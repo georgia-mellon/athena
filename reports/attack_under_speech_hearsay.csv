@@ -1,4 +1,4 @@
 condition,n,flagged,flag_rate,flag_lo,flag_hi,p_synthetic_median,p_synthetic_max
 clean,100,0,0.0000,0.0000,0.0370,0.1390,0.3180
 "keys, shield off",100,0,0.0000,0.0000,0.0370,0.1428,0.3657
-"keys, shield on",100,1,0.0100,0.0018,0.0545,0.1746,0.7222
+"keys, shield on",100,2,0.0200,0.0055,0.0700,0.1820,0.5930

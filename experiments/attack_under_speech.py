@@ -3,7 +3,7 @@
 Hearsay showed keystrokes don't break voice detection. This is the reverse direction: with someone talking over the
 typing, is keystroke leakage still a threat on a call? If yes, the shield has something real to defend against.
 
-Protocol (fixed seeds, CPU, 8 threads, ~11 min):
+Protocol (fixed seeds, CPU, 8 threads, ~12 min):
 - Keys: Keyguard's harrison bank (36 keys x 25 presses, one MacBook), per-key 60/40 split.
 - Attackers: KeyNet + torch_logmel trained here (provisional, in-domain). `clean` on clean presses; `speech-aug`
   on presses mixed with speech at +0..+20 dB (the adaptive attacker, which knows calls have speech).
@@ -11,7 +11,8 @@ Protocol (fixed seeds, CPU, 8 threads, ~11 min):
   attacker's training noise and the evaluation mixtures.
 - Each test press sits at a random spot in a 1.5 s speech excerpt at a speech-to-key power ratio (speech excerpt
   power over key-window power). Attack with the oracle onset and with Keyguard's onset detector on the mixture.
-- Shield: Keyguard DSP Shield with ShieldConfig() defaults (as CallGuard ships it) given the true onset (the victim has OS key events).
+- Shield: Keyguard DSP Shield with ShieldConfig(key_frames=26) (as CallGuard ships it; Keyguard's default 14 as a
+  secondary row at keys only / +10 dB) given the true onset (the victim has OS key events).
 - Hearsay check (pass criterion 3): full real clips (>= 3 s) from the test speakers, with test presses at +10 dB
   speech-to-key, scored clean / keys unshielded / keys shielded by CallGuard's Hearsay driver (r4ft, CPU).
 
@@ -51,7 +52,9 @@ EXCERPT = int(1.5 * SR)
 PRE = int(PRE_S * SR)
 MATCH_TOL = int(0.030 * SR)
 LEVELS = [None, -10, -5, 0, 5, 10, 20]  # speech-to-key dB; None = keys only
-SHIELD_CFG = ShieldConfig()  # Keyguard defaults, as callguard/drivers/keyguard_real.KeyguardShield runs it
+SHIELD_CFG = ShieldConfig(key_frames=26)  # as callguard/drivers/keyguard_real.KeyguardShield runs it (press + release)
+SHIELD_CFG_14 = ShieldConfig()  # Keyguard's default key_frames=14: secondary comparison only
+LEVELS_14 = {None, 10}
 DEMO_SPEAKERS = {"100", "2803"}  # voices in the demo scenario: the attacker must never have heard them
 N_SPEECH = 200
 EPOCHS = 40
@@ -199,19 +202,24 @@ def main():
     rows, qual = [], []
     for level in LEVELS:
         lvl = "keys only" if level is None else f"{level:+d} dB"
-        W = {(s, o): np.zeros_like(Xte) for s in ("off", "on") for o in ("oracle", "detected")}
-        hit = {(s, "detected"): np.zeros(len(Xte), bool) for s in ("off", "on")}
+        shields = ("off", "on", "on14") if level in LEVELS_14 else ("off", "on")
+        W = {(s, o): np.zeros_like(Xte) for s in shields for o in ("oracle", "detected")}
+        hit = {(s, "detected"): np.zeros(len(Xte), bool) for s in shields}
         for i, (k, sp, pos) in enumerate(zip(Xte, sps, poss)):
             onset = pos + PRE
             raw = mix(k, sp, level, pos)
             shielded = Shield(SHIELD_CFG, seed=SEED + i).apply(raw, onsets=np.array([onset]))
-            for s, a in (("off", raw), ("on", shielded)):
+            audio = {"off": raw, "on": shielded}
+            if "on14" in shields:
+                audio["on14"] = Shield(SHIELD_CFG_14, seed=SEED + i).apply(raw, onsets=np.array([onset]))
+            for s, a in audio.items():
                 W[s, "oracle"][i] = cut(a, onset)
                 d = detect(a, onset)
                 if d is not None:
                     W[s, "detected"][i] = cut(a, d); hit[s, "detected"][i] = True
             if level is not None:
-                qual.append((lvl, *quality(raw, shielded), *quality(sp, raw), *quality(sp, shielded)))
+                q14 = quality(raw, audio["on14"]) if "on14" in audio else (np.nan, np.nan)
+                qual.append((lvl, *quality(raw, shielded), *quality(sp, raw), *quality(sp, shielded), *q14))
         for name, net in nets.items():
             for (s, o), w in W.items():
                 r = top_ranks(net, w, yte)
@@ -225,7 +233,8 @@ def main():
 
     res = pd.DataFrame(rows)
     q = pd.DataFrame(qual, columns=["level", "stoi_shield_vs_mix", "pesq_shield_vs_mix", "stoi_mix_vs_speech",
-                                    "pesq_mix_vs_speech", "stoi_shield_vs_speech", "pesq_shield_vs_speech"])
+                                    "pesq_mix_vs_speech", "stoi_shield_vs_speech", "pesq_shield_vs_speech",
+                                    "stoi_shield14_vs_mix", "pesq_shield14_vs_mix"])
     q = q.groupby("level", sort=False).mean().reset_index()
     res = res.merge(q, on="level", how="left")
     out = REPO / "reports"

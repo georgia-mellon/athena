@@ -9,7 +9,7 @@ repos read-only (`KEYGUARD_ROOT`, `HEARSAY_ROOT`, defaulting to the sibling chec
 
 ```
 cd CallGuard
-.venv/Scripts/python experiments/attack_under_speech.py     # ~11 min on 8 CPU threads: ~6 attack, ~4.5 Hearsay check
+.venv/Scripts/python experiments/attack_under_speech.py     # ~12 min on 8 CPU threads: ~7.5 attack, ~4.5 Hearsay check
 ```
 
 Needs: Keyguard's `data/pool/harrison.npz`, Hearsay's `data/processed/manifest.parquet` and its processed
