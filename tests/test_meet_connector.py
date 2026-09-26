@@ -20,7 +20,7 @@ from app.source.audio.keys import ScriptedKeyClock
 from app.source.bus import EventBus
 from app.source.connectors.meet import launcher
 from app.source.connectors.meet.router import make_router, origin_ok
-from app.source.pipeline import Pipeline
+from app.source.pipeline import ArrivalAnchor, Pipeline
 from app.source.types import BLOCK, SR
 
 MEET = {"origin": "https://meet.google.com"}
@@ -73,8 +73,10 @@ def test_mic_round_trip_same_size_in_order():
     assert pipe.mic.position == 60 * BLOCK
     pipe.stop()
     bus.flush()
-    assert any(s["connected"] and s["mic"] and s["latency_ms"] >= 500 + 42 for s in states)
-    assert set(states[-1]) == {"connected", "url", "mic", "far", "browser", "latency_ms"}
+    assert any(s["connected"] and s["mic"] and s["latency_ms"] >= 500 + 42 and s["owner"] == MEET["origin"]
+               for s in states)
+    assert set(states[-1]) == {"connected", "owner", "url", "mic", "far", "browser", "latency_ms"}
+    assert not states[-1]["connected"] and states[-1]["owner"] is None
     bus.close()
 
 
@@ -97,19 +99,30 @@ def test_far_frames_reach_the_far_ring():
 
 
 def test_origin_checks():
-    assert origin_ok("https://meet.google.com") and origin_ok("http://localhost:5173") and origin_ok("http://[::1]:1")
-    assert origin_ok(None)                                   # not a browser: a local process
+    assert origin_ok("https://meet.google.com", 8765) and origin_ok("http://localhost:8765", 8765)
+    assert origin_ok("http://[::1]:1", 1) and origin_ok("http://localhost", 80) and origin_ok("https://127.0.0.1", 443)
+    assert origin_ok(None, 8765)                             # not a browser: a local process
     for bad in ("https://evil.example", "https://meet.google.com.evil.example", "http://meet.google.com",
-                "https://127.0.0.1.evil.example", "null"):
-        assert not origin_ok(bad), bad
+                "https://127.0.0.1.evil.example", "null", "http://localhost:5173", "http://127.0.0.1",
+                "http://127.0.0.1:99999", "file://"):
+        assert not origin_ok(bad, 8765), bad
     pipe, bus, _ = _pipe()
     client, router = _client(pipe)
-    for path in ("/meet/mic", "/meet/far"):
-        with pytest.raises(WebSocketDisconnect) as e:
-            with client.websocket_connect(path, headers={"origin": "https://evil.example"}) as ws:
-                ws.receive_bytes()
-        assert e.value.code == 1008
-    assert router.meet_stats["rejected"] == 2 and pipe.mic.position == 0
+    # another website, and another local server (a dev server, a local page someone else runs)
+    for origin in ("https://evil.example", "http://127.0.0.1:5173"):
+        for path in ("/meet/mic", "/meet/far"):
+            with pytest.raises(WebSocketDisconnect) as e:
+                with client.websocket_connect(path, headers={"origin": origin}) as ws:
+                    ws.receive_bytes()
+            assert e.value.code == 1008
+    assert router.meet_stats["rejected"] == 4 and pipe.mic.position == 0
+    pipe.meet_port = 9000                                   # the port follows the server CallGuard runs on
+    with client.websocket_connect("/meet/far", headers={"origin": "http://localhost:9000"}) as ws:
+        ws.send_bytes(_blocks(1).tobytes())
+    app = FastAPI()
+    app.include_router(make_router(pipe, port=9100))        # or an explicit one
+    with TestClient(app).websocket_connect("/meet/far", headers={"origin": "http://127.0.0.1:9100"}) as ws:
+        ws.send_bytes(_blocks(1).tobytes())
     pipe.stop()
     bus.close()
 
@@ -129,6 +142,101 @@ def test_second_tab_waits_its_turn():
         assert len(again.receive_bytes()) == BLOCK * 4
     pipe.stop()
     bus.close()
+
+
+def test_meet_takes_over_from_a_local_page():
+    """A real meeting beats a stray test-room tab; the reverse (and Meet vs Meet) waits its turn."""
+    pipe, bus, states = _pipe()
+    client, _ = _client(pipe)
+    local = {"origin": "http://127.0.0.1:8765"}
+    with client.websocket_connect("/meet/mic", headers=local) as room:
+        room.send_bytes(_blocks(1).tobytes())
+        room.receive_bytes()
+        assert pipe.meet_owners["mic"] == local["origin"]
+        with client.websocket_connect("/meet/mic", headers=MEET) as meet:
+            with pytest.raises(WebSocketDisconnect) as e:
+                room.receive_bytes()
+            assert e.value.code == 1013
+            assert pipe.meet_owners["mic"] == MEET["origin"]
+            for other in (local, MEET):
+                with pytest.raises(WebSocketDisconnect) as e:
+                    with client.websocket_connect("/meet/mic", headers=other) as late:
+                        late.receive_bytes()
+                assert e.value.code == 1013
+            meet.send_bytes(_blocks(1).tobytes())
+            assert len(meet.receive_bytes()) == BLOCK * 4
+            time.sleep(0.3)
+    assert pipe.meet_owners == {"mic": None, "far": None}   # the displaced page's close didn't clear Meet's claim
+    pipe.stop()
+    bus.flush()
+    owners = [s["owner"] for s in states]
+    assert local["origin"] in owners and MEET["origin"] in owners and owners[-1] is None
+    bus.close()
+
+
+def test_new_mic_socket_flushes_the_delay_line():
+    """Audio still in the secret delay line when a socket drops must not come out ~0.5 s into the next one."""
+    pipe, bus, _ = _pipe()
+    client, _ = _client(pipe)
+    with client.websocket_connect("/meet/mic", headers=MEET) as ws:
+        for b in np.full((DELAY + 10, BLOCK), 0.25, "<f4"):
+            ws.send_bytes(b.tobytes())
+            ws.receive_bytes()
+    out = []
+    with client.websocket_connect("/meet/mic", headers=MEET) as ws:
+        for b in np.zeros((DELAY + 10, BLOCK), "<f4"):
+            ws.send_bytes(b.tobytes())
+            out.append(np.frombuffer(ws.receive_bytes(), "<f4"))
+    assert not np.any(np.concatenate(out))                  # nothing from before the reconnect
+    assert pipe.mic.position == 2 * (DELAY + 10) * BLOCK   # the stream's clock runs on
+    pipe.stop()
+    bus.close()
+
+
+def test_owner_survives_start_meet_and_never_goes_negative():
+    """A socket opened before start_meet (the app starts meet mode while a page is already connected) and closed
+    after it: meet.state follows the router's owner, no counter to drift."""
+    cfg = config.load(env={})
+    bus = EventBus()
+    pipe = Pipeline(cfg, bus, voice=MockVoice(), attacker=MockAttacker(), shield=MockShield(),
+                    spotter=MockSpotter(), spotter_in=MockSpotter(mode="inbound"))
+    states = []
+    bus.subscribe("meet.state", lambda e: states.append(e.data))
+    client, _ = _client(pipe)
+    with client.websocket_connect("/meet/far", headers=MEET):
+        time.sleep(0.1)
+        pipe.start_meet(keyclock=ScriptedKeyClock([]))
+        pipe.start_meet(keyclock=ScriptedKeyClock([]))      # idempotent
+        time.sleep(0.4)
+    time.sleep(0.4)
+    for _ in range(2):
+        with client.websocket_connect("/meet/mic", headers=MEET):
+            pass
+    time.sleep(0.4)
+    pipe.stop()
+    bus.flush()
+    assert states[0]["connected"] and states[0]["owner"] == MEET["origin"]
+    assert not states[-1]["connected"] and states[-1]["owner"] is None
+    bus.close()
+
+
+def test_arrival_anchor_rejects_jitter():
+    """Blocks arrive late by a constant 30 ms plus bursty jitter (0-150 ms, some bursts): the anchor recovers the
+    constant part within a block's worth, and follows a slow clock drift."""
+    rng = np.random.default_rng(1)
+    anchor, t0 = ArrivalAnchor(window_s=3.0), 100.0
+    errs = []
+    for k in range(1, 1000):                                # 20 s of blocks
+        s = k * BLOCK
+        drift = 0.001 * s / SR                              # 1 ms per second
+        jitter = rng.exponential(0.02) + (0.15 if k % 50 < 5 else 0.0)
+        est = anchor(s, t0 + s / SR + 0.03 + drift + jitter)
+        if k > 150:
+            errs.append(est - (t0 + s / SR + 0.03 + drift))
+    errs = np.array(errs)
+    assert np.abs(errs).max() < 0.005, (errs.min(), errs.max())   # the raw arrival time is off by up to ~250 ms
+    anchor.reset()
+    assert anchor(BLOCK, 5.0) == pytest.approx(5.0)
 
 
 def test_armed_secret_is_redacted_in_the_meet_stream():
@@ -220,9 +328,9 @@ def served():
     from dashboard.server import create_app
     pipe, bus, states = _pipe()
     app = create_app(bus, controls=pipe)
-    router = make_router(pipe)
-    app.include_router(router)
     port = _free_port()
+    router = make_router(pipe, port=port)
+    app.include_router(router)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     th = threading.Thread(target=server.run, daemon=True)
     th.start()
@@ -313,6 +421,7 @@ def test_browser_bridge_on_real_meet_page(served, tmp_path):
         assert s.evaluate("!!window.__callguardBridge && __callguardBridge.source") == "cdp"
         s.evaluate("navigator.mediaDevices.getUserMedia({audio: true}).then((m) => { window.__m = m; return 1; })")
         assert _wait(lambda: router.meet_stats["mic_out"] > 50), router.meet_stats
-        print(f"\n[meet] {s.evaluate('location.href')}: {s.evaluate('__callguardBridge.stats')}")
+        print(f"\n[meet] {s.evaluate('location.href')} (local network access: {s.lna}): "
+              f"{s.evaluate('__callguardBridge.stats')}")
     finally:
         s.close()

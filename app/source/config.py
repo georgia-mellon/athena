@@ -75,6 +75,7 @@ class DevicesConfig:
     virtual_out: str = "CABLE Input"
     loopback: str = ""
     key_offset_s: float = 0.0          # KeyClock calibration: + if key sounds land later than their OS timestamps
+    meet_key_offset_s: float = 0.0     # the same for meet mode: + the page's capture + socket latency (~0.02-0.08)
 
 
 @dataclass
