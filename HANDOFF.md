@@ -50,3 +50,9 @@ no devices), at the commit that added this file.
 
 ## Owner to-dos
 - Install VB-CABLE (vb-audio.com/Cable, admin, reboot) for live Zoom mode.
+
+## Update 2026-09-26: third pillar added (WP9)
+The owner approved the **spoken-secret shield**: redact codes, passwords and card numbers from your outbound voice
+while the caller is unverified. Spec: `plans/06_spoken_secret_shield.md`; work package WP9 in `plans/05`. It is **in
+scope for this phase and not blocked on upstream**. Build it after WP8 lands (it plugs into the pipeline's outbound
+chain after the Keyguard shield, with a constant delay line like the existing shield).

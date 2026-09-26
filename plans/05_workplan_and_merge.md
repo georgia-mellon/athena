@@ -21,6 +21,8 @@
 | WP7 attack proof | plan 04 experiment + report | `experiments/*`, `reports/attack_under_speech.*` |
 | WP8 integrate | `pipeline.py`, `cli.py`, demo scenarios + agent renderer/caller, end-to-end replay test, README, runbook | `callguard/pipeline.py`, `callguard/cli.py`, `demo/*`, `tests/test_e2e_replay.py`, `README.md`, `docs/demo_runbook.md` |
 
+| WP9 secret shield (plan 06) | Vosk grammar spotter, delay-line redactor, `SecretSpotterDriver` contract (additive), pipeline + threat + dashboard wiring, eval + report | `callguard/drivers/secret_vosk.py`, `callguard/audio/redactor.py`, `experiments/secret_shield_eval.py`, `reports/secret_shield.md`, `tests/test_secret_shield.py` (+ coordinated edits to types/mock/pipeline/threat/dashboard) |
+
 Order: WP1-WP7 in parallel (WP7 is independent), then WP8 (needs all of them), then an independent review pass.
 
 ## 3. Done for this phase
@@ -30,6 +32,7 @@ Order: WP1-WP7 in parallel (WP7 is independent), then WP8 (needs all of them), t
   story on the dashboard.
 - `callguard devices` finds VB-CABLE when installed, and prints the setup steps when it's missing.
 - The attack-proof report exists, with numbers.
+- WP9: the secret shield is in the `ai_caller` demo, and `reports/secret_shield.md` has leak and false-redaction numbers.
 
 ## 4. Blocked on upstream (the stop list)
 | item | waits for |

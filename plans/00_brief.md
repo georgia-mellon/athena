@@ -36,3 +36,10 @@ Stop when everything that does not depend on unfinished upstream work is built, 
 upstream code and mocks. The remaining items, listed in `plans/05_workplan_and_merge.md` §4, should be only:
 - Hearsay model changes, which wait for the NSA verdict;
 - Keyguard's final attacker/shield weights and APIs, which wait for the teammate.
+
+## Addendum 2026-09-26: third pillar approved
+The owner approved a **third core function**, the **spoken-secret shield** (`plans/06_spoken_secret_shield.md`).
+While the caller is unverified or synthetic, CallGuard redacts codes, passwords and card numbers from *your own
+outbound voice* before they reach the meeting. CallGuard now protects **what you hear (Hearsay), what you type
+(Keyguard), and what you say (secret shield)**. It bridges privacy and security, and it is in scope for this phase
+(not blocked on upstream).

@@ -56,6 +56,10 @@ the offline demo.
 **F8 Drivers are swappable** (`plans/02` §3): `real` (Hearsay frozen models; Keyguard current code) or `mock`
 (deterministic, no models) for tests and UI work. Chosen by config, never by code edits.
 
+**F9 Spoken-secret shield (third pillar, plan 06).** While the caller is unverified (Hearsay `V >= 0.5`), or after an
+inbound request trigger ("read me the code"), redact digit sequences, passwords and card numbers from the outbound
+mic before they reach the meeting. The redaction is threat-aware, logs only the category and length, and fails open.
+
 ## 5. Non-functional
 - **Runs on one Windows laptop, CPU only.** CUDA is used if present. Hearsay live inference uses 1 window, ≈ 0.2 s
   on CPU.
