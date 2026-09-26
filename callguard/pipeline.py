@@ -140,6 +140,7 @@ class Pipeline:
             if x is not None:
                 x.reset()
         self._out_cursor = self._far_cursor = 0
+        self._last_request = -10 * SR
         self._keep_until = self._bypass_until = -1e9
         self._manual: bool | None = None
         self.armed, self.armed_by, self._auto_by, self._run = False, "", "", None
@@ -263,8 +264,6 @@ class Pipeline:
         if not self._secret_on():
             return False
         c, now, did = self.cfg.secret, self.clock(), False
-        if self.spotter_in is not None:
-            did |= self._feed(self.spotter_in, self.far, "_far_cursor", self._on_request)
         V = self.engine.V
         if c.arm_on_voice and (V >= c.arm_voice or (self.armed and V >= c.keep_voice)):
             self._auto_by = self._auto_by if now < self._keep_until else "voice"
@@ -285,6 +284,13 @@ class Pipeline:
         self._close_run(self._out_cursor)
         return did
 
+    def request_step(self) -> bool:
+        """Listen to the far end for "read me the code" (own thread: Vosk's 0.15-0.4 s end-of-utterance spikes must
+        not hold up the outbound spotter, whose spans have to beat the delay line)."""
+        if not self._secret_on() or self.spotter_in is None:
+            return False
+        return self._feed(self.spotter_in, self.far, "_far_cursor", self._on_request)
+
     def _feed(self, drv, ring: Ring, cursor: str, on_span) -> bool:
         pos, end = getattr(self, cursor), ring.total
         pos = max(pos, end - ring.cap + BLOCK)          # fell a whole ring behind: skip ahead
@@ -303,6 +309,9 @@ class Pipeline:
         return True
 
     def _on_request(self, sp) -> None:
+        if sp.start - self._last_request < 3 * SR:       # one request sentence can match several phrases
+            return
+        self._last_request = sp.start
         self.bus.emit("secret.request", t_audio=round(sp.start / SR, 2))
         if self.cfg.secret.arm_on_request:
             now = self.clock()
@@ -365,7 +374,7 @@ class Pipeline:
                 if not busy:
                     stop.wait(0.02)
         ts = [threading.Thread(target=loop, args=(f,), name=f"callguard-{f.__name__}", daemon=True)
-              for f in (self.voice_step, self.attack_step, self.secret_step)]
+              for f in (self.voice_step, self.attack_step, self.secret_step, self.request_step)]
         for t in ts:
             t.start()
         return ts
@@ -407,6 +416,7 @@ class Pipeline:
                     while self.voice_step():
                         pass
                     self.attack_step()
+                    self.request_step()
                     self.secret_step()
                     if (s // BLOCK) % (TICK // BLOCK) == 0:
                         self.bus.flush()                # the engine must see this tick's events first
@@ -414,6 +424,7 @@ class Pipeline:
             completed = not stop.is_set()
             if not realtime:                            # drain the tail
                 self.attack_step()
+                self.request_step()
                 self.secret_step()
                 self._close_run(None)
                 self.bus.flush()

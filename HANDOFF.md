@@ -56,3 +56,22 @@ The owner approved the **spoken-secret shield**: redact codes, passwords and car
 while the caller is unverified. Spec: `plans/06_spoken_secret_shield.md`; work package WP9 in `plans/05`. It is **in
 scope for this phase and not blocked on upstream**. Build it after WP8 lands (it plugs into the pipeline's outbound
 chain after the Keyguard shield, with a constant delay line like the existing shield).
+
+## Update 2026-09-26 evening: phase 1 complete up to the upstream blockers
+Built by the CallGuard session. PRs (open, for the owner to merge in order): **#1** WP3 Hearsay driver, **#2** WP7
+attack proof, **#3** WP8 integration, **#4** WP9 secret shield (stacked on #3). `uv run pytest -q`: 72 passed with
+the upstream repos + Vosk model present.
+- `callguard run --mode replay --scenario ai_caller --drivers real` plays the full story on the dashboard:
+  SAFE → WATCH → WARN → CRITICAL (~26-29 s) → WARN (shield on) → WATCH → SAFE; the secret shield arms on the
+  synthetic voice and hears the agent's "read me the code".
+- The six contract mismatches above are reconciled (see PR #3). An independent review's findings are fixed
+  (PR #4 description lists them).
+- Honest results: reports/attack_under_speech.md (plan 04: criterion 1 pass with known key timing only, 2 marginal
+  fail, 3 pass at the boundary) and reports/secret_shield.md (0.19 s/min false redaction on normal speech; 1.32
+  digits leaked per sequence vs the ≤ 1 acceptance).
+- Owner to-dos: install VB-CABLE; merge #1 before the others (it removes a hard-coded path and stops __pycache__
+  in Hearsay); record a consenting teammate reading the fake code to `demo/audio/recorded/victim_code.wav` (the
+  secret-shield demo beat and a real eval set need it; never TTS); decide on the agent voice (currently a dataset
+  ElevenLabs clone of a LibriSpeech speaker, brief constraint 4 wants a consenting teammate's clone); confirm
+  whether CallGuard should keep Hearsay's current 4:1 threshold or follow Pspoof=0.3/Cfa=4 once the Hearsay
+  session recomputes it (delete runs/hearsay_calibration.json after it changes).
