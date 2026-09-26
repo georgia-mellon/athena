@@ -13,7 +13,7 @@ Start with replay. Switch to live only if the room and Wi-Fi allow.
 4. For live: install **VB-CABLE** (https://vb-audio.com/Cable/, run as admin, reboot), then follow
    `docs/zoom_setup.md`. `uv run callguard devices` must show `virtual mic out: CABLE Input`.
 5. Laptop on power, notifications off, headphones in, display mirrored to the projector at 100 % zoom.
-6. Spoken-secret beat: `uv run python scripts/get_vosk_model.py` (40 MB, once). Record a teammate (consenting) reading
+6. Spoken-secret beat: `uv run python app/secret_shield/get_model.py` (40 MB, once). Record a teammate (consenting) reading
    the **fake** code, e.g. "four eight two one nine three", as a 16 kHz mono WAV at
    `demo/audio/recorded/victim_code.wav`, then rebuild the demo audio. Without the recording the replay still arms
    the secret shield but has nothing to cut (plan 06: never fake the victim with TTS).
@@ -37,7 +37,7 @@ bars against the chance line, and the event log. The shield buttons (off / dsp) 
 shows an error banner until the teammate's model ships. Don't click it on stage.
 
 Talking points: "Works with any meeting app: it's a virtual mic, not a plugin." "Nothing leaves the laptop."
-"Fake password, consenting voices." The attack proof: `reports/attack_under_speech.md` (keys are still readable
+"Fake password, consenting voices." The attack proof: `docs/reports/attack_under_speech.md` (keys are still readable
 with someone talking over them, and the shield brings the attacker down toward chance).
 
 ## Live demo (Zoom)

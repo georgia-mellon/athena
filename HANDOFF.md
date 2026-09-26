@@ -1,7 +1,7 @@
 # Handoff: CallGuard phase 1 (paused 2026-09-26 ~14:20 EDT)
 
 Paused by the owner so that a dedicated Claude session can continue CallGuard here, while the original session works
-only on Hearsay. **Start by reading `CLAUDE.md`, then `plans/00_brief.md`** (owner intent), then plans 01-05.
+only on Hearsay. **Start by reading `CLAUDE.md`, then `docs/plans/00_brief.md`** (owner intent), then plans 01-05.
 
 ## Where things stand
 Phase 1 ran as a workflow (script saved in `plans/phase1_workflow.js`) with 7 parallel work packages (plan 05 §2),
@@ -15,8 +15,8 @@ no devices), at the commit that added this file.
 | WP4 Keyguard drivers | **done**, 4 tests | provisional KeyNet (harrison held-out n=360): **top-1 70.8 %, top-3 95.3 %** (chance 2.8 %), cached at `runs/provisional_keynet.pt`; streaming DSP shield adds 80 ms; Keyguard commit b0349c0. |
 | WP5 mocks + registry + quarantine | **done**, 11 tests | |
 | WP6 server + dashboard | **done**, 6 tests | FastAPI `create_app(bus, state_provider, controls)`, `/ws`, static dashboard with no CDNs. |
-| WP3 Hearsay driver | **partial**: `callguard/drivers/hearsay_real.py` written, no report | calibration cached in `runs/hearsay_calibration.json`: r4ft thr −2.82, s 6.27; r5 thr 0.61, s 3.89 (from Hearsay `val_testlike`). Verify it, then write `tests/test_hearsay_driver.py`. |
-| WP7 attack proof | **partial**: `experiments/attack_under_speech.py` written, not run to a report | finish, run, and write `reports/attack_under_speech.md` (plan 04). |
+| WP3 Hearsay driver | **partial**: `app/hearsay/driver.py` written, no report | calibration cached in `runs/hearsay_calibration.json`: r4ft thr −2.82, s 6.27; r5 thr 0.61, s 3.89 (from Hearsay `val_testlike`). Verify it, then write `tests/test_hearsay_driver.py`. |
+| WP7 attack proof | **partial**: `app/keystroke_guard/eval/attack_under_speech.py` written, not run to a report | finish, run, and write `docs/reports/attack_under_speech.md` (plan 04). |
 | WP8 integrate | **not started** | `pipeline.py`, `cli.py`, demo scenario, e2e replay, README, runbook. The prompt is in `plans/phase1_workflow.js`. |
 | Review | not started | |
 
@@ -53,7 +53,7 @@ no devices), at the commit that added this file.
 
 ## Update 2026-09-26: third pillar added (WP9)
 The owner approved the **spoken-secret shield**: redact codes, passwords and card numbers from your outbound voice
-while the caller is unverified. Spec: `plans/06_spoken_secret_shield.md`; work package WP9 in `plans/05`. It is **in
+while the caller is unverified. Spec: `docs/plans/06_spoken_secret_shield.md`; work package WP9 in `docs/plans/05`. It is **in
 scope for this phase and not blocked on upstream**. Build it after WP8 lands (it plugs into the pipeline's outbound
 chain after the Keyguard shield, with a constant delay line like the existing shield).
 
@@ -66,8 +66,8 @@ the upstream repos + Vosk model present.
   synthetic voice and hears the agent's "read me the code".
 - The six contract mismatches above are reconciled (see PR #3). An independent review's findings are fixed
   (PR #4 description lists them).
-- Honest results: reports/attack_under_speech.md (plan 04: criterion 1 pass with known key timing only, 2 marginal
-  fail, 3 pass at the boundary) and reports/secret_shield.md (0.19 s/min false redaction on normal speech; 1.32
+- Honest results: docs/reports/attack_under_speech.md (plan 04: criterion 1 pass with known key timing only, 2 marginal
+  fail, 3 pass at the boundary) and docs/reports/secret_shield.md (0.19 s/min false redaction on normal speech; 1.32
   digits leaked per sequence vs the ≤ 1 acceptance).
 - Owner to-dos: install VB-CABLE; merge #1 before the others (it removes a hard-coded path and stops __pycache__
   in Hearsay); record a consenting teammate reading the fake code to `demo/audio/recorded/victim_code.wav` (the

@@ -9,9 +9,9 @@ Sources (all read-only):
 - mic: another LibriSpeech speaker (LOCAL) at -28 dBFS with gaps; keystrokes near their recorded level (key-window
   power KEY_DBFS, laptop keys are about as loud as speech); a quiet-room noise floor NOISE_DBFS, ~40 dB under the keys.
   The provisional attacker (isolated, near-silent harrison presses) needs that: ~30 dB of key-to-noise already takes
-  it toward chance. Noise robustness is an open item for the teammate's attacker (reports/attack_under_speech.md).
+  it toward chance. Noise robustness is an open item for the teammate's attacker (docs/reports/attack_under_speech.md).
   The user goes quiet while typing the code (as people do); keys under ongoing speech are the harder case that
-  reports/attack_under_speech.md measures.
+  docs/reports/attack_under_speech.md measures.
 
 Usage: .venv\\Scripts\\python demo\\build_scenario_audio.py
 """
@@ -30,10 +30,10 @@ import soundfile as sf
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-from callguard.audio.replay import load_wav  # noqa: E402
-from callguard.audio.vad import speech_fraction  # noqa: E402
-from callguard.drivers.keyguard_real import harrison_split  # noqa: E402
-from callguard.types import SR  # noqa: E402
+from app.source.audio.replay import load_wav  # noqa: E402
+from app.source.audio.vad import speech_fraction  # noqa: E402
+from app.keystroke_guard.driver import harrison_split  # noqa: E402
+from app.source.types import SR  # noqa: E402
 
 HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT") or REPO.parent / "Hearsay")
 OUT = REPO / "demo" / "audio" / "ai_caller"

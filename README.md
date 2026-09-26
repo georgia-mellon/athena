@@ -34,17 +34,17 @@ threat score escalates to **CRITICAL**: synthetic caller + sensitive typing = so
 
  all events ─► EventBus ─► ThreatEngine (0-100, SAFE/WATCH/WARN/CRITICAL) ─► dashboard (WebSocket) + hooks
 ```
-- **Threat-aware secret shield** ([plans/06](plans/06_spoken_secret_shield.md)): it arms only while the caller is
+- **Threat-aware secret shield** ([docs/plans/06](docs/plans/06_spoken_secret_shield.md)): it arms only while the caller is
   unverified (Hearsay V ≥ 0.5), after the caller asks for a code, or by hand. With a verified colleague, the same
   sentence passes untouched. The recognized words never leave the spotter; events carry the category and length only.
   It fails open.
 - **Works with any meeting app**: integration is at the audio-device layer, so there's no plugin or bot, and the
-  shield can act on your outgoing audio before the app encodes it ([plans/03](plans/03_meeting_platform.md)).
-- **Swappable drivers** (`callguard/drivers/`): `real` (Hearsay's frozen models; Keyguard's attacker + DSP shield)
-  or `mock` (deterministic, no models) behind the Protocols in `callguard/types.py`.
+  shield can act on your outgoing audio before the app encodes it ([docs/plans/03](docs/plans/03_meeting_platform.md)).
+- **Swappable drivers** (`app/`): `real` (Hearsay's frozen models; Keyguard's attacker + DSP shield)
+  or `mock` (deterministic, no models) behind the Protocols in `app/source/types.py`.
 - **Fail-safe audio**: models never run on the audio thread except the shield (and the O(block) delay line), and a driver that raises is
   quarantined: the audio passes through, and the dashboard raises an alarm. Your mic is never muted by a bug.
-- **Threat score** ([plans/02 §4](plans/02_architecture.md)): voice risk V (EMA of p_synthetic), keystroke exposure
+- **Threat score** ([docs/plans/02 §4](docs/plans/02_architecture.md)): voice risk V (EMA of p_synthetic), keystroke exposure
   E/L (how often the true key is in the attacker's top 3, above chance, on the raw/shielded mic), typing activity T,
   a social-engineering rule (typing while an unverified voice speaks), and S (secrets blocked from your voice).
 - **Hooks**: console, JSONL and webhook sinks (e.g. a Slack incoming webhook via `CALLGUARD_WEBHOOK_URL`). Key
@@ -58,7 +58,7 @@ uv run pytest -q                                   # mock drivers: no models, no
 The real drivers read the two upstream repos, read-only, from sibling checkouts (override with `HEARSAY_ROOT` /
 `KEYGUARD_ROOT`): `../Hearsay` (its frozen `R4ft_xlsr_light` checkpoint) and `../keyboard-acoustic-shield`.
 ```
-uv run python scripts/get_vosk_model.py            # spoken-secret spotter model (40 MB, sha256-checked, once)
+uv run python app/secret_shield/get_model.py            # spoken-secret spotter model (40 MB, sha256-checked, once)
 uv run python demo/render_agent.py                 # the agent's TTS lines (line 06 = "read me the code")
 uv run python demo/build_scenario_audio.py         # builds demo/audio/ (gitignored) from the upstream data
 uv run callguard run --mode replay --scenario ai_caller          # the full story, real models, dashboard opens
@@ -91,7 +91,7 @@ shielded ones (chance 8 %).
 2 ms per keystroke; DSP shield 2.8 ms median (5 ms max) per 20 ms block while a key is active, 0 ms otherwise, plus
 80 ms constant lookahead.
 
-**Attack proof** ([reports/attack_under_speech.md](reports/attack_under_speech.md), 360 held-out presses, 95 % CIs):
+**Attack proof** ([docs/reports/attack_under_speech.md](docs/reports/attack_under_speech.md), 360 held-out presses, 95 % CIs):
 can an eavesdropper read keys with someone talking over them, and does the shield stop it? Top-1, adaptive
 (speech-trained) attacker, chance 2.8 %:
 
@@ -116,11 +116,11 @@ shield on, 1.3 %.
 
 ## Repository
 ```
-callguard/   types.py (contracts) · pipeline.py · cli.py · bus.py · threat.py · hooks.py · config.py
+app/source/   types.py (contracts) · pipeline.py · cli.py · bus.py · threat.py · hooks.py · config.py
              audio/ (devices, streams, ring, vad, keys, replay) · drivers/ (hearsay_real, keyguard_real, mock, base)
              server/ (FastAPI + static dashboard, no CDNs)
 demo/        scenarios/ai_caller.toml · build_scenario_audio.py · agent_caller.py · render_agent.py
-experiments/ attack_under_speech.py      reports/ attack_under_speech.md
+experiments/ attack_under_speech.py      docs/reports/ attack_under_speech.md
 plans/       00 brief · 01 spec · 02 architecture · 03 meeting platform · 04 attack proof · 05 work plan and merge
 ```
 

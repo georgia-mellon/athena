@@ -4,8 +4,8 @@ import fnmatch
 import numpy as np
 from fastapi.testclient import TestClient
 
-from callguard.server.app import create_app
-from callguard.types import Event
+from dashboard.server import create_app
+from app.source.types import Event
 
 
 class FakeBus:

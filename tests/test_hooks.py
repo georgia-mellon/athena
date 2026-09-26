@@ -2,10 +2,10 @@ import json
 
 import numpy as np
 
-from callguard import config, hooks
-from callguard.bus import EventBus
-from callguard.config import HookConfig
-from callguard.types import Event
+from app.source import config, hooks
+from app.source.bus import EventBus
+from app.source.config import HookConfig
+from app.source.types import Event
 
 
 def test_jsonl_sink_filters_topics_and_scrubs_keys(tmp_path):

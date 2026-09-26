@@ -2,13 +2,14 @@
 and the threat input S. Mock spotter only: no model, no devices."""
 import numpy as np
 
-from callguard import config
-from callguard.audio.redactor import RAMP, Redactor
-from callguard.bus import EventBus
-from callguard.drivers.mock import MockAttacker, MockShield, MockSpotter
-from callguard.pipeline import Pipeline, Scenario
-from callguard.threat import ThreatEngine
-from callguard.types import BLOCK, SR, SecretSpotterDriver, VoiceScore
+from app.source import config
+from app.secret_shield.redactor import RAMP, Redactor
+from app.source.bus import EventBus
+from app.keystroke_guard.mock import MockAttacker, MockShield
+from app.secret_shield.mock import MockSpotter
+from app.source.pipeline import Pipeline, Scenario
+from app.source.threat import ThreatEngine
+from app.source.types import BLOCK, SR, SecretSpotterDriver, VoiceScore
 
 
 def _run(r: Redactor, x: np.ndarray, marks=()):
@@ -162,7 +163,7 @@ def test_threat_s_rules():
     clk = Clock()
     bus = EventBus()
     eng = ThreatEngine(bus, config.ThreatConfig(), now=lambda: clk.t)
-    from callguard.types import Event
+    from app.source.types import Event
     for i in range(8):                               # a synthetic voice, but below WARN on its own
         clk.t += 0.5
         eng.on_event(Event("voice.verdict", {"p_synthetic": 0.9}))

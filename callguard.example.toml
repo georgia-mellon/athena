@@ -4,18 +4,18 @@
 
 # hearsay_root = "../Hearsay"                    # default: sibling of this repo
 # keyguard_root = "../keyboard-acoustic-shield"
-# attacker_weights = ""                          # empty = provisional KeyNet (plans/04)
+# attacker_weights = ""                          # empty = provisional KeyNet (docs/plans/04)
 
 [drivers]
 voice = "real"            # real | mock
 attacker = "real"         # real | mock
 shield = "real"           # real | mock
-secret = "real"           # real (Vosk, run scripts/get_vosk_model.py) | mock
+secret = "real"           # real (Vosk, run app/secret_shield/get_model.py) | mock
 hearsay_mode = "r4ft"     # r4ft (fast) | r5 (submitted fusion)
 shield_mode = "dsp"       # off | dsp | adversarial
 device = "auto"           # auto | cpu | cuda
 
-[devices]                 # substring of the device name; empty = system default (plans/03)
+[devices]                 # substring of the device name; empty = system default (docs/plans/03)
 mic = ""
 virtual_out = "CABLE Input"
 loopback = ""
@@ -25,7 +25,7 @@ key_offset_s = 0.0        # KeyClock: + if keystroke sounds land later than thei
 host = "127.0.0.1"
 port = 8765
 
-[threat]                  # plans/02 §4
+[threat]                  # docs/plans/02 §4
 voice_half_life_s = 6.0
 voice_stale_s = 4.0
 readout_window = 20
@@ -48,7 +48,7 @@ tick_hz = 4.0
 kind = "console"
 topics = ["threat.level_change", "driver.error"]
 
-[secret]                  # spoken-secret shield, plans/06
+[secret]                  # spoken-secret shield, docs/plans/06
 enabled = true            # adds a constant 500 ms delay to the outgoing mic while on
 delay_ms = 500.0
 style = "tone"            # mute | tone | noise

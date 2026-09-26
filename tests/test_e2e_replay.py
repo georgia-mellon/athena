@@ -10,11 +10,11 @@ import os
 import numpy as np
 import pytest
 
-from callguard import config
-from callguard.bus import EventBus
-from callguard.drivers.mock import MockAttacker, MockShield
-from callguard.pipeline import Pipeline, Scenario, load_scenario
-from callguard.types import SR, VoiceScore
+from app.source import config
+from app.source.bus import EventBus
+from app.keystroke_guard.mock import MockAttacker, MockShield
+from app.source.pipeline import Pipeline, Scenario, load_scenario
+from app.source.types import SR, VoiceScore
 
 CODE = "RESET4821"
 
@@ -122,7 +122,8 @@ def test_controls():
 
 def _real_available():
     try:
-        from callguard.drivers import hearsay_real, keyguard_real
+        from app.hearsay import driver as hearsay_real
+        from app.keystroke_guard import driver as keyguard_real
         return hearsay_real.RUN.exists() and (keyguard_real.keyguard_root() / "keyguard").is_dir()
     except Exception:
         return False
