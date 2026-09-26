@@ -21,6 +21,9 @@ dependencies = [
     "soundcard>=0.4.3",
     "pynput>=1.7.7",
     "pystoi>=0.4",
+    "matplotlib>=3.11.2",
+    "pesq>=0.0.4",
+    "praat-parselmouth>=0.4.7",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,59 @@
+# Copy to callguard.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT, KEYGUARD_ROOT,
+# CALLGUARD_ATTACKER_WEIGHTS, CALLGUARD_<SECTION>_<FIELD> (e.g. CALLGUARD_DRIVERS_VOICE=mock),
+# CALLGUARD_WEBHOOK_URL (adds a webhook for threat.level_change; keeps the URL out of files).
+
+# hearsay_root = "../Hearsay"                    # default: sibling of this repo
+# keyguard_root = "../keyboard-acoustic-shield"
+# attacker_weights = ""                          # empty = provisional KeyNet (plans/04)
+
+[drivers]
+voice = "real"            # real | mock
+attacker = "real"         # real | mock
+shield = "real"           # real | mock
+hearsay_mode = "r4ft"     # r4ft (fast) | r5 (submitted fusion)
+shield_mode = "dsp"       # off | dsp | adversarial
+device = "auto"           # auto | cpu | cuda
+
+[devices]                 # substring of the device name; empty = system default (plans/03)
+mic = ""
+virtual_out = "CABLE Input"
+loopback = ""
+
+[server]
+host = "127.0.0.1"
+port = 8765
+
+[threat]                  # plans/02 §4
+voice_half_life_s = 6.0
+voice_stale_s = 4.0
+readout_window = 20
+num_classes = 36
+typing_window_s = 10.0
+typing_saturation = 10
+typing_on = 0.2
+w_v = 0.7
+w_l = 0.9
+se_voice = 0.5
+se_floor = 60.0
+se_gain = 40.0
+watch = 25.0
+warn = 50.0
+critical = 75.0
+hysteresis = 5.0
+tick_hz = 4.0
+
+[[hooks]]
+kind = "console"
+topics = ["threat.level_change", "driver.error"]
+
+[[hooks]]
+kind = "jsonl"
+topics = ["*"]
+path = "logs/events.jsonl"
+
+# [[hooks]]
+# kind = "webhook"        # e.g. a Slack incoming webhook; prefer CALLGUARD_WEBHOOK_URL
+# url = "https://hooks.slack.com/services/..."
+# topics = ["threat.level_change"]
+# timeout_s = 3.0
+# retries = 2
