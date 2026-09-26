@@ -77,6 +77,14 @@ def make_shield(cfg: Any = None):
     return MockShield()
 
 
+def make_spotter(cfg: Any = None, mode: str = "outbound"):
+    """Spoken-secret spotter (plan 06). Real = Vosk; raises FileNotFoundError when its model isn't downloaded."""
+    if _kind(cfg, "secret") == "real":
+        return _real("secret_vosk", "VoskSpotter", mode=mode)
+    from callguard.drivers.mock import MockSpotter
+    return MockSpotter(mode=mode)
+
+
 class Quarantine:
     """Runs a driver's calls with timing; a raising driver can't take the pipeline down.
 
@@ -153,11 +161,21 @@ class QuarantinedShield(Quarantine):
         self._call("reset", None)
 
 
+class QuarantinedSpotter(Quarantine):
+    kind = "secret"
+
+    def feed(self, block: np.ndarray, start: int) -> list:
+        return self._call("feed", [], block, start)
+
+    def reset(self) -> None:
+        self._call("reset", None)
+
+
 def guard(driver: Any, on_error: Callable[[Event], None] | None = None, max_failures: int = 3) -> Quarantine:
     """Wrap a driver in the Quarantine subclass matching the Protocol it implements."""
-    from callguard.types import KeystrokeAttackerDriver, ShieldDriver, VoiceAuthenticityDriver
+    from callguard.types import KeystrokeAttackerDriver, SecretSpotterDriver, ShieldDriver, VoiceAuthenticityDriver
     for proto, cls in ((VoiceAuthenticityDriver, QuarantinedVoice), (KeystrokeAttackerDriver, QuarantinedAttacker),
-                       (ShieldDriver, QuarantinedShield)):
+                       (SecretSpotterDriver, QuarantinedSpotter), (ShieldDriver, QuarantinedShield)):
         if isinstance(driver, proto):
             return cls(driver, on_error, max_failures)
     raise TypeError(f"{type(driver).__name__} implements no driver Protocol")

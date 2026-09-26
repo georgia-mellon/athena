@@ -8,6 +8,8 @@ Consumed payloads (producers must send these keys; extra keys are ignored):
                    hit rate of a guessing attacker (default 3 / num_classes) (the pipeline
                    also sends the dashboard's lists: raw/shielded guesses, acc_raw, acc_shielded, chance)
 - `shield.state`   {"mode": "off"|"dsp"|"adversarial", "failed"?: bool}
+- `secret.blocked` {"category", "length"}            a spoken secret redacted from the outbound mic (plan 06)
+- `secret.request` {}                                the far end asked for a code ("read me the code")
 Published:
 - `threat.update`        {"score", "level", "V", "E", "L", "T", "typing", "shield", "reasons"}  on every tick()
 - `threat.level_change`  {"from", "to", "score", "reasons"}
@@ -51,12 +53,15 @@ class ThreatEngine:
         self._hits = {"raw": deque(maxlen=self.cfg.readout_window), "shielded": deque(maxlen=self.cfg.readout_window)}
         self._chance = min(3, self.cfg.num_classes) / self.cfg.num_classes
         self._strokes: deque[float] = deque()
+        self._secrets: deque[tuple[float, str, int]] = deque()   # (t, category, length) of blocked secrets
+        self._t_request = -1e9
         self.shield = "off"
         self.shield_failed = False
         self.level = "SAFE"
         self.score = 0.0
         self._unsubs = [bus.subscribe(t, self.on_event)
-                        for t in ("voice.verdict", "keys.stroke", "keys.readout", "shield.state")]
+                        for t in ("voice.verdict", "keys.stroke", "keys.readout", "shield.state", "secret.blocked",
+                                  "secret.request")]
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
 
@@ -79,6 +84,10 @@ class ThreatEngine:
                     self._chance = float(d["chance"])
                 for stream, ok in d["hit"].items():
                     self._hits[stream].append(bool(ok))
+            elif ev.topic == "secret.blocked":
+                self._secrets.append((now, str(d.get("category", "secret")), int(d.get("length", 0))))
+            elif ev.topic == "secret.request":
+                self._t_request = now
             elif ev.topic == "shield.state":
                 if d.get("mode", self.shield) != self.shield:
                     self._hits["shielded"].clear()     # L = what leaks with the *current* shield
@@ -103,6 +112,10 @@ class ThreatEngine:
             self._advance_v(now)
             while self._strokes and now - self._strokes[0] > c.typing_window_s:
                 self._strokes.popleft()
+            while self._secrets and now - self._secrets[0][0] > c.secret_window_s:
+                self._secrets.popleft()
+            S = len(self._secrets)
+            asked = now - self._t_request <= c.secret_window_s
             V = self.V
             E = _above_chance(self._hits["raw"], self._chance)
             L = _above_chance(self._hits["shielded"], self._chance)
@@ -115,13 +128,22 @@ class ThreatEngine:
             se = V >= c.se_voice and typing
             if se:
                 score = max(score, c.se_floor + c.se_gain * V * leak)
+            if S and V >= c.se_voice:           # you started reading a secret to an unverified voice (plan 06 §6)
+                score = max(score, c.critical + 10 if asked else c.warn)
             score = min(100.0, max(0.0, score))
             level = self._hysteresis(score)
             reasons = self._reasons(now, V, E, L, T, typing, shield_on, se)
+            if S:
+                reasons = [r for r in reasons if r != "no threat signals"]
+                cat, n = self._secrets[-1][1:]
+                what = f"{n}-digit code" if cat == "digits" else cat
+                who = "caller asked for a code and you started reading it: " if asked and V >= c.se_voice else ""
+                reasons.insert(0, f"{who}{what} blocked from your voice" + (f" ({S} in {c.secret_window_s:.0f} s)"
+                                                                            if S > 1 else ""))
             old, self.level, self.score = self.level, level, score
             shield = self.shield + (" (failed)" if self.shield_failed else "")
 
-        update = {"score": round(score, 1), "level": level, "V": round(V, 3), "E": round(E, 3),
+        update = {"score": round(score, 1), "level": level, "V": round(V, 3), "E": round(E, 3), "S": S,
                   "L": round(L, 3), "T": round(T, 2), "typing": typing, "shield": shield, "reasons": reasons}
         self.bus.emit("threat.update", **update)
         if level != old:

@@ -30,6 +30,7 @@ import soundfile as sf
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+from callguard.audio.replay import load_wav  # noqa: E402
 from callguard.audio.vad import speech_fraction  # noqa: E402
 from callguard.drivers.keyguard_real import harrison_split  # noqa: E402
 from callguard.types import SR  # noqa: E402
@@ -44,6 +45,11 @@ AGENT = ("diffssd", "elevenlabs", "librispeech:100")
 LOCAL = "2803"                            # the user at the keyboard
 CODE = "RESET4821"                        # fake code only
 TYPING = [22.0, 29.5]                     # shield off at the first, on (28 s) at the second
+# Spoken-secret beat (plan 06 section 7): the agent asks "just read me the code", the victim starts reading it.
+REQUEST_T, VICTIM_T = 34.4, 37.4
+RECORDED = REPO / "demo" / "audio" / "recorded"
+AGENT_REQUEST = [RECORDED / "agent_request.wav", REPO / "demo" / "audio" / "agent_lines" / "06.wav"]
+VICTIM_LINE = RECORDED / "victim_code.wav"  # a consenting teammate reading the fake code; never TTS (plan 06)
 PRE_S = 0.02                              # keyguard.config.PRE_S
 FAR_DBFS, KEY_DBFS, NOISE_DBFS, GAP = -23.0, -24.0, -65.0, 0.3
 LOCAL_DBFS = -28.0                        # user's speech at the mic (not while typing)
@@ -134,10 +140,31 @@ def main() -> None:
     for t0, t1 in zip(TYPING, burst_ends):
         a, b = round((t0 - 0.3) * SR), round((t1 + 0.5) * SR)
         env[a:b] = 0.0
+    victim = load_wav(VICTIM_LINE) if VICTIM_LINE.exists() else None
+    if victim is not None:                              # the user stops chatting while reading the code
+        a = round((VICTIM_T - 0.3) * SR)
+        env[a:a + len(victim) + round(0.8 * SR)] = 0.0
     env = np.convolve(env, np.ones(800, np.float32) / 800, mode="same")  # 50 ms fades
     speech = speech * env
     noise = db_gain(rng.standard_normal(n), NOISE_DBFS).astype(np.float32)
     mic = speech + keys_track + noise
+    if victim is not None:
+        a = round(VICTIM_T * SR)
+        victim = db_gain(trim(victim), LOCAL_DBFS)[: n - a]
+        mic[a:a + len(victim)] += victim
+        print(f"secret beat: victim line {VICTIM_LINE.name} ({len(victim) / SR:.1f} s) at {VICTIM_T} s")
+    else:
+        print(f"secret beat: no victim recording; record a teammate reading the fake code into {VICTIM_LINE} "
+              f"(16 kHz mono WAV) and rebuild")
+    request = next((p for p in AGENT_REQUEST if p.exists()), None)
+    if request is not None:                             # the agent's "read me the code" replaces agent audio there
+        a = round(REQUEST_T * SR)
+        line = db_gain(trim(load_wav(request)), FAR_DBFS)[: round((VICTIM_T - REQUEST_T) * SR)]
+        far[a:a + len(line)] = line
+        far[a + len(line): round((VICTIM_T + 0.2) * SR)] = 0.0   # the agent waits for the answer
+        print(f"secret beat: agent request {request.relative_to(REPO)} at {REQUEST_T} s")
+    else:
+        print("secret beat: no agent request line; run `python demo/render_agent.py` (line 06)")
 
     OUT.mkdir(parents=True, exist_ok=True)
     for name, x in (("far_end", far), ("mic", mic)):

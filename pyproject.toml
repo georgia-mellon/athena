@@ -24,6 +24,7 @@ dependencies = [
     "matplotlib>=3.11.2",
     "pesq>=0.0.4",
     "praat-parselmouth>=0.4.7",
+    "vosk>=0.3.45",
 ]
 
 [project.optional-dependencies]

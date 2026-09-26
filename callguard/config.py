@@ -38,6 +38,7 @@ class ThreatConfig:
     critical: float = 75.0
     hysteresis: float = 5.0
     tick_hz: float = 4.0               # threat.update rate (>= 2 Hz)
+    secret_window_s: float = 60.0      # S = spoken secrets blocked in this window (plan 06 section 6)
 
 
 @dataclass
@@ -45,9 +46,26 @@ class DriversConfig:
     voice: str = "real"                # real | mock, per slot
     attacker: str = "real"
     shield: str = "real"
+    secret: str = "real"               # spoken-secret spotter (plan 06): real = Vosk (runs/models), mock
     hearsay_mode: str = "r4ft"         # r4ft (fast) | r5 (submitted fusion)
     shield_mode: str = "dsp"           # off | dsp | adversarial
     device: str = "auto"               # torch device: auto | cpu | cuda
+
+
+@dataclass
+class SecretConfig:
+    """Spoken-secret shield (plan 06)."""
+    enabled: bool = True
+    delay_ms: float = 500.0            # constant outbound delay while enabled (the redactor's lookahead)
+    style: str = "tone"                # mute | tone | noise
+    arm_on_voice: bool = True          # arm while Hearsay V >= arm_voice
+    arm_voice: float = 0.5
+    keep_voice: float = 0.3            # stays armed while V >= this ...
+    arm_on_request: bool = True        # ... or after an inbound "read me the code" trigger
+    disarm_after_s: float = 60.0       # ... for this long after the last reason to be armed
+    allow_s: float = 30.0              # the dashboard's Allow button
+    min_digits: int = 3                # a run this long is reported as a blocked secret
+    gap_s: float = 1.2                 # tokens further apart than this start a new run
 
 
 @dataclass
@@ -84,10 +102,12 @@ class Config:
     devices: DevicesConfig = field(default_factory=DevicesConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     threat: ThreatConfig = field(default_factory=ThreatConfig)
+    secret: SecretConfig = field(default_factory=SecretConfig)
     hooks: list[HookConfig] = field(default_factory=lambda: [HookConfig("console")])
 
 
-SECTIONS = {"drivers": DriversConfig, "devices": DevicesConfig, "server": ServerConfig, "threat": ThreatConfig}
+SECTIONS = {"drivers": DriversConfig, "devices": DevicesConfig, "server": ServerConfig, "threat": ThreatConfig,
+            "secret": SecretConfig}
 
 
 def _coerce(value, like):
@@ -139,13 +159,15 @@ def load(path: str | Path | None = None, env: dict[str, str] | None = None) -> C
 
 def _validate(cfg: Config) -> None:
     d = cfg.drivers
-    for slot in ("voice", "attacker", "shield"):
+    for slot in ("voice", "attacker", "shield", "secret"):
         if getattr(d, slot) not in DRIVER_KINDS:
             raise ValueError(f"drivers.{slot} must be one of {DRIVER_KINDS}, got {getattr(d, slot)!r}")
     if d.shield_mode not in SHIELD_MODES:
         raise ValueError(f"drivers.shield_mode must be one of {SHIELD_MODES}")
     if d.hearsay_mode not in HEARSAY_MODES:
         raise ValueError(f"drivers.hearsay_mode must be one of {HEARSAY_MODES}")
+    if cfg.secret.style not in ("mute", "tone", "noise"):
+        raise ValueError("secret.style must be mute | tone | noise")
     for h in cfg.hooks:
         if h.kind not in ("console", "jsonl", "webhook"):
             raise ValueError(f"unknown hook kind {h.kind!r}")

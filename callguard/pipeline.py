@@ -7,7 +7,10 @@ and far-end ring, with a ScriptedKeyClock. Downstream nothing knows which mode i
 The workers are step functions keyed on *audio* sample counters, not wall time:
 - `voice_step`: every 2 s of far-end audio, if the last 4 s is mostly speech, score it -> voice.window/voice.verdict.
 - `attack_step`: each key event -> keys.stroke; once 0.5 s of audio after it exists, run the attacker at the same
-  onset on the raw ring and on the shielded ring (shifted by the shield's latency) -> keys.readout.
+  onset on the raw ring and on the shielded ring (shifted by the output latency) -> keys.readout.
+- `secret_step` (plan 06): while armed (unverified voice, an inbound "read me the code" trigger, or manual), feed the
+  outbound audio (after the Keyguard shield, before the delay line) to the spotter and mark its spans on the
+  Redactor; the audio thread applies them as the samples leave the constant delay line -> secret.blocked.
 Live and realtime replay run them on worker threads; fast replay (tests) calls them inline after every block, which
 makes a run deterministic. The audio thread only ever runs the shield; a raising driver is quarantined and the
 block passes through (MicShieldStream + drivers.base.Quarantine).
@@ -31,13 +34,14 @@ from typing import Any, Callable
 import numpy as np
 
 from callguard.audio.keys import KeyClock, ScriptedKeyClock
+from callguard.audio.redactor import Redactor
 from callguard.audio.replay import FileSource
 from callguard.audio.ring import Ring
 from callguard.audio.streams import MicShieldStream
 from callguard.audio.vad import speech_fraction
 from callguard.bus import EventBus
 from callguard.config import REPO, SHIELD_MODES, Config
-from callguard.drivers.base import guard, make_attacker, make_shield, make_voice
+from callguard.drivers.base import guard, make_attacker, make_shield, make_spotter, make_voice
 from callguard.threat import ThreatEngine
 from callguard.types import BLOCK, SR, Event
 
@@ -86,11 +90,24 @@ def load_scenario(name: str, root: Path = SCENARIOS, audio: Path = DEMO_AUDIO) -
 class Pipeline:
     """Owns the drivers (built once; models are slow to load) and one run's state (rebuilt by `reset`)."""
 
-    def __init__(self, cfg: Config, bus: EventBus, voice: Any = None, attacker: Any = None, shield: Any = None):
+    def __init__(self, cfg: Config, bus: EventBus, voice: Any = None, attacker: Any = None, shield: Any = None,
+                 spotter: Any = None, spotter_in: Any = None):
         self.cfg, self.bus = cfg, bus
         self.voice = guard(voice or make_voice(cfg), self._on_error)
         self.attacker = guard(attacker or make_attacker(cfg), self._on_error)
         self.shield = guard(shield or make_shield(cfg), self._on_error)
+        sc, self.secret_error = cfg.secret, None
+        self.spotter = self.spotter_in = self.redactor = None
+        if sc.enabled:
+            try:
+                self.spotter = guard(spotter or make_spotter(cfg, "outbound"), self._on_error)
+                if sc.arm_on_request:
+                    self.spotter_in = guard(spotter_in or make_spotter(cfg, "inbound"), self._on_error)
+                self.redactor = Redactor(round(sc.delay_ms / 1000 * SR), sc.style)
+            except Exception as e:                      # noqa: BLE001 - no model: the feature is off, audio is not
+                self.spotter = self.spotter_in = None
+                self.secret_error = f"{type(e).__name__}: {e}"
+                log.warning("secret shield disabled: %s", self.secret_error)
         self.shield_mode = cfg.drivers.shield_mode
         self.mode = "idle"                      # idle | live | replay
         self._run_stop: threading.Event | None = None
@@ -115,19 +132,36 @@ class Pipeline:
         if getattr(self, "engine", None):
             self.engine.stop()
         self.engine = ThreatEngine(self.bus, self.cfg.threat, now=clock)
+        self.outbound = Ring(30.0)              # shield output before the delay line: what the spotter hears
+        for x in (self.redactor, self.spotter, self.spotter_in):
+            if x is not None:
+                x.reset()
+        self._out_cursor = self._far_cursor = 0
+        self._keep_until = self._bypass_until = -1e9
+        self._manual: bool | None = None
+        self.armed, self.armed_by, self._run = False, "", None
         self._publish_shield()
+        self._publish_secret()
 
     def _on_error(self, ev: Event) -> None:
         self.bus.publish(ev)
         if ev.data.get("kind") == "shield" and ev.data.get("quarantined"):
             self._publish_shield(failed=True)
+        if ev.data.get("kind") == "secret" and ev.data.get("quarantined"):
+            self.secret_error = f"spotter failed: {ev.data.get('error')}"   # fails open: the delay line just passes
+            self._publish_secret()
 
     def _publish_shield(self, failed: bool = False) -> None:
         self.bus.emit("shield.state", mode=self.shield_mode, failed=failed or self.shield.quarantined,
                       driver=self.shield.name, latency_ms=round(self._shield_lag() / SR * 1000, 1))
 
     def _shield_lag(self) -> int:
-        return 0 if self.shield.quarantined else int(getattr(self.shield, "latency", 0) or 0)
+        """Output delay of the shielded stream vs the raw mic: Keyguard shield lookahead + the secret delay line."""
+        lag = 0 if self.shield.quarantined else int(getattr(self.shield, "latency", 0) or 0)
+        return lag + (self.redactor.latency if self._secret_on() else 0)
+
+    def _secret_on(self) -> bool:
+        return self.redactor is not None and self.spotter is not None
 
     # --- audio thread -----------------------------------------------------------------------------------------
     def _hook(self, block: np.ndarray, start: int) -> np.ndarray:
@@ -137,7 +171,11 @@ class Pipeline:
         if self.shield_mode != "off":
             evs = [s for s in self.keyclock.in_range(start - LATE, start + len(block)) if s not in self._sent]
             self._sent.update(evs)
-        return self.shield.process(block, evs)
+        y = self.shield.process(block, evs)
+        if self._secret_on():                           # constant delay line whenever the feature is on
+            self.outbound.write(y)
+            y = self.redactor.process(y, start)
+        return y
 
     # --- workers ----------------------------------------------------------------------------------------------
     def voice_step(self) -> bool:
@@ -206,6 +244,102 @@ class Pipeline:
                       raw=list(self._readout["raw"]), shielded=list(self._readout["shielded"]),
                       acc_raw=acc["raw"], acc_shielded=acc["shielded"], driver=self.attacker.name)
 
+    # --- spoken-secret shield (plan 06) -----------------------------------------------------------------------
+    def secret_step(self) -> bool:
+        """Arm/disarm, listen for inbound triggers, spot outbound secrets and mark them. True if work was done."""
+        if not self._secret_on():
+            return False
+        c, now, did = self.cfg.secret, self.clock(), False
+        if self.spotter_in is not None:
+            did |= self._feed(self.spotter_in, self.far, "_far_cursor", self._on_request)
+        V = self.engine.V
+        if c.arm_on_voice and (V >= c.arm_voice or (self.armed and V >= c.keep_voice)):
+            if not self.armed:
+                self.armed_by = "voice"
+            self._keep_until = max(self._keep_until, now + c.disarm_after_s)
+        armed = self._manual if self._manual is not None else now < self._keep_until
+        if self._manual:
+            self.armed_by = "manual"
+        if armed != self.armed:
+            self.armed = armed
+            if not armed:
+                self.armed_by = ""
+            self._publish_secret()
+        if armed:
+            did |= self._feed(self.spotter, self.outbound, "_out_cursor", self._on_span)
+        else:
+            self._out_cursor = self.outbound.total      # not listening while disarmed (plan 06 section 8)
+        self._close_run(self._out_cursor)
+        return did
+
+    def _feed(self, drv, ring: Ring, cursor: str, on_span) -> bool:
+        pos, end = getattr(self, cursor), ring.total
+        pos = max(pos, end - ring.cap + BLOCK)          # fell a whole ring behind: skip ahead
+        end = min(end, pos + SR)                        # at most 1 s per step
+        n = (end - pos) // BLOCK * BLOCK
+        if n <= 0:
+            return False
+        x = ring.read_range(pos, pos + n)
+        if x is None:
+            setattr(self, cursor, ring.total)
+            return False
+        for s in range(0, n, BLOCK):
+            for sp in drv.feed(x[s:s + BLOCK], pos + s):
+                on_span(sp)
+        setattr(self, cursor, pos + n)
+        return True
+
+    def _on_request(self, sp) -> None:
+        self.bus.emit("secret.request", t_audio=round(sp.start / SR, 2))
+        if self.cfg.secret.arm_on_request:
+            self._keep_until = max(self._keep_until, self.clock() + self.cfg.secret.disarm_after_s)
+            if not self.armed:
+                self.armed_by = "request"
+
+    def _on_span(self, sp) -> None:
+        allowed = self.clock() < self._bypass_until
+        leaked = 0 if allowed else self.redactor.mark(sp.start, sp.end)
+        r = self._run
+        if r is not None and sp.start - r["end"] <= self.cfg.secret.gap_s * SR and sp.category == r["category"]:
+            r["end"], r["length"] = max(r["end"], sp.end), max(r["length"], sp.length)
+            r["leaked"] += leaked
+        else:
+            self._close_run(None)
+            self._run = {"start": sp.start, "end": sp.end, "category": sp.category, "length": sp.length,
+                         "leaked": leaked, "allowed": allowed}
+
+    def _close_run(self, pos: int | None) -> None:
+        """Publish the current run once the stream is gap_s past it (pos None = now)."""
+        r = self._run
+        if r is None or (pos is not None and pos < r["end"] + self.cfg.secret.gap_s * SR):
+            return
+        self._run = None
+        if r["category"] == "digits" and r["length"] < self.cfg.secret.min_digits:
+            return
+        self.bus.emit("secret.blocked", category=r["category"], length=r["length"], armed_by=self.armed_by,
+                      allowed=r["allowed"], leaked_ms=round(r["leaked"] / SR * 1000),
+                      t_audio=round(r["start"] / SR, 2))
+
+    def _publish_secret(self) -> None:
+        c, on = self.cfg.secret, self._secret_on()
+        self.bus.emit("secret.state", enabled=on, armed=self.armed, armed_by=self.armed_by, manual=self._manual,
+                      allowed=self.clock() < self._bypass_until, delay_ms=c.delay_ms if on else 0,
+                      error=self.secret_error, driver=self.spotter.name if self.spotter is not None else None)
+
+    def secret(self, action: str) -> str:
+        """Dashboard control: allow (bypass for allow_s) | arm | disarm | auto."""
+        if not self._secret_on():
+            raise ValueError(f"secret shield unavailable ({self.secret_error or 'disabled in config'})")
+        if action == "allow":
+            self._bypass_until = self.clock() + self.cfg.secret.allow_s
+        elif action in ("arm", "disarm", "auto"):
+            self._manual = {"arm": True, "disarm": False, "auto": None}[action]
+        else:
+            raise ValueError(f"unknown secret action {action!r}")
+        self.bus.publish(Event("control.secret", {"action": action}))
+        self._publish_secret()
+        return action
+
     def _workers(self, stop: threading.Event) -> list[threading.Thread]:
         def loop(step):
             while not stop.is_set():
@@ -217,7 +351,7 @@ class Pipeline:
                 if not busy:
                     stop.wait(0.02)
         ts = [threading.Thread(target=loop, args=(f,), name=f"callguard-{f.__name__}", daemon=True)
-              for f in (self.voice_step, self.attack_step)]
+              for f in (self.voice_step, self.attack_step, self.secret_step)]
         for t in ts:
             t.start()
         return ts
@@ -258,11 +392,14 @@ class Pipeline:
                     while self.voice_step():
                         pass
                     self.attack_step()
+                    self.secret_step()
                     if (s // BLOCK) % (TICK // BLOCK) == 0:
                         self.bus.flush()                # the engine must see this tick's events first
                         self.engine.tick()
             if not realtime:                            # drain the tail
                 self.attack_step()
+                self.secret_step()
+                self._close_run(None)
                 self.bus.flush()
                 self.engine.tick()
         finally:

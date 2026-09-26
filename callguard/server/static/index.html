@@ -63,6 +63,21 @@
       <button data-mode="off">Off</button><button data-mode="dsp">DSP</button><button data-mode="adversarial">Adversarial</button>
     </div>
   </section>
+
+  <section class="card" aria-label="What you're saying">
+    <h2>What you're saying</h2>
+    <div class="secret-head">
+      <span id="sec-pill" class="pill off">offline</span>
+      <span id="sec-why" class="muted"></span>
+    </div>
+    <div class="muted small">Codes, PINs and card numbers you read aloud are cut from your mic while the caller is
+      unverified. Only the kind and length are shown; nothing you say is stored. Delay <b id="sec-delay">–</b>.</div>
+    <ol id="sec-log" class="sec-log"><li class="muted">nothing blocked</li></ol>
+    <div class="shield" role="group" aria-label="secret shield controls">
+      <span class="lab">Secrets</span>
+      <button data-sec="allow" title="let the next 30 s through">Allow 30 s</button><button data-sec="arm">Arm</button><button data-sec="auto">Auto</button><button data-sec="disarm">Off</button>
+    </div>
+  </section>
 </main>
 
 <section class="card bottom">

@@ -34,6 +34,10 @@ class FakeControls:
         self.calls.append(("scenario", action, name))
         return "started"
 
+    def secret(self, action):
+        self.calls.append(("secret", action))
+        return action
+
 
 def make():
     bus, ctl = FakeBus(), FakeControls()
@@ -87,7 +91,10 @@ def test_controls():
         r = c.post("/api/control/scenario", json={"action": "start", "name": "ai_caller"})
         assert r.json() == {"ok": True, "result": "started"}
         c.post("/api/control/scenario", json={"action": "stop", "name": "ai_caller"})
-    assert ctl.calls == [("shield", "adversarial"), ("scenario", "start", "ai_caller"), ("scenario", "stop", "ai_caller")]
+        assert c.post("/api/control/secret", json={"action": "allow"}).json()["result"] == "allow"
+        assert c.post("/api/control/secret", json={"action": "read"}).status_code == 422
+    assert ctl.calls == [("shield", "adversarial"), ("scenario", "start", "ai_caller"), ("scenario", "stop", "ai_caller"),
+                         ("secret", "allow")]
 
 
 def test_controls_missing_is_503():

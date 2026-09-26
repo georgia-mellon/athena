@@ -78,11 +78,22 @@ shielded ones (chance 8 %).
 2 ms per keystroke; DSP shield 2.8 ms median (5 ms max) per 20 ms block while a key is active, 0 ms otherwise, plus
 80 ms constant lookahead.
 
-**Attack proof** ([reports/attack_under_speech.md](reports/attack_under_speech.md)): can an eavesdropper read keys
-with someone talking over them, and does the shield stop it? Honest summary: with typing in a quiet room, the
-adaptive attacker reads ~54 % of keys top-1 (chance 2.8 %) and the shield cuts that sharply; with speech +10 dB over
-the keys the provisional attacker drops to ~16 % with perfect key timing and near chance with its own onset
-detection. Speech quality with the shield (STOI) and Hearsay's false alarms on shielded real speech are in the report.
+**Attack proof** ([reports/attack_under_speech.md](reports/attack_under_speech.md), 360 held-out presses, 95 % CIs):
+can an eavesdropper read keys with someone talking over them, and does the shield stop it? Top-1, adaptive
+(speech-trained) attacker, chance 2.8 %:
+
+| condition | no shield | Keyguard DSP shield (208 ms key region) |
+|---|---|---|
+| quiet typing, attacker knows key timing | 53.6 % | 10.8 % |
+| quiet typing, attacker detects keys itself | 47.5 % | 11.4 % |
+| speech +10 dB over the keys, known timing | 15.8 % | 5.8 % |
+| speech +10 dB, attacker detects keys itself | 5.8 % | 2.5 % |
+
+Honest reading: keystrokes are clearly readable on a call when you type while quiet, and still 5.7x chance under
+speech if the attacker knows when you typed; the attacker's own key detection is what fails under speech. The
+shield cuts quiet-typing reads ~5x but doesn't reach chance against this adaptive attacker (plan 04 criterion 2
+misses narrowly: 5.8 % vs a 5.6 % bar, STOI 0.897 vs 0.9 on a pessimistic one-key-per-1.5 s test). The fix is
+Keyguard's adversarial shield stage (teammate). Hearsay flags 2/100 real voices on shielded speech (0/100 unshielded).
 
 **Hearsay under keystrokes** (the reverse direction, `hearsay/reports/generalization.md` §2): with typing as loud as
 the voice, the submitted model flags ≤ 1.7 % of real speakers; with the Keyguard shield on, 1.3 %.

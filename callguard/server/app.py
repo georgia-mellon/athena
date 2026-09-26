@@ -25,6 +25,10 @@ class ShieldCmd(BaseModel):
     mode: Literal["off", "dsp", "adversarial"]
 
 
+class SecretCmd(BaseModel):
+    action: Literal["allow", "arm", "disarm", "auto"]
+
+
 class ScenarioCmd(BaseModel):
     action: Literal["start", "stop"]
     name: str = "ai_caller"
@@ -104,6 +108,10 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
     @app.post("/api/control/shield")
     def control_shield(cmd: ShieldCmd):
         return _control("set_shield", cmd.mode)
+
+    @app.post("/api/control/secret")
+    def control_secret(cmd: SecretCmd):
+        return _control("secret", cmd.action)
 
     @app.post("/api/control/scenario")
     def control_scenario(cmd: ScenarioCmd):
