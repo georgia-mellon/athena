@@ -17,6 +17,18 @@
   <button id="theme" title="Toggle light/dark">Light</button>
 </header>
 
+<section id="meet-bar" class="meet card" aria-label="Meeting">
+  <span class="lab">Meeting</span>
+  <span id="meet-pill" class="pill off" aria-live="polite">not in a meeting</span>
+  <input id="meet-url" type="url" placeholder="meet.google.com/abc-defg-hij" aria-label="Google Meet link" spellcheck="false">
+  <button id="meet-join">Join</button>
+  <button id="meet-leave">Leave</button>
+  <a href="/meet/testroom" target="_blank" rel="noopener" class="link">Test room ↗</a>
+  <div class="spacer"></div>
+  <span class="muted small" title="how long your voice is held before it leaves: Keyguard shield + secret delay line">Pipeline:
+    outgoing delay <b id="pipe-lat">–</b> <span id="pipe-split"></span></span>
+</section>
+
 <div id="alarm" class="alarm" hidden></div>
 
 <section class="threat card" aria-label="Threat score">

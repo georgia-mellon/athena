@@ -48,6 +48,11 @@ class SecretCmd(BaseModel):
     action: Literal["allow", "arm", "disarm", "auto"]
 
 
+class MeetCmd(BaseModel):
+    action: Literal["join", "leave"]
+    url: str | None = None
+
+
 class ScenarioCmd(BaseModel):
     action: Literal["start", "stop"]
     name: str = "ai_caller"
@@ -72,7 +77,7 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
                allowed_hosts: frozenset[str] = LOCAL_HOSTS) -> FastAPI:
     """bus: anything with subscribe(glob, fn) -> unsubscribe. state_provider: returns the snapshot
     {topic: {"t", "data"}}; default = the latest event per topic seen here. controls: set_shield(mode),
-    scenario(action, name)."""
+    scenario(action, name), secret(action), meet(action, url)."""
     latest: dict[str, dict] = {}
     clients: set[asyncio.Queue] = set()
 
@@ -121,6 +126,10 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
     def state() -> Response:
         return Response(json.dumps(snapshot(), default=_jsonable), media_type="application/json")
 
+    @app.get("/api/health")  # the desktop shell waits on this before opening the window
+    def health() -> dict:
+        return {"ok": True, "mode": getattr(controls, "mode", None)}
+
     def _control(method: str, *args):
         fn = getattr(controls, method, None)
         if fn is None:
@@ -138,6 +147,10 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
     @app.post("/api/control/secret")
     def control_secret(cmd: SecretCmd):
         return _control("secret", cmd.action)
+
+    @app.post("/api/control/meet")
+    def control_meet(cmd: MeetCmd):
+        return _control("meet", cmd.action, cmd.url)
 
     @app.post("/api/control/scenario")
     def control_scenario(cmd: ScenarioCmd):

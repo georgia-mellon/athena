@@ -21,6 +21,11 @@ button.on { background: var(--accent); border-color: var(--accent); color: #fff;
 .spacer { flex: 1; }
 .pill { font-size: 15px; padding: 3px 10px; border-radius: 99px; border: 2px solid var(--line); }
 .pill.ok { border-color: var(--safe); color: var(--safe); } .pill.off { border-color: var(--crit); color: var(--crit); }
+.meet { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 20px; margin-bottom: 16px; }
+.meet input { flex: 1 1 320px; min-width: 200px; max-width: 520px; }
+.meet .pill { font-size: 17px; }
+.pill.wait { border-color: var(--watch); color: var(--watch); }
+.link { color: var(--accent); font-size: 18px; text-decoration: none; } .link:hover { text-decoration: underline; }
 .alarm { background: var(--crit); color: #fff; padding: 10px 16px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; }
 
 .card { background: var(--card); border: 2px solid var(--line); border-radius: 14px; padding: 16px 20px; }

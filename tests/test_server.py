@@ -38,6 +38,12 @@ class FakeControls:
         self.calls.append(("secret", action))
         return action
 
+    def meet(self, action, url=None):
+        if url is not None and "meet.google.com" not in url:
+            raise ValueError("not a Meet URL")
+        self.calls.append(("meet", action, url))
+        return "joining" if action == "join" else "left"
+
 
 LOCAL = "http://127.0.0.1:8765"
 
@@ -100,9 +106,26 @@ def test_controls():
                          ("secret", "allow")]
 
 
+def test_meet_control_and_health():
+    _, ctl, app = make()
+    ctl.mode = "meet"
+    with TestClient(app, base_url=LOCAL) as c:
+        assert c.get("/api/health").json() == {"ok": True, "mode": "meet"}
+        r = c.post("/api/control/meet", json={"action": "join", "url": "https://meet.google.com/abc-defg-hij"})
+        assert r.json() == {"ok": True, "result": "joining"}
+        assert c.post("/api/control/meet", json={"action": "leave"}).json()["result"] == "left"
+        assert c.post("/api/control/meet", json={"action": "dance"}).status_code == 422
+        assert c.post("/api/control/meet", json={"action": "join", "url": "https://evil.example"}).status_code == 400
+        assert c.post("/api/control/meet", json={"action": "leave"},
+                      headers={"origin": "https://meet.google.com"}).status_code == 403   # dashboard stays local-only
+    assert ctl.calls == [("meet", "join", "https://meet.google.com/abc-defg-hij"), ("meet", "leave", None)]
+
+
 def test_controls_missing_is_503():
     with TestClient(create_app(FakeBus(), None, None), base_url=LOCAL) as c:
         assert c.post("/api/control/shield", json={"mode": "off"}).status_code == 503
+        assert c.post("/api/control/meet", json={"action": "join"}).status_code == 503
+        assert c.get("/api/health").json() == {"ok": True, "mode": None}
 
 
 def test_other_sites_are_refused():
