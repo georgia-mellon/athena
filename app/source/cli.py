@@ -1,7 +1,9 @@
-"""callguard run | devices | bench (plan 01 §3).
+"""callguard run | app | devices | bench (plan 01 §3).
 
   callguard run --mode replay --scenario ai_caller [--drivers real|mock] [--exit-at-end] [--mute] [--no-browser]
   callguard run --mode live                        (VB-CABLE + Zoom, docs/plans/03)
+  callguard run --mode meet [--meet-url URL]       (Google Meet in CallGuard's own browser window; no VB-CABLE)
+  callguard app [--meet-url URL] [--port N]        (the desktop app: dashboard window + Meet)
   callguard devices                                (routing check; prints the VB-CABLE install steps if missing)
   callguard bench [--drivers real|mock]            (per-driver latency)
 """
@@ -37,6 +39,7 @@ def cmd_run(args) -> int:
 
     from app.source import hooks
     from app.source.bus import EventBus
+    from app.source.connectors.meet.router import make_router
     from app.source.pipeline import Pipeline, load_scenario
     from dashboard.server import create_app
 
@@ -50,10 +53,12 @@ def cmd_run(args) -> int:
           f"attacker={cfg.drivers.attacker} shield={cfg.drivers.shield} ...", flush=True)
     t0 = time.perf_counter()
     pipe = Pipeline(cfg, bus)
+    pipe.meet_port = port
     print(f"[callguard] drivers ready in {time.perf_counter() - t0:.1f} s: {pipe.voice.name}, {pipe.attacker.name}, "
           f"{pipe.shield.name}", flush=True)
-    server = uvicorn.Server(uvicorn.Config(create_app(bus, controls=pipe), host=cfg.server.host, port=port,
-                                           log_level="warning"))
+    app = create_app(bus, controls=pipe)
+    app.include_router(make_router(pipe))
+    server = uvicorn.Server(uvicorn.Config(app, host=cfg.server.host, port=port, log_level="warning"))
     url = f"http://{cfg.server.host}:{port}/"
 
     def begin():
@@ -65,6 +70,14 @@ def cmd_run(args) -> int:
         if args.mode == "live":
             pipe.start_live()
             print("[callguard] live: mic -> shield -> virtual mic; scoring the meeting's output. Ctrl+C to stop.")
+        elif args.mode == "meet":
+            pipe.start_meet()
+            print(f"[callguard] meet: test room {url}meet/testroom", flush=True)
+            if not args.no_browser:
+                try:
+                    print(f"[callguard] {pipe.meet('join', args.meet_url)}", flush=True)
+                except ValueError as e:
+                    print(f"[callguard] {e}; use the dashboard's Join button", flush=True)
         else:
             time.sleep(args.delay)                      # let the browser connect before the story starts
             end = (lambda: setattr(server, "should_exit", True)) if args.exit_at_end else None
@@ -78,6 +91,14 @@ def cmd_run(args) -> int:
         bus.flush()
         bus.close()
     return 0
+
+
+def cmd_app(args) -> int:
+    from app.source.desktop import main as desktop_main
+    argv = ["--config", args.config] if args.config else []
+    argv += ["--meet-url", args.meet_url] if args.meet_url else []
+    argv += ["--port", str(args.port)] if args.port else []
+    return desktop_main(argv)
 
 
 def cmd_devices(args) -> int:
@@ -141,7 +162,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", help="TOML config (default: ./callguard.toml if present)")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run the pipeline and the dashboard")
-    r.add_argument("--mode", choices=("live", "replay"), default="replay")
+    r.add_argument("--mode", choices=("live", "replay", "meet"), default="replay")
+    r.add_argument("--meet-url", help="meet: a Meet link or code (default: Meet's home page)")
     r.add_argument("--scenario", default="ai_caller")
     r.add_argument("--drivers", choices=("real", "mock"), help="override every driver slot")
     r.add_argument("--port", type=int)
@@ -152,6 +174,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--mute", action="store_true", help="replay: don't play the audio on the speakers")
     r.add_argument("--delay", type=float, default=3.0, help="replay: seconds before the scenario starts")
     r.set_defaults(fn=cmd_run)
+    a = sub.add_parser("app", help="desktop app: dashboard in a native window, Google Meet connector")
+    a.add_argument("--meet-url", help="a Meet link or code to open at start")
+    a.add_argument("--port", type=int)
+    a.set_defaults(fn=cmd_app)
     sub.add_parser("devices", help="list audio devices and check the Zoom routing").set_defaults(fn=cmd_devices)
     b = sub.add_parser("bench", help="per-driver latency")
     b.add_argument("--drivers", choices=("real", "mock"), help="override every driver slot")

@@ -95,4 +95,5 @@ TOPICS = (
     "threat.update", "threat.level_change",
     "control.scenario", "control.shield",
     "secret.state", "secret.blocked", "secret.request", "control.secret",
+    "meet.state", "control.meet",
 )

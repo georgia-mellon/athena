@@ -1,7 +1,8 @@
 """Pipeline: audio in -> shield -> rings -> voice / attacker workers -> bus -> ThreatEngine (plan 02 §1).
 
-One code path for both modes. Live: MicShieldStream (mic -> shield -> VB-CABLE) + LoopbackStream (far end) +
-the pynput KeyClock. Replay: a scenario's WAVs are pushed block by block through the same MicShieldStream.process
+One code path for all modes. Live: MicShieldStream (mic -> shield -> VB-CABLE) + LoopbackStream (far end) +
+the pynput KeyClock. Meet: the browser bridge (app/source/connectors/meet) pushes the page's mic blocks through
+`meet_mic` (the same MicShieldStream.process) and the remote participants' audio into `meet_far`. Replay: a scenario's WAVs are pushed block by block through the same MicShieldStream.process
 and far-end ring, with a ScriptedKeyClock. Downstream nothing knows which mode it is in.
 
 The workers are step functions keyed on *audio* sample counters, not wall time:
@@ -110,7 +111,9 @@ class Pipeline:
                 self.secret_error = f"{type(e).__name__}: {e}"
                 log.warning("secret shield disabled: %s", self.secret_error)
         self.shield_mode = cfg.drivers.shield_mode
-        self.mode = "idle"                      # idle | live | replay
+        self.mode = "idle"                      # idle | live | replay | meet
+        self.meet_session = None                # launcher.MeetSession while a Meet window is open
+        self.meet_port: int | None = None       # the server the bridge talks to (None: cfg.server.port)
         self._run_stop: threading.Event | None = None
         self._run_thread: threading.Thread | None = None
         self._live: list = []
@@ -460,7 +463,100 @@ class Pipeline:
         self._workers(self._run_stop)
         self.engine.start()
 
+    # --- Google Meet (app/source/connectors/meet) ----------------------------------------------------------------
+    def start_meet(self, keyclock: KeyClock | None = None) -> None:
+        """Meet mode: no local audio devices; the bridge in the Meet page feeds meet_mic / meet_far over the
+        server's /meet WebSockets. `keyclock` is for tests (default: the pynput KeyClock)."""
+        kc = keyclock or KeyClock(offset_s=self.cfg.devices.key_offset_s)
+        self.reset(kc, clock=time.monotonic)
+        self.mode = "meet"
+        self._run_stop = stop = threading.Event()
+        kc.start()
+        self._live = [kc]
+        self._meet = {"mic": 0.0, "far": 0.0, "links": {"mic": 0, "far": 0}, "rtt_ms": 0.0, "last": None}
+        self._workers(stop)
+        self.engine.start()
+        threading.Thread(target=self._meet_watch, args=(stop,), name="callguard-meet-state", daemon=True).start()
+        self._publish_meet()
+
+    def meet_mic(self, block: np.ndarray) -> np.ndarray:
+        """One mic block from the page -> Keyguard shield -> secret delay line -> back to the page (same size).
+        Outside meet mode it passes straight through (never mute the user)."""
+        block = np.nan_to_num(np.asarray(block, np.float32).reshape(-1))
+        if self.mode != "meet":
+            return block
+        self._meet["mic"] = time.monotonic()
+        # the block's last sample was captured about now (plus browser + socket latency: devices.key_offset_s)
+        self.keyclock.anchor(self.mic.position + len(block))
+        return self.mic.process(block)
+
+    def meet_far(self, block: np.ndarray) -> None:
+        """Remote participants' audio (mixed in the page) -> far-end ring (Hearsay, the request listener)."""
+        if self.mode == "meet":
+            self._meet["far"] = time.monotonic()
+            self.far.write(np.nan_to_num(np.asarray(block, np.float32).reshape(-1)))
+
+    def meet_link(self, kind: str, delta: int = 0, rtt_ms: float | None = None) -> None:
+        """Router bookkeeping: a /meet/<kind> socket opened (+1) / closed (-1); the bridge's measured round trip."""
+        if self.mode != "meet":
+            return
+        self._meet["links"][kind] += delta
+        if rtt_ms is not None:
+            self._meet["rtt_ms"] = float(rtt_ms)
+        self._publish_meet()
+
+    def _meet_watch(self, stop: threading.Event) -> None:
+        while not stop.wait(0.25):                      # mic/far flip to False a second after frames stop
+            self._publish_meet()
+
+    def _publish_meet(self) -> None:
+        m, now, sess = getattr(self, "_meet", None), time.monotonic(), self.meet_session
+        if m is None or self.mode != "meet":
+            return
+        state = dict(connected=bool(sum(m["links"].values())) or bool(sess and sess.alive),
+                     url=sess.url if sess and sess.alive else None,
+                     mic=now - m["mic"] < 1.0, far=now - m["far"] < 1.0,
+                     browser=sess.browser if sess and sess.alive else None,
+                     latency_ms=round(self._shield_lag() / SR * 1000 + m["rtt_ms"], 1))
+        key = {k: v for k, v in state.items() if k != "latency_ms"} | {"lat": round(state["latency_ms"], -1)}
+        if key != m["last"]:                            # on changes only (latency in 10 ms steps)
+            m["last"] = key
+            self.bus.emit("meet.state", **state)
+
+    def meet(self, action: str, url: str | None = None) -> str:
+        """Dashboard control: join (launch the Meet window, or focus / navigate the open one) | leave."""
+        from app.source.connectors.meet import launcher
+        if self.mode != "meet":
+            raise ValueError("Google Meet needs meet mode (callguard app, or callguard run --mode meet)")
+        if action == "leave":
+            if self.meet_session is not None:
+                self.meet_session.close()
+                self.meet_session = None
+            result = "left"
+        elif action == "join":
+            url = launcher.meet_url(url)                # ValueError on anything but a Meet / local URL
+            s = self.meet_session
+            if s is not None and s.alive:
+                if url != launcher.MEET_HOME and url != s.url:
+                    s.navigate(url)
+                s.focus()
+                result = f"focused {s.url}"
+            else:
+                try:
+                    self.meet_session = launcher.launch(url, self.meet_port or self.cfg.server.port)
+                except (FileNotFoundError, RuntimeError) as e:
+                    raise ValueError(f"could not open Meet: {e}") from e
+                result = f"opened {url} in {self.meet_session.browser}"
+        else:
+            raise ValueError(f"unknown meet action {action!r}")
+        self.bus.publish(Event("control.meet", {"action": action, "url": url}))
+        self._publish_meet()
+        return result
+
     def stop(self) -> None:
+        if self.meet_session is not None:
+            self.meet_session.close()
+            self.meet_session = None
         if self._run_stop is not None:
             self._run_stop.set()
         if self._run_thread is not None:
@@ -470,6 +566,8 @@ class Pipeline:
             x.stop()
         self._live = []
         self.engine.stop()
+        if self.mode == "meet":                         # late bridge frames now pass straight through
+            self.mode = "idle"
 
     # --- controls (the server's `controls` object) ------------------------------------------------------------
     def set_shield(self, mode: str) -> str:
@@ -487,7 +585,7 @@ class Pipeline:
     def scenario(self, action: str, name: str = "ai_caller", on_end: Callable[[], None] | None = None,
                  play: bool = True) -> str:
         """Start/stop a realtime replay on a background thread (dashboard button, CLI)."""
-        if self.mode == "live":
+        if self.mode in ("live", "meet"):
             raise ValueError("scenarios run in replay mode (callguard run --mode replay)")
         if action == "stop":
             if self._run_stop is not None:
