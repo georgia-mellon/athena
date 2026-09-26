@@ -3,7 +3,7 @@
 Hearsay showed keystrokes don't break voice detection. This is the reverse direction: with someone talking over the
 typing, is keystroke leakage still a threat on a call? If yes, the shield has something real to defend against.
 
-Protocol (fixed seeds, CPU, ~10 min):
+Protocol (fixed seeds, CPU, 8 threads, ~11 min):
 - Keys: Keyguard's harrison bank (36 keys x 25 presses, one MacBook), per-key 60/40 split.
 - Attackers: KeyNet + torch_logmel trained here (provisional, in-domain). `clean` on clean presses; `speech-aug`
   on presses mixed with speech at +0..+20 dB (the adaptive attacker, which knows calls have speech).
@@ -11,7 +11,9 @@ Protocol (fixed seeds, CPU, ~10 min):
   attacker's training noise and the evaluation mixtures.
 - Each test press sits at a random spot in a 1.5 s speech excerpt at a speech-to-key power ratio (speech excerpt
   power over key-window power). Attack with the oracle onset and with Keyguard's onset detector on the mixture.
-- Shield: Keyguard DSP Shield (dashboard settings) given the true onset (the victim has OS key events).
+- Shield: Keyguard DSP Shield with ShieldConfig() defaults (as CallGuard ships it) given the true onset (the victim has OS key events).
+- Hearsay check (pass criterion 3): full real clips (>= 3 s) from the test speakers, with test presses at +10 dB
+  speech-to-key, scored clean / keys unshielded / keys shielded by CallGuard's Hearsay driver (r4ft, CPU).
 
 Run: .venv/Scripts/python experiments/attack_under_speech.py   (reads KEYGUARD_ROOT, HEARSAY_ROOT; writes reports/)
 """
@@ -49,9 +51,14 @@ EXCERPT = int(1.5 * SR)
 PRE = int(PRE_S * SR)
 MATCH_TOL = int(0.030 * SR)
 LEVELS = [None, -10, -5, 0, 5, 10, 20]  # speech-to-key dB; None = keys only
-SHIELD_CFG = ShieldConfig(strength=1.0, randomize=1.0, decoys=6, key_frames=6)  # dashboard settings
+SHIELD_CFG = ShieldConfig()  # Keyguard defaults, as callguard/drivers/keyguard_real.KeyguardShield runs it
+DEMO_SPEAKERS = {"100", "2803"}  # voices in the demo scenario: the attacker must never have heard them
 N_SPEECH = 200
 EPOCHS = 40
+N_HEARSAY = 100          # real clips for criterion 3
+KEYS_PER_CLIP = 5
+HEARSAY_LEVEL = 10       # dB speech-to-key
+torch.set_num_threads(8)  # leave cores for other work on this machine
 CHANCE = 1 / len(CLASSES)
 
 
@@ -82,11 +89,16 @@ def load_keys(rng):
     return wins[tr], y[tr], wins[te], y[te]
 
 
-def load_speech(rng):
-    """~200 real clips (>= 1.5 s), split by speaker: half feed attacker training, half the evaluation."""
+def real_clips() -> pd.DataFrame:
+    """Hearsay's held-out bona fide LibriSpeech/LJSpeech clips (all >= 3 s), minus the demo voices."""
     m = pd.read_parquet(HEARSAY_ROOT / "data" / "processed" / "manifest.parquet")
-    m = m[(m.label == "bonafide") & m.source.isin(["librispeech", "ljspeech"]) & (m.split == "test_internal")
-          & (m.duration >= 2.0)]
+    return m[(m.label == "bonafide") & m.source.isin(["librispeech", "ljspeech"]) & (m.split == "test_internal")
+             & (m.duration >= 3.0) & ~m.speaker.astype(str).isin(DEMO_SPEAKERS)]
+
+
+def load_speech(rng):
+    """~200 real clips (>= 3 s), split by speaker: half feed attacker training, half the evaluation."""
+    m = real_clips()
     m = m.sample(n=N_SPEECH, random_state=SEED)
     spk = np.array(sorted(m.speaker.unique()))
     train_spk = set(rng.permutation(spk)[: len(spk) // 2])
@@ -95,7 +107,7 @@ def load_speech(rng):
         x, sr = sf.read(HEARSAY_ROOT / r.path, dtype="float32")
         assert sr == SR, (r.path, sr)
         pools["train" if r.speaker in train_spk else "test"].append(x if x.ndim == 1 else x.mean(1))
-    return pools
+    return pools, set(spk) - train_spk
 
 
 def excerpt(pool, rng) -> np.ndarray:
@@ -169,12 +181,16 @@ def main():
     t0 = time.time()
     rng = np.random.default_rng(SEED)
     Xtr, ytr, Xte, yte = load_keys(rng)
-    pools = load_speech(rng)
+    pools, test_spk = load_speech(rng)
     print(f"keys train {len(Xtr)} test {len(Xte)}; speech clips train {len(pools['train'])} "
           f"test {len(pools['test'])}", flush=True)
 
     Xa, ya = speech_aug_set(Xtr, ytr, pools["train"], rng)
     nets = {"clean": train(Xtr, ytr), "speech-aug": train(Xa, ya)}
+    (REPO / "runs").mkdir(exist_ok=True)  # the adaptive attacker the live pipeline loads (gitignored)
+    torch.save({"state_dict": nets["speech-aug"].state_dict(), "provisional": True, "speech_aug": True,
+                "split_seed": SEED, "data": "harrison.npz + Hearsay test_internal train-speaker speech"},
+               REPO / "runs" / "provisional_keynet_speechaug.pt")
     print(f"attackers trained ({time.time() - t0:.0f}s)", flush=True)
 
     # One speech excerpt + position per test press, reused at every level (paired design).
@@ -217,7 +233,47 @@ def main():
     res.to_csv(out / "attack_under_speech.csv", index=False, float_format="%.4f")
     plot(res, out / "figures" / "attack_under_speech.png")
     print(res.to_string(float_format=lambda v: f"{v:.3f}"))
+    print(f"attack done ({time.time() - t0:.0f}s)", flush=True)
+
+    hs = hearsay_check(test_spk, Xte, rng)
+    hs.to_csv(out / "attack_under_speech_hearsay.csv", index=False, float_format="%.4f")
+    print(hs.to_string(float_format=lambda v: f"{v:.3f}"))
     print(f"total {time.time() - t0:.0f}s")
+
+
+def hearsay_check(test_spk: set, Xte: np.ndarray, rng) -> pd.DataFrame:
+    """Criterion 3: does the shield make a real voice look fake? Full test-speaker clips, test presses only."""
+    sys.path.insert(0, str(REPO))
+    from callguard.drivers.hearsay_real import HearsayDriver
+    drv = HearsayDriver(mode="r4ft", threads=8, device="cpu")
+    m = real_clips()
+    m = m[m.speaker.isin(test_spk)]
+    m = m.sample(n=min(N_HEARSAY, len(m)), random_state=SEED)
+    klen = Xte.shape[1]
+    p = {c: [] for c in ("clean", "keys, shield off", "keys, shield on")}
+    for i, r in enumerate(m.itertuples()):
+        x, sr = sf.read(HEARSAY_ROOT / r.path, dtype="float32")
+        assert sr == SR, (r.path, sr)
+        x = x if x.ndim == 1 else x.mean(1)
+        slot = len(x) // KEYS_PER_CLIP  # one press per slot, so presses never overlap
+        keyed, onsets = x.copy(), []
+        for j, ki in enumerate(rng.choice(len(Xte), KEYS_PER_CLIP, replace=False)):
+            k = Xte[ki] * np.sqrt(power(x) / (power(Xte[ki]) * 10 ** (HEARSAY_LEVEL / 10)))
+            pos = j * slot + int(rng.integers(0, slot - klen + 1))
+            keyed[pos:pos + klen] += k
+            onsets.append(pos + PRE)
+        shielded = Shield(SHIELD_CFG, seed=SEED + i).apply(keyed, onsets=np.array(onsets))
+        for c, a in zip(p, (x, keyed, shielded)):
+            p[c].append(drv.score(a).p_synthetic)
+        if i % 20 == 19:
+            print(f"hearsay {i + 1}/{len(m)}", flush=True)
+    rows = []
+    for c, v in p.items():
+        v = np.array(v); k, n = int((v > 0.5).sum()), len(v)
+        lo, hi = wilson(k, n)
+        rows.append(dict(condition=c, n=n, flagged=k, flag_rate=k / n, flag_lo=lo, flag_hi=hi,
+                         p_synthetic_median=float(np.median(v)), p_synthetic_max=float(v.max())))
+    return pd.DataFrame(rows)
 
 
 def plot(res: pd.DataFrame, path: Path):
