@@ -43,7 +43,22 @@ def _opt(cfg: Any, key: str, default: Any = None) -> Any:
 
 
 def _real(module: str, cls: str, **kwargs: Any) -> Any:
+    import sys
+    sys.dont_write_bytecode = True  # real drivers import the read-only upstream repos: no __pycache__ there
     return getattr(importlib.import_module(f"callguard.drivers.{module}"), cls)(**kwargs)
+
+
+def _hf_offline_if_cached(repo_id: str = "facebook/wav2vec2-xls-r-300m") -> None:
+    """Hearsay builds XLS-R with from_pretrained, which calls the HF Hub on every start. If the weights are already
+    in the local cache, go offline so the demo never depends on the venue network (spec F7)."""
+    import os
+    try:
+        from huggingface_hub import try_to_load_from_cache
+        if isinstance(try_to_load_from_cache(repo_id, "config.json"), str):
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    except Exception:  # noqa: BLE001 - no hub lib / odd cache: stay online
+        pass
 
 
 def _kind(cfg: Any, key: str) -> str:
@@ -55,6 +70,7 @@ def _kind(cfg: Any, key: str) -> str:
 
 def make_voice(cfg: Any = None):
     if _kind(cfg, "voice") == "real":
+        _hf_offline_if_cached()
         mode = _opt(cfg, "hearsay_mode", _opt(cfg, "voice_mode", "r4ft"))
         return _real("hearsay_real", "HearsayDriver", mode=mode, threads=int(_opt(cfg, "threads", 4)),
                      device=_opt(cfg, "device", "auto"))
@@ -75,6 +91,14 @@ def make_shield(cfg: Any = None):
         return _real("keyguard_real", "KeyguardShield", mode="dsp" if mode == "off" else mode)
     from callguard.drivers.mock import MockShield
     return MockShield()
+
+
+def make_spotter(cfg: Any = None, mode: str = "outbound"):
+    """Spoken-secret spotter (plan 06). Real = Vosk; raises FileNotFoundError when its model isn't downloaded."""
+    if _kind(cfg, "secret") == "real":
+        return _real("secret_vosk", "VoskSpotter", mode=mode)
+    from callguard.drivers.mock import MockSpotter
+    return MockSpotter(mode=mode)
 
 
 class Quarantine:
@@ -153,11 +177,21 @@ class QuarantinedShield(Quarantine):
         self._call("reset", None)
 
 
+class QuarantinedSpotter(Quarantine):
+    kind = "secret"
+
+    def feed(self, block: np.ndarray, start: int) -> list:
+        return self._call("feed", [], block, start)
+
+    def reset(self) -> None:
+        self._call("reset", None)
+
+
 def guard(driver: Any, on_error: Callable[[Event], None] | None = None, max_failures: int = 3) -> Quarantine:
     """Wrap a driver in the Quarantine subclass matching the Protocol it implements."""
-    from callguard.types import KeystrokeAttackerDriver, ShieldDriver, VoiceAuthenticityDriver
+    from callguard.types import KeystrokeAttackerDriver, SecretSpotterDriver, ShieldDriver, VoiceAuthenticityDriver
     for proto, cls in ((VoiceAuthenticityDriver, QuarantinedVoice), (KeystrokeAttackerDriver, QuarantinedAttacker),
-                       (ShieldDriver, QuarantinedShield)):
+                       (SecretSpotterDriver, QuarantinedSpotter), (ShieldDriver, QuarantinedShield)):
         if isinstance(driver, proto):
             return cls(driver, on_error, max_failures)
     raise TypeError(f"{type(driver).__name__} implements no driver Protocol")

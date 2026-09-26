@@ -12,7 +12,7 @@ from typing import Sequence
 
 import numpy as np
 
-from callguard.types import SR, KeyGuess, VoiceScore
+from callguard.types import SR, KeyGuess, SecretSpan, VoiceScore
 
 CLASSES = list(string.ascii_uppercase + string.digits)
 MARK_HZ = 7_600.0     # below Nyquist, above speech; the tone the attacker listens for
@@ -72,7 +72,8 @@ class MockAttacker:
         out = []
         for i, onset in enumerate(np.asarray(onsets, dtype=np.int64)):
             truth = truths[i] if truths is not None and i < len(truths) else None
-            rng = np.random.default_rng((self.seed, int(onset)))
+            seg = np.asarray(audio[max(int(onset), 0): int(onset) + _DETECT_LEN], np.float64)
+            rng = np.random.default_rng((self.seed, int(onset), int(abs(seg).sum() * 1e4) % 2**31))
             order = [self.classes[j] for j in rng.permutation(len(self.classes))[: self.top_k]]
             if truth in self.classes and not shield_marked(audio, int(onset)) and rng.random() < self.accuracy:
                 order = [truth] + [k for k in order if k != truth][: self.top_k - 1]
@@ -112,3 +113,26 @@ class MockShield:
         t = (self._n + np.arange(n)) / SR
         self._n += n
         return (block + gate * MARK_AMP * np.sin(2 * np.pi * MARK_HZ * t)).astype(np.float32)
+
+
+class MockSpotter:
+    """Scripted spoken-secret spotter: `spans` = [(t_start_s, t_end_s, category, length)] on the fed stream's clock.
+    Each is returned once the stream has been fed `lag_s` past its start, which mimics a streaming recognizer's
+    partial-result latency (so late marks leak through the delay line, as they would for real)."""
+
+    def __init__(self, spans: Sequence[tuple[float, float, str, int]] = (), mode: str = "outbound",
+                 lag_s: float = 0.3):
+        self.name = f"mock_spotter_{mode}"
+        self.spans, self.lag = sorted(spans), round(lag_s * SR)
+        self.reset()
+
+    def reset(self) -> None:
+        self._next = 0
+
+    def feed(self, block: np.ndarray, start: int) -> list[SecretSpan]:
+        pos, out = start + len(block), []
+        while self._next < len(self.spans) and round(self.spans[self._next][0] * SR) + self.lag <= pos:
+            a, b, cat, n = self.spans[self._next]
+            out.append(SecretSpan(round(a * SR), round(b * SR), cat, n))
+            self._next += 1
+        return out

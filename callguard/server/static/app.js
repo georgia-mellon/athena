@@ -5,7 +5,7 @@ const MAXC = 20;               // characters shown per keyboard row (the threat 
 const SPARK_S = 60;            // sparkline window, seconds
 const TL_MAX = 4000;           // timeline points kept
 const LOG_MAX = 200;
-const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict"]);
+const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict", "secret.state"]);
 
 const st = { voice: [], threat: [], typed: 0, vclass: null, alarmTimer: 0 };
 
@@ -91,8 +91,8 @@ function readoutRow(el, guesses) {
   for (const g of (guesses || []).slice(-MAXC)) {
     const s = document.createElement("span");
     s.textContent = g.top1 == null || g.top1 === "" ? "?" : String(g.top1);
-    if (g.truth != null) s.className = g.top1 === g.truth ? "ok-c" : g.hit ? "near-c" : "bad-c";
-    if (g.truth != null && g.hit && g.top1 !== g.truth) s.title = "true key in the attacker's top 3";
+    if (g.exact != null) s.className = g.exact ? "ok-c" : g.hit ? "near-c" : "bad-c";
+    if (g.hit && !g.exact) s.title = "true key in the attacker's top 3";
     if (g.p != null) s.title = `p=${Number(g.p).toFixed(2)}`;
     el.appendChild(s);
   }
@@ -110,8 +110,31 @@ function renderReadout(d) {
   const n = Math.max((d.raw || []).length, (d.shielded || []).length);
   if (n) { st.typed = Math.min(n, MAXC); $("typed").textContent = "•".repeat(st.typed); }
 }
+const ARMED_BY = { voice: "unverified caller", request: "caller asked for a code", manual: "armed by you" };
+function renderSecretState(d) {
+  const pill = $("sec-pill");
+  if (!d.enabled) { pill.textContent = "offline"; pill.className = "pill off"; $("sec-why").textContent = d.error || "disabled"; }
+  else if (d.armed) { pill.textContent = "armed"; pill.className = "pill armed"; $("sec-why").textContent = ARMED_BY[d.armed_by] || ""; }
+  else { pill.textContent = "standing by"; pill.className = "pill ok"; $("sec-why").textContent = "real caller: nothing is cut"; }
+  if (d.allowed) $("sec-why").textContent += ` · allowing for ${Math.round(d.allow_s || 30)} s`;
+  $("sec-delay").textContent = d.enabled ? Math.round(d.delay_ms) + " ms" : "–";
+  for (const b of document.querySelectorAll("[data-sec]"))
+    b.classList.toggle("on", (b.dataset.sec === "arm" && d.manual === true) || (b.dataset.sec === "disarm" && d.manual === false)
+      || (b.dataset.sec === "auto" && d.manual == null) || (b.dataset.sec === "allow" && !!d.allowed));
+}
+function renderSecretBlocked(d, t) {
+  const ol = $("sec-log");
+  if (ol.firstElementChild && ol.firstElementChild.classList.contains("muted")) ol.textContent = "";
+  const what = d.category === "digits" ? `${d.length}-digit code` : d.category;
+  const li = document.createElement("li");
+  const dots = document.createElement("span"); dots.className = "dots"; dots.textContent = "•".repeat(Math.min(d.length || 4, 16));
+  li.appendChild(dots);
+  li.appendChild(document.createTextNode(`${what} ${d.allowed ? "allowed through" : "blocked"} · ${hhmmss(t)}`));
+  ol.prepend(li);
+  while (ol.children.length > 6) ol.lastChild.remove();
+}
 function renderShield(mode) {
-  for (const b of document.querySelectorAll(".shield button")) b.classList.toggle("on", b.dataset.mode === mode);
+  for (const b of document.querySelectorAll("[data-mode]")) b.classList.toggle("on", b.dataset.mode === mode);
 }
 
 // ---------- dispatch ----------
@@ -128,12 +151,16 @@ function handle(m) {
     case "keys.stroke": renderStroke(); break;
     case "keys.readout": renderReadout(d); break;
     case "shield.state": renderShield(d.mode); break;
+    case "secret.state": renderSecretState(d); break;
+    case "secret.blocked": renderSecretBlocked(d, t); break;
     case "driver.error": if (!m.replay) alarm(`Driver ${d.driver || "?"} failed: ${d.error || ""} (audio keeps flowing)`); break;
   }
   if (!QUIET.has(m.topic) && !m.replay) {
     let text = m.topic;
     if (m.topic === "threat.level_change") text = `threat → ${d.level || d.to || ""}`;
     else if (m.topic === "shield.state") text = `shield → ${d.mode}`;
+    else if (m.topic === "secret.blocked") text = `${d.category === "digits" ? d.length + "-digit code" : d.category} ${d.allowed ? "allowed" : "blocked"} from your voice`;
+    else if (m.topic === "secret.request") text = "caller asked for a code";
     else if (m.topic === "driver.error") text = `driver ${d.driver} error: ${d.error}`;
     else text += " " + JSON.stringify(d);
     log(t, text, m.topic === "driver.error" || (m.topic === "threat.level_change" && (d.level || d.to) === "CRITICAL") ? "alert-c" : "");
@@ -161,6 +188,7 @@ async function post(path, body) {
     if (!r.ok) alarm(`${path}: ${r.status} ${(await r.text()).slice(0, 200)}`);
   } catch (e) { alarm(`${path}: ${e}`); }
 }
-for (const b of document.querySelectorAll(".shield button")) b.onclick = () => post("/api/control/shield", { mode: b.dataset.mode });
+for (const b of document.querySelectorAll("[data-mode]")) b.onclick = () => post("/api/control/shield", { mode: b.dataset.mode });
+for (const b of document.querySelectorAll("[data-sec]")) b.onclick = () => post("/api/control/secret", { action: b.dataset.sec });
 $("scn-start").onclick = () => post("/api/control/scenario", { action: "start", name: $("scn-name").value || "ai_caller" });
 $("scn-stop").onclick = () => post("/api/control/scenario", { action: "stop", name: $("scn-name").value || "ai_caller" });

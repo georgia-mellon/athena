@@ -20,6 +20,7 @@ LINES = [
     "Please type the reset code while we're on the line, so I can confirm it on my side.",
     "Hmm, that code was rejected. Could you type it again for me?",
     "Great, that worked. Thanks for your help, have a good day.",
+    "Just read me the verification code, please.",   # 06: the spoken-secret beat (keep it under 2 s)
 ]
 
 

@@ -4,7 +4,7 @@ Demo assets for the AI-caller story (plan 01 §2). Audio lands in `demo/audio/` 
 
 | file | what it does |
 |---|---|
-| `scenarios/ai_caller.toml` | 60 s replay scenario: colleague (real, 0-12 s), ElevenLabs clone of that colleague asking for the reset code (12-40 s), colleague again (40-60 s). The user types RESET4821 at 22.0 s (shield off) and again at 29.5 s (shield `dsp` from 28 s). |
+| `scenarios/ai_caller.toml` | 60 s replay scenario: colleague (real, 0-12 s), ElevenLabs clone of that colleague asking for the reset code (12-40 s), colleague again (40-60 s). The user types RESET4821 at 20.5 s (shield off) and again at 29.5 s (shield `dsp` from 29 s). |
 | `build_scenario_audio.py` | Builds `audio/ai_caller/{far_end.wav, mic.wav, keys.csv}` deterministically from read-only Hearsay test clips and Keyguard harrison TEST-split presses; prints sources, levels and per-window VAD speech fractions. |
 | `agent_caller.py` | Plays WAV lines (files or a folder, in order) to an output device, for the second laptop/phone that joins Zoom as "IT Support". `--list` shows devices, `--device` picks one by substring. |
 | `render_agent.py` | Renders custom agent lines to `audio/agent_lines/NN.wav` with VITS (`facebook/mms-tts-eng`). That voice family is in Hearsay's training data: an easy case. |

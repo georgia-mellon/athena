@@ -57,8 +57,14 @@ def run(pipe: Pipeline, sc: Scenario, bus: EventBus):
     return seen
 
 
-def test_mock_replay_story():
+def _mock_cfg():
     cfg = config.load(env={})
+    cfg.drivers.secret = "mock"
+    return cfg
+
+
+def test_mock_replay_story():
+    cfg = _mock_cfg()
     bus = EventBus()
     pipe = Pipeline(cfg, bus, voice=PitchVoice(), attacker=MockAttacker(accuracy=0.95), shield=MockShield())
     seen = run(pipe, mock_scenario(), bus)
@@ -75,8 +81,8 @@ def test_mock_replay_story():
     before, after = ro[len(CODE) - 1], ro[-1]
     assert before["acc_raw"] > 0.8                        # shield off: both streams read the code
     last = after["shielded"][-len(CODE):]
-    assert np.mean([r["top1"] == r["truth"] for r in last]) < 0.3   # shield on: noise
-    assert np.mean([r["top1"] == r["truth"] for r in after["raw"][-len(CODE):]]) > 0.8
+    assert np.mean([r["exact"] for r in last]) < 0.3                 # shield on: noise
+    assert np.mean([r["exact"] for r in after["raw"][-len(CODE):]]) > 0.8
     pipe.stop()
     bus.close()
 
@@ -86,7 +92,7 @@ def test_shield_failure_passes_audio_and_alarms():
         def process(self, block, key_events):
             raise RuntimeError("boom")
 
-    cfg = config.load(env={})
+    cfg = _mock_cfg()
     bus = EventBus()
     errors, states = [], []
     bus.subscribe("driver.error", lambda e: errors.append(e.data))
@@ -97,13 +103,13 @@ def test_shield_failure_passes_audio_and_alarms():
     bus.flush()
     assert pipe.shield.quarantined and errors and errors[-1]["quarantined"]
     assert states[-1]["failed"]
-    n = pipe.mic.raw.total
-    np.testing.assert_array_equal(pipe.mic.shielded.read_range(n - SR, n), pipe.mic.raw.read_range(n - SR, n))
+    n, lag = pipe.mic.raw.total, pipe._shield_lag()          # quarantined shield: no lookahead; secret delay only
+    np.testing.assert_array_equal(pipe.mic.shielded.read_range(n - SR, n), pipe.mic.raw.read_range(n - SR - lag, n - lag))
     bus.close()
 
 
 def test_controls():
-    cfg = config.load(env={})
+    cfg = _mock_cfg()
     bus = EventBus()
     pipe = Pipeline(cfg, bus, voice=PitchVoice(), attacker=MockAttacker(), shield=MockShield())
     assert pipe.set_shield("dsp") == "dsp"
@@ -147,8 +153,8 @@ def test_real_replay_ai_caller():
           "".join(r["top1"] for r in ro["shielded"]))
     at = lambda t: [lv for tt, lv, _ in seen["levels"] if tt <= t][-1]  # noqa: E731
     assert at(11) == "SAFE"                                        # real colleague
-    assert "CRITICAL" in [lv for tt, lv, _ in seen["levels"] if 22 <= tt < 28]  # agent + readable typing
-    assert at(36) != "CRITICAL"                                    # shield on (28 s)
+    assert "CRITICAL" in [lv for tt, lv, _ in seen["levels"] if 20 <= tt < 29]  # agent + readable typing
+    assert at(36) != "CRITICAL"                                    # shield on (29 s)
     assert at(sc.seconds) in ("SAFE", "WATCH")                     # agent gone
     n = len(seen["readouts"]) // 2                                 # first burst: shield off; second: on
     raw_off = sum(r["hit"]["raw"] for r in seen["readouts"][:n])

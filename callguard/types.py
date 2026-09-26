@@ -64,6 +64,29 @@ class ShieldDriver(Protocol):
     def reset(self) -> None: ...
 
 
+@dataclass
+class SecretSpan:
+    """A stretch of outbound (or inbound, for category "request") audio to act on. No text field, by design: the
+    recognized words never leave the spotter (plan 06 §8)."""
+    start: int                  # absolute sample index on the stream the spotter was fed
+    end: int
+    category: str               # "digits" | "password" | "card" (outbound) | "request" (inbound trigger phrase)
+    length: int                 # tokens in the run so far (digits spoken); 0 for trigger phrases
+
+
+@runtime_checkable
+class SecretSpotterDriver(Protocol):
+    """Streaming spotter (plan 06). `feed` gets consecutive blocks with the absolute index of their first sample and
+    returns spans as soon as it can place them (partial results), each at most once. Outbound mode redacts every
+    digit/letter token that follows another within gap_s (the first token of a run passes: the delay line can't
+    wait for a whole sequence), plus the words after an own-side trigger ("the code is ...")."""
+    name: str
+
+    def feed(self, block: np.ndarray, start: int) -> list[SecretSpan]: ...
+
+    def reset(self) -> None: ...
+
+
 # Event topics (plan 01 F6). Payload keys are documented next to each producer.
 TOPICS = (
     "voice.window", "voice.verdict",
@@ -71,4 +94,5 @@ TOPICS = (
     "shield.state", "driver.error",
     "threat.update", "threat.level_change",
     "control.scenario", "control.shield",
+    "secret.state", "secret.blocked", "secret.request", "control.secret",
 )

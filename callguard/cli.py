@@ -24,7 +24,7 @@ from callguard.types import BLOCK, SR
 def _cfg(args) -> config.Config:
     cfg = config.load(args.config)
     if args.drivers:
-        cfg.drivers.voice = cfg.drivers.attacker = cfg.drivers.shield = args.drivers
+        cfg.drivers.voice = cfg.drivers.attacker = cfg.drivers.shield = cfg.drivers.secret = args.drivers
     if getattr(args, "mic", None):
         cfg.devices.mic = args.mic
     if getattr(args, "speaker", None):
