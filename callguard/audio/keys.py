@@ -58,10 +58,14 @@ class KeyClock:
         with self._lock:
             return list(self._events)[-n:]
 
+    def between(self, start: int, stop: int) -> list[KeyEvent]:
+        """Presses with start <= sample < stop."""
+        with self._lock:
+            return [e for e in self._events if start <= e.sample < stop]
+
     def in_range(self, start: int, stop: int) -> list[int]:
         """Absolute sample indices of presses in [start, stop)."""
-        with self._lock:
-            return [e.sample for e in self._events if start <= e.sample < stop]
+        return [e.sample for e in self.between(start, stop)]
 
     def start(self) -> KeyClock:
         """Start the global pynput listener. Without pynput (or a display/permission) we log and run without keys."""

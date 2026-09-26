@@ -44,6 +44,8 @@ class VoiceAuthenticityDriver(Protocol):
 
 @runtime_checkable
 class KeystrokeAttackerDriver(Protocol):
+    """`onsets` are sample indices within `audio`. The driver never gets the true keys: the pipeline fills
+    KeyGuess.truth after the call (only a mock may opt in with `wants_truth = True`)."""
     name: str
     classes: list[str]
 
@@ -52,6 +54,9 @@ class KeystrokeAttackerDriver(Protocol):
 
 @runtime_checkable
 class ShieldDriver(Protocol):
+    """Streaming, same length out. `key_events` are ABSOLUTE sample indices on the block clock (sum of block lengths
+    since reset()); each event is passed once, possibly a block or two late (OS key events lag the sound).
+    Optional `latency` attribute: output delay in samples (0 if absent)."""
     name: str
 
     def process(self, block: np.ndarray, key_events: list[int]) -> np.ndarray: ...

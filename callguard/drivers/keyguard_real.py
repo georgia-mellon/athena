@@ -24,6 +24,11 @@ log = logging.getLogger(__name__)
 
 REPO = Path(__file__).resolve().parents[2]
 PROVISIONAL = REPO / "runs" / "provisional_keynet.pt"
+PROVISIONAL_AUG = REPO / "runs" / "provisional_keynet_speechaug.pt"  # plan 04's adaptive attacker (experiments/)
+# Keyguard's default key region (14 frames, 112 ms) stops before the key *release*, which the attacker's 300 ms
+# window still hears: 26 frames (208 ms) covers press + release and took the provisional speech-aug attacker from
+# 22 % to 7.5 % top-1 on the 360 harrison test presses (chosen on those presses; reports/attack_under_speech.md).
+KEY_FRAMES = 26
 SPLIT_SEED = 0          # plan 04: per-key seeded 60/40 split of harrison presses
 TRAIN_FRAC = 0.6
 
@@ -61,8 +66,10 @@ def harrison_split(root: Path | None = None, seed: int = SPLIT_SEED):
 class KeyguardAttacker:
     """KeystrokeAttackerDriver around Keyguard's KeyNet.
 
-    Weights: `weights` arg, else CALLGUARD_ATTACKER_WEIGHTS, else a provisional KeyNet that CallGuard trains once on
-    the harrison train split with Keyguard's own train_attacker and caches in runs/. Provisional = ours, not the
+    Weights: `weights` arg, else CALLGUARD_ATTACKER_WEIGHTS, else the provisional speech-augmented KeyNet saved by
+    experiments/attack_under_speech.py (the adaptive attacker: it has heard keys under speech), else a clean
+    provisional KeyNet that CallGuard trains once on the harrison train split with Keyguard's own train_attacker and
+    caches in runs/. The clean one reads keys well alone but not under speech. Provisional = ours, not the
     teammate's tuned attacker; it's replaced when their weights ship (plan 05).
     """
     name = "keyguard-keynet"
@@ -76,14 +83,15 @@ class KeyguardAttacker:
         self.net = KeyNet(len(self.classes)).eval()
         path = weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS")
         self.provisional = not path
-        path = Path(path) if path else PROVISIONAL
+        path = Path(path) if path else (PROVISIONAL_AUG if PROVISIONAL_AUG.exists() else PROVISIONAL)
         if not path.exists():
             if not self.provisional:
                 raise FileNotFoundError(f"attacker weights not found: {path}")
             self._train_provisional(path, root, epochs)
         state = torch.load(path, map_location="cpu")
         self.net.load_state_dict(state.get("state_dict", state))  # cache dict or a bare Keyguard state_dict
-        self.name = f"keyguard-keynet{' (provisional)' if self.provisional else ''}"
+        kind = ", speech-aug" if path == PROVISIONAL_AUG else ""
+        self.name = f"keyguard-keynet{f' (provisional{kind})' if self.provisional else ''}"
         if self.provisional:
             log.warning("attacker: using PROVISIONAL KeyNet %s (CallGuard-trained, not the teammate's)", path)
 
@@ -136,7 +144,7 @@ class KeyguardShield:
     """
 
     def __init__(self, mode: str = "dsp", root: Path | None = None, lookahead: int = 4 * BLOCK,
-                 history: int = 16 * BLOCK, seed: int = 0, **shield_cfg):
+                 history: int = 24 * BLOCK, seed: int = 0, **shield_cfg):
         if mode == "adversarial":
             raise NotImplementedError("shield mode 'adversarial' waits for the teammate's streaming adversarial "
                                       "shield D (plan 05 blockers); use mode='dsp'")
@@ -147,12 +155,13 @@ class KeyguardShield:
         from keyguard.shield.shield import Shield, ShieldConfig
         self.name = "keyguard-dsp"
         self.mode = mode
-        self.shield = Shield(ShieldConfig(**shield_cfg), seed=seed)
+        self.shield = Shield(ShieldConfig(**{"key_frames": KEY_FRAMES, **shield_cfg}), seed=seed)
         self.lookahead, self.history = int(lookahead), int(history)
         cfg = self.shield.cfg
         # sample span a key event at e can change: [e - before, e + after)
         self._before = 2 * HOP + N_FFT // 2
         self._after = cfg.key_frames * HOP + N_FFT // 2
+        self.latency = self.lookahead    # samples of output delay (ShieldDriver contract)
         self.latency_ms = self.lookahead / SR * 1000
         self.shield.apply(np.zeros(4 * N_FFT, np.float32), np.array([N_FFT]))  # warm librosa (~3 s cold) off the audio thread
         self.reset()

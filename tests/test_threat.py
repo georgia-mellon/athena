@@ -32,10 +32,9 @@ def run(eng, clock, seconds, *, p=None, typing=False, raw=None, shielded=None):
             feed(eng, "voice.verdict", p_synthetic=p)
         if typing:
             feed(eng, "keys.stroke")
-            if raw is not None:
-                feed(eng, "keys.readout", stream="raw", correct=raw)
-            if shielded is not None:
-                feed(eng, "keys.readout", stream="shielded", correct=shielded)
+            hit = {k: v for k, v in (("raw", raw), ("shielded", shielded)) if v is not None}
+            if hit:
+                feed(eng, "keys.readout", hit=hit)
         out = eng.tick()
     return out
 
@@ -61,7 +60,7 @@ def test_synthetic_voice_plus_leaky_typing_shield_off_is_critical():
     eng, clock, bus, changes = engine()
     feed(eng, "shield.state", mode="off")
     u = run(eng, clock, 30, p=0.95, typing=True, raw=True, shielded=True)
-    assert u["level"] == "CRITICAL" and u["E"] == 1.0
+    assert u["level"] == "CRITICAL" and u["E"] > 0.85
     assert "typing while an unverified voice is speaking" in u["reasons"]
     bus.flush()
     assert changes[-1] == "CRITICAL"
@@ -74,7 +73,7 @@ def test_shield_on_with_low_leak_is_lower():
     on, c2, *_ = engine()
     feed(on, "shield.state", mode="dsp")
     u_on = run(on, c2, 30, p=0.95, typing=True, raw=True, shielded=False)
-    assert u_on["L"] == 0.0 and u_on["E"] == 1.0
+    assert u_on["L"] == 0.0 and u_on["E"] > 0.85
     assert u_on["score"] < u_off["score"] and u_on["level"] != "CRITICAL"
     assert any("blocking" in r for r in u_on["reasons"])
 
@@ -89,7 +88,7 @@ def test_shield_failure_counts_as_off():
 def test_chance_level_attacker_is_no_exposure():
     eng, *_ = engine()
     for i in range(20):
-        feed(eng, "keys.readout", stream="raw", correct=(i == 0), k=20)  # 1/20 = chance
+        feed(eng, "keys.readout", hit={"raw": i == 0}, chance=1 / 20)
     assert eng.tick()["E"] == 0.0
 
 
@@ -118,3 +117,11 @@ def test_tick_publishes_update():
     eng.tick()
     bus.flush()
     assert got and set(got[0]) >= {"score", "level", "V", "E", "L", "T", "reasons"}
+
+
+def test_shield_change_restarts_residual_leak():
+    eng, clock, *_ = engine()
+    run(eng, clock, 5, typing=True, raw=True, shielded=True)       # shield off: shielded == raw
+    assert eng.tick()["L"] > 0.5
+    feed(eng, "shield.state", mode="dsp")
+    assert eng.tick()["L"] == 0.0

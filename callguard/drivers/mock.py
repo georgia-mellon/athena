@@ -58,8 +58,11 @@ def shield_marked(audio: np.ndarray, onset: int) -> bool:
 
 class MockAttacker:
     """Reads the true key with probability `accuracy` when truths are given, else guesses uniformly; on shielded
-    onsets it always guesses uniformly. Seeded per onset, so the same input gives the same output."""
+    onsets it always guesses uniformly. Seeded per onset, so the same input gives the same output.
+    It can't hear keys, so it's the one driver the pipeline hands the truth to (`wants_truth`); real attackers never
+    see it, and the pipeline attaches KeyGuess.truth after the call."""
     name = "mock_attacker"
+    wants_truth = True
 
     def __init__(self, accuracy: float = 0.85, top_k: int = 3, seed: int = 0, classes: list[str] | None = None):
         self.accuracy, self.top_k, self.seed = accuracy, top_k, seed
@@ -81,9 +84,10 @@ class MockAttacker:
 
 
 class MockShield:
-    """Adds the pilot tone for MARK_LEN samples after each key event (sample offsets within `block`); carries the
-    tail and the phase across blocks. `perturb=False` is a pure pass-through."""
+    """Adds the pilot tone for MARK_LEN samples after each key event (absolute sample indices since reset(), like
+    the real shield); carries the tail and the phase across blocks. `perturb=False` is a pure pass-through."""
     name = "mock_shield"
+    latency = 0  # samples of output delay (the real DSP shield has a lookahead)
 
     def __init__(self, perturb: bool = True):
         self.perturb = perturb
@@ -100,9 +104,10 @@ class MockShield:
         gate = np.zeros(n, np.float32)
         gate[: min(self._left, n)] = 1.0
         end = min(self._left, n) if self._left else 0
-        for e in sorted(int(e) for e in key_events if 0 <= int(e) < n):
-            gate[e: e + MARK_LEN] = 1.0
-            end = max(end, e + MARK_LEN)
+        for e in (int(e) - self._n for e in key_events):  # absolute -> within this block; late events keep their tail
+            if e < n and e + MARK_LEN > 0:
+                gate[max(e, 0): e + MARK_LEN] = 1.0
+                end = max(end, e + MARK_LEN)
         self._left = max(end - n, 0)
         t = (self._n + np.arange(n)) / SR
         self._n += n

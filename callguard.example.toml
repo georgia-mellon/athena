@@ -18,6 +18,7 @@ device = "auto"           # auto | cpu | cuda
 mic = ""
 virtual_out = "CABLE Input"
 loopback = ""
+key_offset_s = 0.0        # KeyClock: + if keystroke sounds land later than their OS timestamps (calibrate by typing)
 
 [server]
 host = "127.0.0.1"

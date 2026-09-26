@@ -57,7 +57,7 @@ speaker to it, and point CallGuard at that BlackHole as the far-end source. Give
 | `virtual mic out: MISSING` after install | You didn't reboot, or the installer wasn't run as admin. Reinstall as admin, then reboot. |
 | Zoom hears nothing | Zoom mic must be **CABLE Output** (not Input). Check that CallGuard is running and that `callguard devices` shows the cable. |
 | You hear nothing | CABLE Input became the default Windows speaker. Set your headphones back as the default. |
-| Robotic or choppy outgoing audio | Close other audio apps. Check the `xruns` counter on the dashboard. Try another host API with `--mic "<name>"` (MME is the most tolerant). |
+| Robotic or choppy outgoing audio | Close other audio apps. Check the audio-device warnings in the `callguard` console. Try another host API with `--mic "<name>"` (MME is the most tolerant). |
 | `loopback speakers: NONE` | `soundcard` can't see WASAPI loopback. Update the audio driver, or set the meeting speaker to a second virtual cable and pass it as `--speaker`. |
 | Voice light stays grey | There's no far-end speech in the loopback. Make sure the meeting plays to the speaker CallGuard captures (`--speaker`). |
 | Keystrokes not timed (no key events) | pynput needs a desktop session. Some elevated apps (admin windows) hide keys from a non-admin listener, so run from a normal terminal and type into a normal window. |

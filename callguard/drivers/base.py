@@ -6,7 +6,8 @@ are read from a ``drivers`` section first, then from the top level:
     voice     = "real" | "mock"   -> real: callguard.drivers.hearsay_real.HearsayDriver(mode=voice_mode, threads=threads)
     attacker  = "real" | "mock"   -> real: callguard.drivers.keyguard_real.KeyguardAttacker(weights=attacker_weights)
     shield    = "real" | "mock"   -> real: callguard.drivers.keyguard_real.KeyguardShield(mode=shield_mode)
-    voice_mode = "r4ft" | "r5" (default "r4ft"), threads = 4, attacker_weights = None, shield_mode = "dsp",
+    hearsay_mode (alias voice_mode) = "r4ft" | "r5" (default "r4ft"), threads = 4, device = "auto",
+    attacker_weights = None, shield_mode = "dsp" ("off" is a runtime switch, so it still builds the dsp shield),
     mock_latency_ms = 0.0 (MockVoice sleep, to mimic the real timing profile)
 
 Real drivers are imported lazily so a missing upstream repo only fails when "real" is actually asked for.
@@ -54,21 +55,24 @@ def _kind(cfg: Any, key: str) -> str:
 
 def make_voice(cfg: Any = None):
     if _kind(cfg, "voice") == "real":
-        return _real("hearsay_real", "HearsayDriver", mode=_opt(cfg, "voice_mode", "r4ft"), threads=int(_opt(cfg, "threads", 4)))
+        mode = _opt(cfg, "hearsay_mode", _opt(cfg, "voice_mode", "r4ft"))
+        return _real("hearsay_real", "HearsayDriver", mode=mode, threads=int(_opt(cfg, "threads", 4)),
+                     device=_opt(cfg, "device", "auto"))
     from callguard.drivers.mock import MockVoice
     return MockVoice(latency_ms=float(_opt(cfg, "mock_latency_ms", 0.0)))
 
 
 def make_attacker(cfg: Any = None):
     if _kind(cfg, "attacker") == "real":
-        return _real("keyguard_real", "KeyguardAttacker", weights=_opt(cfg, "attacker_weights"))
+        return _real("keyguard_real", "KeyguardAttacker", weights=_opt(cfg, "attacker_weights") or None)
     from callguard.drivers.mock import MockAttacker
     return MockAttacker()
 
 
 def make_shield(cfg: Any = None):
     if _kind(cfg, "shield") == "real":
-        return _real("keyguard_real", "KeyguardShield", mode=_opt(cfg, "shield_mode", "dsp"))
+        mode = _opt(cfg, "shield_mode", "dsp")
+        return _real("keyguard_real", "KeyguardShield", mode="dsp" if mode == "off" else mode)
     from callguard.drivers.mock import MockShield
     return MockShield()
 

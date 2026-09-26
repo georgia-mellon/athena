@@ -41,7 +41,7 @@ def _shielded(audio, onsets):
     sh, out = MockShield(), []
     for s in range(0, len(audio), BLOCK):
         blk = audio[s: s + BLOCK]
-        out.append(sh.process(blk, [int(o - s) for o in onsets if s <= o < s + BLOCK]))
+        out.append(sh.process(blk, [int(o) for o in onsets if s <= o < s + BLOCK]))
     return np.concatenate(out)
 
 
@@ -69,6 +69,9 @@ def test_shield_passthrough_and_reset():
     assert not np.array_equal(sh.process(blk, []), blk)  # tail carries into the next block
     sh.reset()
     np.testing.assert_array_equal(sh.process(blk, []), blk)
+    sh.reset()
+    sh.process(blk, [])
+    assert not np.array_equal(sh.process(blk, [BLOCK // 2]), blk)  # a late event (previous block) still marks
 
 
 class _Boom:
@@ -128,7 +131,7 @@ def test_factory_real_is_lazy_and_passes_options(monkeypatch):
     cfg = {"drivers": {"voice": "real", "attacker": "real", "shield": "real", "voice_mode": "r5", "threads": 2},
            "attacker_weights": "w.pt"}
     base.make_voice(cfg), base.make_attacker(cfg), base.make_shield(cfg)
-    assert seen == {"HearsayDriver": ("hearsay_real", {"mode": "r5", "threads": 2}),
+    assert seen == {"HearsayDriver": ("hearsay_real", {"mode": "r5", "threads": 2, "device": "auto"}),
                     "KeyguardAttacker": ("keyguard_real", {"weights": "w.pt"}),
                     "KeyguardShield": ("keyguard_real", {"mode": "dsp"})}
     with pytest.raises(ValueError):

@@ -15,3 +15,5 @@ runs/
 logs/
 demo/audio/
 experiments/cache/
+.claude/worktrees/
+.gstack/

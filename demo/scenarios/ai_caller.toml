@@ -1,0 +1,35 @@
+# AI caller: a cloned-voice "IT support" agent asks the user to type a reset code (fake: RESET4821).
+# Audio is built by demo/build_scenario_audio.py into demo/audio/ (gitignored); paths are relative to it.
+# Mic: the user's quiet speech throughout; RESET4821 typed at 22.0 s (shield off) and again at 29.5 s
+# ("the code was rejected, type it again") after the shield turns on at 28 s.
+name = "ai_caller"
+title = "AI agent clones a colleague and asks for the reset code"
+far_end = "ai_caller/far_end.wav"
+mic = "ai_caller/mic.wav"
+keys = "ai_caller/keys.csv"
+
+[[actions]]
+t = 0.0
+shield = "off"
+
+[[actions]]
+t = 28.0
+shield = "dsp"
+
+[[segments]]
+name = "colleague"
+start = 0.0
+end = 12.0
+voice = "real"
+
+[[segments]]
+name = "ai_agent"
+start = 12.0
+end = 40.0
+voice = "synthetic"
+
+[[segments]]
+name = "colleague_returns"
+start = 40.0
+end = 60.0
+voice = "real"

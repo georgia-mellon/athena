@@ -24,7 +24,7 @@ class ThreatConfig:
     voice_half_life_s: float = 6.0     # EMA half-life of V
     voice_stale_s: float = 4.0         # no verdict for this long = silence, V decays toward 0
     readout_window: int = 20           # keystrokes for E and L
-    num_classes: int = 36              # K for the chance rescale (A-Z0-9), unless the readout says otherwise
+    num_classes: int = 36              # K (A-Z0-9): chance = 3/K for top-3 hits, unless the readout says otherwise
     typing_window_s: float = 10.0
     typing_saturation: int = 10        # strokes in the window at which T = 1
     typing_on: float = 0.2             # T >= this counts as "typing" (T_on); 0.2 = 2 strokes in 10 s
@@ -56,6 +56,7 @@ class DevicesConfig:
     mic: str = ""
     virtual_out: str = "CABLE Input"
     loopback: str = ""
+    key_offset_s: float = 0.0          # KeyClock calibration: + if key sounds land later than their OS timestamps
 
 
 @dataclass
