@@ -56,6 +56,7 @@ class DevicesConfig:
     mic: str = ""
     virtual_out: str = "CABLE Input"
     loopback: str = ""
+    key_offset_s: float = 0.0          # KeyClock calibration: + if key sounds land later than their OS timestamps
 
 
 @dataclass

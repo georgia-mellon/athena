@@ -32,10 +32,9 @@ def run(eng, clock, seconds, *, p=None, typing=False, raw=None, shielded=None):
             feed(eng, "voice.verdict", p_synthetic=p)
         if typing:
             feed(eng, "keys.stroke")
-            if raw is not None:
-                feed(eng, "keys.readout", stream="raw", correct=raw)
-            if shielded is not None:
-                feed(eng, "keys.readout", stream="shielded", correct=shielded)
+            hit = {k: v for k, v in (("raw", raw), ("shielded", shielded)) if v is not None}
+            if hit:
+                feed(eng, "keys.readout", hit=hit)
         out = eng.tick()
     return out
 
@@ -89,7 +88,7 @@ def test_shield_failure_counts_as_off():
 def test_chance_level_attacker_is_no_exposure():
     eng, *_ = engine()
     for i in range(20):
-        feed(eng, "keys.readout", stream="raw", correct=(i == 0), k=20)  # 1/20 = chance
+        feed(eng, "keys.readout", hit={"raw": i == 0}, k=20)  # 1/20 = chance
     assert eng.tick()["E"] == 0.0
 
 

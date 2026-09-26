@@ -19,7 +19,7 @@ from .config import REPO, HookConfig
 from .types import Event
 
 log = logging.getLogger(__name__)
-PRIVATE = frozenset({"truth", "key", "typed"})
+PRIVATE = frozenset({"truth", "key", "typed", "top1"})  # top1 = what the attacker read
 
 
 def _scrub(x):

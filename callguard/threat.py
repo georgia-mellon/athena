@@ -3,7 +3,8 @@
 Consumed payloads (producers must send these keys; extra keys are ignored):
 - `voice.verdict`  {"p_synthetic": float}              one per scored far-end speech window
 - `keys.stroke`    {}                                  one per OS key event (timing only)
-- `keys.readout`   {"stream": "raw"|"shielded", "correct": bool, "k"?: int}   one per attacked keystroke
+- `keys.readout`   {"hit": {"raw": bool, "shielded": bool}, "k"?: int}   one per attacked keystroke (the pipeline
+                   also sends the dashboard's lists: raw/shielded guesses, acc_raw, acc_shielded, chance)
 - `shield.state`   {"mode": "off"|"dsp"|"adversarial", "failed"?: bool}
 Published:
 - `threat.update`        {"score", "level", "V", "E", "L", "T", "typing", "shield", "reasons"}  on every tick()
@@ -71,7 +72,8 @@ class ThreatEngine:
             elif ev.topic == "keys.readout":
                 if d.get("k"):
                     self._k = int(d["k"])
-                self._hits[d["stream"]].append(bool(d["correct"]))
+                for stream, ok in d["hit"].items():
+                    self._hits[stream].append(bool(ok))
             elif ev.topic == "shield.state":
                 self.shield = d.get("mode", self.shield)
                 self.shield_failed = bool(d.get("failed", False))
