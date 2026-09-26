@@ -21,11 +21,12 @@ import numpy as np
 
 from callguard.types import SR, VoiceScore
 
-HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT", r"C:\Users\danma\Documents\Dan\Projects\Hearsay"))
+REPO = Path(__file__).resolve().parents[2]
+HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT") or REPO.parent / "Hearsay")  # same default as config.py
 RUN = HEARSAY_ROOT / "data" / "models" / "r4ft_xlsr" / "R4ft_xlsr_light"
 R1_MODEL = HEARSAY_ROOT / "data" / "models" / "r1_lgbm_all_full.txt"
 R5_JSON = HEARSAY_ROOT / "data" / "scores" / "R5_r4ft_r1.json"
-CACHE = Path(__file__).resolve().parents[2] / "runs" / "hearsay_calibration.json"
+CACHE = REPO / "runs" / "hearsay_calibration.json"
 SCORE_FILES = {"r4ft": "R4ft_xlsr_light", "r5": "R5_r4ft_r1"}
 
 
@@ -42,6 +43,7 @@ def scale_for(fake_median: float, thr: float) -> float:
 
 def _import_hearsay() -> None:
     os.environ["HEARSAY_ROOT"] = str(HEARSAY_ROOT)  # hearsay.audio.ROOT reads it at import
+    sys.dont_write_bytecode = True  # read-only upstream: no __pycache__ inside it
     for p in (HEARSAY_ROOT / "src", HEARSAY_ROOT / "scripts"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))

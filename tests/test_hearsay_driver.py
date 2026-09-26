@@ -51,6 +51,13 @@ def test_real_driver_separates(driver):
 
 
 @needs_hearsay
+def test_threshold_and_short_clip(driver):
+    assert hr.p_from_margin(driver.thr, driver.thr, driver.s) == 0.5 and driver.s > 0
+    with pytest.raises(ValueError):
+        driver.score(np.zeros(16000 - 1, np.float32))
+
+
+@needs_hearsay
 def test_latency_4s(driver):
     x = np.random.default_rng(0).standard_normal(4 * 16000).astype(np.float32) * 0.1
     driver.score(x)  # warm-up
