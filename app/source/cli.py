@@ -57,7 +57,7 @@ def cmd_run(args) -> int:
     print(f"[callguard] drivers ready in {time.perf_counter() - t0:.1f} s: {pipe.voice.name}, {pipe.attacker.name}, "
           f"{pipe.shield.name}", flush=True)
     app = create_app(bus, controls=pipe)
-    app.include_router(make_router(pipe))
+    app.include_router(make_router(pipe, port=port))
     server = uvicorn.Server(uvicorn.Config(app, host=cfg.server.host, port=port, log_level="warning"))
     url = f"http://{cfg.server.host}:{port}/"
 

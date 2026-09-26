@@ -53,7 +53,7 @@ with someone talking over them, and the shield brings the attacker down toward c
 4. The outgoing mic is delayed by ~0.6 s in total (bridge jitter buffer + 80 ms Keyguard lookahead + 500 ms
    secret-shield delay line). Set `[secret] enabled = false` in `callguard.toml` if the call feels laggy; the
    other two pillars keep working.
-5. If key timing looks off (readouts wrong even with the shield off), set `[devices] key_offset_s` in
+5. If key timing looks off (readouts wrong even with the shield off), set `[devices] meet_key_offset_s` (Meet) or `key_offset_s` (virtual devices) in
    `callguard.toml` (try +0.02 to +0.08 s).
 
 ## Test room (Secret Shield without a second device)

@@ -4,7 +4,7 @@ CallGuard joins Google Meet through **its own Chrome window**: no plugin, no bot
 ([app/source/connectors/meet](../app/source/connectors/meet/README.md)).
 
 ```
-CallGuard's Chrome window (profile runs/meet-profile, bridge.js injected before Meet's scripts)
+CallGuard's Chrome window (its own profile in %LOCALAPPDATA%\CallGuard\meet-profile, bridge.js injected before Meet's scripts)
   your mic ─► ws /meet/mic ─► CallGuard (Keystroke Guard shield + Secret Shield delay line) ─► the track Meet sends
   remote participants ─► ws /meet/far ─► CallGuard (Hearsay + "read me the code" listener)
 ```
@@ -16,7 +16,7 @@ uv run callguard app --meet-url abc-defg-hij   # or open this meeting at start
 uv run callguard run --mode meet               # same engine, dashboard in your normal browser
 ```
 - Needs **Chrome or Edge** installed (Chrome first). Another path: set `CALLGUARD_BROWSER` to the browser's `.exe`.
-- The window uses a dedicated profile (`runs/meet-profile`, gitignored). The first time, **sign in to Google** there
+- The window uses a dedicated profile (`%LOCALAPPDATA%\CallGuard\meet-profile`, outside the repo so no Google session can end up in a zip of it). The first time, **sign in to Google** there
   or join as a guest. Your everyday Chrome profile is never touched.
 - The window only opens Meet links (`https://meet.google.com/...` or a code like `abc-defg-hij`) and local pages.
 - Join / Leave and the link box are on the dashboard's **Meeting** bar. Its pill reads `in meeting: mic ✓ far ✓`
@@ -48,7 +48,7 @@ call feels laggy; the other two pillars keep working.
 | Pill stays on `joining…` or shows `✗` | The bridge isn't connected. Use Join from the dashboard (not a Meet tab in your normal browser); reload the Meet tab. |
 | Meet shows a marketing page | You're signed out. Open a meeting link or code directly, or sign in once in CallGuard's window. |
 | Voice light stays grey | No far-end speech yet. Someone else has to talk in the meeting. |
-| Keystroke readouts look shifted | Set `[devices] key_offset_s` in `callguard.toml` (+0.02 to +0.08 s; positive = clicks land later than their OS timestamp). |
+| Keystroke readouts look shifted | Set `[devices] meet_key_offset_s` (Meet; `key_offset_s` for virtual devices) in `callguard.toml` (+0.02 to +0.08 s; positive = clicks land later than their OS timestamp). |
 | Keystrokes not timed | pynput needs a desktop session; elevated (admin) windows hide keys from a non-admin listener. |
 | CallGuard crashes mid-call | Meet keeps working: the bridge falls back to your raw mic (fail open) and reconnects when CallGuard is back. |
 

@@ -72,7 +72,7 @@ The real Hearsay and Keystroke Guard drivers read the upstream repos read-only f
 and `../keyboard-acoustic-shield` (override with `HEARSAY_ROOT` / `KEYGUARD_ROOT`). Config: copy
 `callguard.example.toml` to `callguard.toml`.
 
-The first time, sign in to Google in CallGuard's Chrome window (its own profile in `runs/meet-profile`) or join as a
+The first time, sign in to Google in CallGuard's Chrome window (its own profile in `%LOCALAPPDATA%\CallGuard\meet-profile`, outside the repo) or join as a
 guest. Turn Meet's noise cancellation off (it removes key clicks and hides the shield). Setup and troubleshooting:
 [docs/meeting_setup.md](docs/meeting_setup.md).
 

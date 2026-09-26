@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     app = create_app(bus, controls=pipe)
     try:
         from app.source.connectors.meet.router import make_router
-        app.include_router(make_router(pipe))
+        app.include_router(make_router(pipe, port=port))
     except ImportError as e:
         log.warning("Meet connector not available (%s); dashboard only", e)
     server = uvicorn.Server(uvicorn.Config(app, host=cfg.server.host, port=port, log_level="warning"))
