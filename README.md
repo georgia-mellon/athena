@@ -1,41 +1,52 @@
 # CallGuard
 
-**Live call security for the AI-voice era.** CallGuard sits between you and your meeting app. It checks whether the
-voice you're hearing is a real person (**Hearsay**), keeps the keys you type from leaking through your microphone
-(**Keyguard**), and turns both into one live **threat score** on a dashboard. HackGT 13, team GeorgiaMellon.
+**Live call security for the AI-voice era. CallGuard protects what you hear, what you type, and what you say.**
+It sits between you and your meeting app and checks whether the voice you're hearing is a real person (**Hearsay**),
+keeps the keys you type from leaking through your microphone (**Keyguard**), and cuts codes you read aloud out of
+your outgoing voice while the caller is unverified (the **spoken-secret shield**). All three feed one live **threat
+score** on a dashboard. HackGT 13, team GeorgiaMellon.
 
 ## The threat
-An AI voice agent joins a Zoom call posing as IT: *"please type the reset code while we're on the line."* Two things
-go wrong at once:
-1. **Inbound:** the voice is synthetic, and you can't tell.
-2. **Outbound:** your keystrokes are audible in your mic stream. Anyone recording the call can run a keystroke
+An AI voice agent joins a Zoom call posing as IT: *"please type the reset code while we're on the line"*, then
+*"just read me the code"*. Three things go wrong at once:
+1. **What you hear:** the voice is synthetic, and you can't tell.
+2. **What you type:** your keystrokes are audible in your mic stream. Anyone recording the call can run a keystroke
    classifier and read the code. No malware needed.
+3. **What you say:** you read the code out loud.
 
-CallGuard's answer, live: the voice light goes red, the keystroke panel shows what an eavesdropper reads from your
-raw mic vs. from the shielded mic, the **shield** makes the eavesdropper read noise while your speech stays intact,
-and the threat score escalates to **CRITICAL** (synthetic caller + sensitive typing = social engineering in progress).
+CallGuard's answer, live: the voice light goes red; the keyboard panel shows what an eavesdropper reads from your
+raw mic vs. the shielded mic, and the Keyguard shield cuts that down while your speech stays intact; the digits
+you start reading are cut from your outgoing audio (only "6-digit code blocked" is shown, never the digits); and the
+threat score escalates to **CRITICAL**: synthetic caller + sensitive typing = social engineering in progress.
 
 ## How it works
 ```
- physical mic ─► [20 ms blocks] ─► Keyguard shield ─► virtual mic (VB-CABLE) ─► Zoom / Meet / Teams
-                     │ raw copy          │ shielded copy
-                     ▼                   ▼
-               raw ring buffer    shielded ring buffer ──► keystroke attacker (at each OS key event) ─► keys.readout
+ physical mic ─► [20 ms blocks] ─► Keyguard shield ─► secret delay line (500 ms) ─► virtual mic ─► Zoom / Meet / Teams
+                     │ raw copy          │ shielded copy     ▲ redact marks
+                     ▼                   ▼                   │
+               raw ring buffer    outbound ring ──► secret spotter (Vosk grammar, only while armed)
+                     │                   │
+                     └──► keystroke attacker (at each OS key event, raw vs shielded) ─► keys.readout
  key timing (pynput) ─┘
 
  meeting speaker ─► WASAPI loopback ─► far-end ring ─► VAD ─► Hearsay (4 s windows every 2 s) ─► voice.verdict
+                                                     └──► request-trigger spotter ("read me the code") ─► secret.request
 
  all events ─► EventBus ─► ThreatEngine (0-100, SAFE/WATCH/WARN/CRITICAL) ─► dashboard (WebSocket) + hooks
 ```
+- **Threat-aware secret shield** ([plans/06](plans/06_spoken_secret_shield.md)): it arms only while the caller is
+  unverified (Hearsay V ≥ 0.5), after the caller asks for a code, or by hand. With a verified colleague, the same
+  sentence passes untouched. The recognized words never leave the spotter; events carry the category and length only.
+  It fails open.
 - **Works with any meeting app**: integration is at the audio-device layer, so there's no plugin or bot, and the
   shield can act on your outgoing audio before the app encodes it ([plans/03](plans/03_meeting_platform.md)).
 - **Swappable drivers** (`callguard/drivers/`): `real` (Hearsay's frozen models; Keyguard's attacker + DSP shield)
   or `mock` (deterministic, no models) behind the Protocols in `callguard/types.py`.
-- **Fail-safe audio**: models never run on the audio thread except the shield, and a driver that raises is
+- **Fail-safe audio**: models never run on the audio thread except the shield (and the O(block) delay line), and a driver that raises is
   quarantined: the audio passes through, and the dashboard raises an alarm. Your mic is never muted by a bug.
 - **Threat score** ([plans/02 §4](plans/02_architecture.md)): voice risk V (EMA of p_synthetic), keystroke exposure
-  E/L (attacker accuracy above chance on the raw/shielded mic), typing activity T, plus a social-engineering rule:
-  typing while an unverified voice speaks.
+  E/L (how often the true key is in the attacker's top 3, above chance, on the raw/shielded mic), typing activity T,
+  a social-engineering rule (typing while an unverified voice speaks), and S (secrets blocked from your voice).
 - **Hooks**: console, JSONL and webhook sinks (e.g. a Slack incoming webhook via `CALLGUARD_WEBHOOK_URL`). Key
   identities and attacker guesses are scrubbed before anything leaves the process.
 
@@ -47,9 +58,11 @@ uv run pytest -q                                   # mock drivers: no models, no
 The real drivers read the two upstream repos, read-only, from sibling checkouts (override with `HEARSAY_ROOT` /
 `KEYGUARD_ROOT`): `../Hearsay` (its frozen `R4ft_xlsr_light` checkpoint) and `../keyboard-acoustic-shield`.
 ```
+uv run python scripts/get_vosk_model.py            # spoken-secret spotter model (40 MB, sha256-checked, once)
+uv run python demo/render_agent.py                 # the agent's TTS lines (line 06 = "read me the code")
 uv run python demo/build_scenario_audio.py         # builds demo/audio/ (gitignored) from the upstream data
 uv run callguard run --mode replay --scenario ai_caller          # the full story, real models, dashboard opens
-uv run callguard run --mode replay --drivers mock                # UI work without models
+uv run callguard run --mode replay --drivers mock                # UI work without models (numbers are meaningless)
 uv run callguard devices                           # checks the Zoom routing (VB-CABLE, loopback)
 uv run callguard run --mode live                   # real call: see docs/zoom_setup.md
 uv run callguard bench                             # per-driver latency
@@ -94,9 +107,12 @@ speech if the attacker knows when you typed; the attacker's own key detection is
 shield cuts quiet-typing reads ~5x but doesn't reach chance against this adaptive attacker (plan 04 criterion 2
 misses narrowly: 5.8 % vs a 5.6 % bar, STOI 0.897 vs 0.9 on a pessimistic one-key-per-1.5 s test). The fix is
 Keyguard's adversarial shield stage (teammate). Hearsay flags 2/100 real voices on shielded speech (0/100 unshielded).
+The report measures Keyguard's offline shield; CallGuard streams it in 20 ms blocks with 80 ms lookahead, which we
+checked reads the same to the attacker (360 presses: top-1 24 % streamed vs 22 % offline at the default key region).
 
 **Hearsay under keystrokes** (the reverse direction, `hearsay/reports/generalization.md` §2): with typing as loud as
-the voice, the submitted model flags ≤ 1.7 % of real speakers; with the Keyguard shield on, 1.3 %.
+the voice, the submitted model flags ≤ 1.7 % of real speakers; with typing 10 dB under the voice and the Keyguard
+shield on, 1.3 %.
 
 ## Repository
 ```

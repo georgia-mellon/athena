@@ -47,7 +47,7 @@ class Redactor:
         with self._lock:
             leaked = max(0, min(end, self._out) - start)
             self.leaked_samples += leaked
-            if end > self._out:
+            if end + RAMP > self._out:
                 self._marks.append((max(start, self._out), end))
         return leaked
 
@@ -59,8 +59,8 @@ class Redactor:
         with self._lock:
             lo = start - self.delay                          # absolute index of out[0]
             self._out = lo + n
-            marks = [m for m in self._marks if m[1] > lo]
-            self._marks = [m for m in marks if m[1] > self._out]
+            marks = [m for m in self._marks if m[1] + RAMP > lo]
+            self._marks = [m for m in marks if m[1] + RAMP > self._out]
         if not marks:
             return out
         gain = np.ones(n, np.float32)

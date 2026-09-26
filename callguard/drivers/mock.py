@@ -72,7 +72,8 @@ class MockAttacker:
         out = []
         for i, onset in enumerate(np.asarray(onsets, dtype=np.int64)):
             truth = truths[i] if truths is not None and i < len(truths) else None
-            rng = np.random.default_rng((self.seed, int(onset)))
+            seg = np.asarray(audio[max(int(onset), 0): int(onset) + _DETECT_LEN], np.float64)
+            rng = np.random.default_rng((self.seed, int(onset), int(abs(seg).sum() * 1e4) % 2**31))
             order = [self.classes[j] for j in rng.permutation(len(self.classes))[: self.top_k]]
             if truth in self.classes and not shield_marked(audio, int(onset)) and rng.random() < self.accuracy:
                 order = [truth] + [k for k in order if k != truth][: self.top_k - 1]

@@ -44,7 +44,7 @@ COLLEAGUE = "100"                         # LibriSpeech speaker id (the agent cl
 AGENT = ("diffssd", "elevenlabs", "librispeech:100")
 LOCAL = "2803"                            # the user at the keyboard
 CODE = "RESET4821"                        # fake code only
-TYPING = [22.0, 29.5]                     # shield off at the first, on (28 s) at the second
+TYPING = [20.5, 29.5]                     # shield off at the first, on (29 s) at the second
 # Spoken-secret beat (plan 06 section 7): the agent asks "just read me the code", the victim starts reading it.
 REQUEST_T, VICTIM_T = 34.4, 37.4
 RECORDED = REPO / "demo" / "audio" / "recorded"

@@ -91,8 +91,8 @@ function readoutRow(el, guesses) {
   for (const g of (guesses || []).slice(-MAXC)) {
     const s = document.createElement("span");
     s.textContent = g.top1 == null || g.top1 === "" ? "?" : String(g.top1);
-    if (g.truth != null) s.className = g.top1 === g.truth ? "ok-c" : g.hit ? "near-c" : "bad-c";
-    if (g.truth != null && g.hit && g.top1 !== g.truth) s.title = "true key in the attacker's top 3";
+    if (g.exact != null) s.className = g.exact ? "ok-c" : g.hit ? "near-c" : "bad-c";
+    if (g.hit && !g.exact) s.title = "true key in the attacker's top 3";
     if (g.p != null) s.title = `p=${Number(g.p).toFixed(2)}`;
     el.appendChild(s);
   }
@@ -116,7 +116,7 @@ function renderSecretState(d) {
   if (!d.enabled) { pill.textContent = "offline"; pill.className = "pill off"; $("sec-why").textContent = d.error || "disabled"; }
   else if (d.armed) { pill.textContent = "armed"; pill.className = "pill armed"; $("sec-why").textContent = ARMED_BY[d.armed_by] || ""; }
   else { pill.textContent = "standing by"; pill.className = "pill ok"; $("sec-why").textContent = "real caller: nothing is cut"; }
-  if (d.allowed) $("sec-why").textContent += " · allowing for 30 s";
+  if (d.allowed) $("sec-why").textContent += ` · allowing for ${Math.round(d.allow_s || 30)} s`;
   $("sec-delay").textContent = d.enabled ? Math.round(d.delay_ms) + " ms" : "–";
   for (const b of document.querySelectorAll("[data-sec]"))
     b.classList.toggle("on", (b.dataset.sec === "arm" && d.manual === true) || (b.dataset.sec === "disarm" && d.manual === false)

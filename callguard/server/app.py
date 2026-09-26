@@ -13,11 +13,30 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 STATIC = Path(__file__).parent / "static"
+LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _hostname(value: str | None) -> str | None:
+    """'http://localhost:8765' / 'localhost:8765' / '[::1]:8765' -> 'localhost' / '::1'."""
+    if not value:
+        return None
+    v = value.split("://", 1)[-1].split("/", 1)[0]
+    if v.startswith("["):
+        return v[1:v.find("]")]
+    return v.rsplit(":", 1)[0] if v.count(":") == 1 else v
+
+
+def is_local(headers: Any, allowed: frozenset[str] = LOCAL_HOSTS) -> bool:
+    """The page and the request both belong to this machine. The dashboard shows what an eavesdropper reads from
+    your keyboard, so another site in the same browser must not read /ws (WebSockets skip CORS) and a DNS-rebinding
+    name must not reach the API. Requests with no Origin (curl, tests) only need a local Host."""
+    origin = headers.get("origin")
+    return _hostname(headers.get("host")) in allowed and (origin is None or _hostname(origin) in allowed)
 CLIENT_QUEUE = 512  # events buffered per browser; beyond this the oldest are dropped
 
 
@@ -49,7 +68,8 @@ def _as_msg(ev: Any) -> dict:
     return {"topic": ev.topic, "t": ev.t, "data": ev.data}
 
 
-def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, controls: Any = None) -> FastAPI:
+def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, controls: Any = None,
+               allowed_hosts: frozenset[str] = LOCAL_HOSTS) -> FastAPI:
     """bus: anything with subscribe(glob, fn) -> unsubscribe. state_provider: returns the snapshot
     {topic: {"t", "data"}}; default = the latest event per topic seen here. controls: set_shield(mode),
     scenario(action, name)."""
@@ -85,6 +105,12 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
                 unsubscribe()
 
     app = FastAPI(title="CallGuard", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def local_only(request, call_next):
+        if not is_local(request.headers, allowed_hosts):
+            return PlainTextResponse("CallGuard only answers pages served from this machine", status_code=403)
+        return await call_next(request)
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     @app.get("/")
@@ -119,6 +145,9 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
 
     @app.websocket("/ws")
     async def ws(sock: WebSocket) -> None:
+        if not is_local(sock.headers, allowed_hosts):
+            await sock.close(code=1008)
+            return
         await sock.accept()
         q: asyncio.Queue = asyncio.Queue(CLIENT_QUEUE)
         clients.add(q)  # before the snapshot, so nothing published in between is lost

@@ -43,7 +43,22 @@ def _opt(cfg: Any, key: str, default: Any = None) -> Any:
 
 
 def _real(module: str, cls: str, **kwargs: Any) -> Any:
+    import sys
+    sys.dont_write_bytecode = True  # real drivers import the read-only upstream repos: no __pycache__ there
     return getattr(importlib.import_module(f"callguard.drivers.{module}"), cls)(**kwargs)
+
+
+def _hf_offline_if_cached(repo_id: str = "facebook/wav2vec2-xls-r-300m") -> None:
+    """Hearsay builds XLS-R with from_pretrained, which calls the HF Hub on every start. If the weights are already
+    in the local cache, go offline so the demo never depends on the venue network (spec F7)."""
+    import os
+    try:
+        from huggingface_hub import try_to_load_from_cache
+        if isinstance(try_to_load_from_cache(repo_id, "config.json"), str):
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    except Exception:  # noqa: BLE001 - no hub lib / odd cache: stay online
+        pass
 
 
 def _kind(cfg: Any, key: str) -> str:
@@ -55,6 +70,7 @@ def _kind(cfg: Any, key: str) -> str:
 
 def make_voice(cfg: Any = None):
     if _kind(cfg, "voice") == "real":
+        _hf_offline_if_cached()
         mode = _opt(cfg, "hearsay_mode", _opt(cfg, "voice_mode", "r4ft"))
         return _real("hearsay_real", "HearsayDriver", mode=mode, threads=int(_opt(cfg, "threads", 4)),
                      device=_opt(cfg, "device", "auto"))

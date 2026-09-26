@@ -50,7 +50,8 @@ log = logging.getLogger(__name__)
 VOICE_WIN = 4 * SR          # scored window (plan 01 F1)
 VOICE_HOP = 2 * SR          # one verdict per 2 s of far-end audio
 SPEECH_MIN = 0.5            # VAD speech fraction needed to score a window
-ATTACK_CTX = SR // 2        # samples either side of an onset handed to the attacker
+ATTACK_CTX = SR // 2        # samples before an onset handed to the attacker
+ATTACK_POST = int(0.3 * SR) # ... and after it: covers Keyguard's KEY_WIN (0.3 s from onset - 20 ms)
 LATE = 4 * BLOCK            # OS key events up to 80 ms late still reach the shield
 TICK = SR // 4              # fast replay: a threat tick every 0.25 s of audio
 SCENARIOS = REPO / "demo" / "scenarios"
@@ -125,7 +126,9 @@ class Pipeline:
         self.shield.reset()
         self._sent: set[int] = set()            # key samples already given to the shield
         self._seen: set = set()                 # key events already published as keys.stroke
-        self._pending: deque = deque()          # key events waiting for their post-onset audio
+        self._pending: deque = deque()          # (key event, shield mode when typed) waiting for its audio
+        self._clear_shielded = False
+        self._mic_errors = 0
         self._next_voice = VOICE_WIN
         self._readout = {"raw": deque(maxlen=self.cfg.threat.readout_window),
                          "shielded": deque(maxlen=self.cfg.threat.readout_window)}
@@ -139,7 +142,7 @@ class Pipeline:
         self._out_cursor = self._far_cursor = 0
         self._keep_until = self._bypass_until = -1e9
         self._manual: bool | None = None
-        self.armed, self.armed_by, self._run = False, "", None
+        self.armed, self.armed_by, self._auto_by, self._run = False, "", "", None
         self._publish_shield()
         self._publish_secret()
 
@@ -210,13 +213,22 @@ class Pipeline:
         for e in self.keyclock.between(max(0, pos - 2 * SR), pos):
             if e not in self._seen:
                 self._seen.add(e)
-                self._pending.append(e)
+                self._pending.append((e, self.shield_mode))
                 self.bus.emit("keys.stroke", t_audio=round(e.sample / SR, 3))
                 did = True
         lag = self._shield_lag()
-        while self._pending and self._pending[0].sample + ATTACK_CTX + lag <= self.mic.shielded.total:
-            self._attack(self._pending.popleft(), lag)
+        while self._pending and self._pending[0][0].sample + ATTACK_POST + lag <= self.mic.shielded.total:
+            e, mode = self._pending.popleft()
+            if self._clear_shielded:                    # the shield mode changed: its readout restarts
+                self._readout["shielded"].clear()
+                self._clear_shielded = False
+            if mode == self.shield_mode:                # typed under another mode: not evidence for this one
+                self._attack(e, lag)
             did = True
+        if self.mic.errors != self._mic_errors:        # the hook failed and passed raw audio: say so
+            self._mic_errors = self.mic.errors
+            self.bus.emit("driver.error", driver="audio hook", kind="stream", error=self.mic.last_error,
+                          failures=self.mic.errors, quarantined=False)
         return did
 
     def _attack(self, e, lag: int) -> None:
@@ -224,8 +236,8 @@ class Pipeline:
         truth = str(e.key).upper()
         if truth not in classes:                        # space, shift, ...: nothing to score
             return
-        raw = self.mic.raw.read_range(e.sample - ATTACK_CTX, e.sample + ATTACK_CTX)
-        shd = self.mic.shielded.read_range(e.sample + lag - ATTACK_CTX, e.sample + lag + ATTACK_CTX)
+        raw = self.mic.raw.read_range(e.sample - ATTACK_CTX, e.sample + ATTACK_POST)
+        shd = self.mic.shielded.read_range(e.sample + lag - ATTACK_CTX, e.sample + lag + ATTACK_POST)
         if raw is None or shd is None:                  # overwritten (we fell far behind): skip
             return
         kw = {"truths": [truth]} if getattr(self.attacker, "wants_truth", False) else {}
@@ -238,7 +250,8 @@ class Pipeline:
             g.truth = truth
             top1, p = g.top[0]
             hit[stream] = truth in [k for k, _ in g.top[:3]]   # exposure = true key in the top 3 (see threat.py)
-            self._readout[stream].append({"top1": top1, "p": round(float(p), 3), "truth": truth, "hit": hit[stream]})
+            self._readout[stream].append({"top1": top1, "p": round(float(p), 3), "exact": top1 == truth,
+                                          "hit": hit[stream]})   # no truth: typed keys never leave the pipeline
         acc = {s: float(np.mean([r["hit"] for r in q])) for s, q in self._readout.items()}
         self.bus.emit("keys.readout", hit=hit, k=len(classes), chance=min(3, len(classes)) / len(classes),
                       raw=list(self._readout["raw"]), shielded=list(self._readout["shielded"]),
@@ -254,16 +267,16 @@ class Pipeline:
             did |= self._feed(self.spotter_in, self.far, "_far_cursor", self._on_request)
         V = self.engine.V
         if c.arm_on_voice and (V >= c.arm_voice or (self.armed and V >= c.keep_voice)):
-            if not self.armed:
-                self.armed_by = "voice"
+            self._auto_by = self._auto_by if now < self._keep_until else "voice"
             self._keep_until = max(self._keep_until, now + c.disarm_after_s)
         armed = self._manual if self._manual is not None else now < self._keep_until
-        if self._manual:
-            self.armed_by = "manual"
-        if armed != self.armed:
-            self.armed = armed
-            if not armed:
-                self.armed_by = ""
+        by = "manual" if self._manual else (self._auto_by if armed else "")
+        if armed != self.armed or by != self.armed_by:
+            if armed and not self.armed:                # fresh listen: nothing from before arming
+                self.spotter.reset()
+                self._out_cursor = self.outbound.total
+                self._run = None
+            self.armed, self.armed_by = armed, by
             self._publish_secret()
         if armed:
             did |= self._feed(self.spotter, self.outbound, "_out_cursor", self._on_span)
@@ -292,9 +305,10 @@ class Pipeline:
     def _on_request(self, sp) -> None:
         self.bus.emit("secret.request", t_audio=round(sp.start / SR, 2))
         if self.cfg.secret.arm_on_request:
-            self._keep_until = max(self._keep_until, self.clock() + self.cfg.secret.disarm_after_s)
-            if not self.armed:
-                self.armed_by = "request"
+            now = self.clock()
+            if now >= self._keep_until or not self._auto_by:
+                self._auto_by = "request"
+            self._keep_until = max(self._keep_until, now + self.cfg.secret.disarm_after_s)
 
     def _on_span(self, sp) -> None:
         allowed = self.clock() < self._bypass_until
@@ -323,7 +337,7 @@ class Pipeline:
     def _publish_secret(self) -> None:
         c, on = self.cfg.secret, self._secret_on()
         self.bus.emit("secret.state", enabled=on, armed=self.armed, armed_by=self.armed_by, manual=self._manual,
-                      allowed=self.clock() < self._bypass_until, delay_ms=c.delay_ms if on else 0,
+                      allowed=self.clock() < self._bypass_until, allow_s=c.allow_s, delay_ms=c.delay_ms if on else 0,
                       error=self.secret_error, driver=self.spotter.name if self.spotter is not None else None)
 
     def secret(self, action: str) -> str:
@@ -358,7 +372,7 @@ class Pipeline:
 
     # --- replay -----------------------------------------------------------------------------------------------
     def replay(self, sc: Scenario, realtime: bool = True, stop: threading.Event | None = None,
-               play: bool = False) -> None:
+               play: bool = False) -> bool:
         """Run a scenario through the pipeline. realtime=False: as fast as possible, workers inline (tests).
         play=True also plays far end + shielded mic on the default speaker (paces the run)."""
         stop = stop or threading.Event()
@@ -372,6 +386,7 @@ class Pipeline:
             threads = self._workers(stop)
             self.engine.start()
         t0 = time.monotonic()
+        completed = False
         try:
             for i, s in enumerate(range(0, len(sc.far), BLOCK)):
                 if stop.is_set():
@@ -396,6 +411,7 @@ class Pipeline:
                     if (s // BLOCK) % (TICK // BLOCK) == 0:
                         self.bus.flush()                # the engine must see this tick's events first
                         self.engine.tick()
+            completed = not stop.is_set()
             if not realtime:                            # drain the tail
                 self.attack_step()
                 self.secret_step()
@@ -411,6 +427,7 @@ class Pipeline:
                 out.close()
             self.engine.stop()
             self.mode = "idle"
+        return completed
 
     def _apply(self, action: dict) -> None:
         if "shield" in action:
@@ -450,7 +467,7 @@ class Pipeline:
         if mode == "adversarial":
             raise ValueError("adversarial shield not available yet (waits for Keyguard's streaming D); use dsp")
         if mode != self.shield_mode:
-            self._readout["shielded"].clear()         # the shielded readout restarts with the new mode
+            self._clear_shielded = True               # the worker restarts the shielded readout (no cross-thread edit)
         self.shield_mode = mode
         self.bus.publish(Event("control.shield", {"mode": mode}))
         self._publish_shield()
@@ -473,13 +490,14 @@ class Pipeline:
         self.bus.publish(Event("control.scenario", {"action": "start", "name": name, "seconds": sc.seconds}))
 
         def run():
+            completed = False
             try:
-                self.replay(sc, realtime=True, stop=stop, play=play)
+                completed = self.replay(sc, realtime=True, stop=stop, play=play)
             except Exception as e:                      # noqa: BLE001
                 log.exception("scenario %s failed", name)
                 self.bus.emit("driver.error", driver="scenario", kind="replay", error=repr(e))
-            self.bus.publish(Event("control.scenario", {"action": "end", "name": name}))
-            if on_end is not None:
+            self.bus.publish(Event("control.scenario", {"action": "end", "name": name, "completed": completed}))
+            if on_end is not None and completed:
                 on_end()
         self._run_thread = threading.Thread(target=run, name="callguard-replay", daemon=True)
         self._run_thread.start()

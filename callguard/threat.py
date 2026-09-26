@@ -84,7 +84,7 @@ class ThreatEngine:
                     self._chance = float(d["chance"])
                 for stream, ok in d["hit"].items():
                     self._hits[stream].append(bool(ok))
-            elif ev.topic == "secret.blocked":
+            elif ev.topic == "secret.blocked" and not d.get("allowed"):
                 self._secrets.append((now, str(d.get("category", "secret")), int(d.get("length", 0))))
             elif ev.topic == "secret.request":
                 self._t_request = now
