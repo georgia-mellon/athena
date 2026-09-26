@@ -2,12 +2,13 @@
 // local test room. Self-contained, no dependencies.
 //
 // Mic:  getUserMedia -> AudioWorklet (downsample to 16 kHz, 320-sample float32 blocks) -> ws /meet/mic -> CallGuard
-//       (Keyguard shield + spoken-secret delay line) -> processed blocks back -> jitter buffer (~60 ms) -> upsample ->
-//       the audio track Meet sends. Video tracks are untouched.
+//       (Keyguard shield + spoken-secret delay line) -> processed blocks back -> jitter buffer (60 ms, grows after
+//       underflows) -> upsample -> the audio track Meet sends. Video tracks are untouched.
 // Far:  every remote audio track an RTCPeerConnection receives -> mixed in WebAudio -> 16 kHz blocks -> ws /meet/far
 //       (Hearsay + the "read me the code" listener).
-// FAIL OPEN: whenever CallGuard isn't answering (socket down, stalled, audio context blocked) the raw mic goes out
-// unchanged; the socket reconnects with backoff. Only console.debug, never audio or text contents.
+// FAIL OPEN: whenever CallGuard isn't answering (socket down, > 15 % of the last 500 ms missing, audio context
+// blocked or suspended) the raw mic goes out unchanged, crossfaded over 10 ms; the socket reconnects with backoff.
+// Only console.debug, never audio or text contents.
 (() => {
   'use strict';
   const HOSTS = ['meet.google.com', '127.0.0.1', 'localhost', '[::1]'];
@@ -16,7 +17,8 @@
   const BASE = `ws://127.0.0.1:${PORT}/meet/`;
   const TARGET_MS = 60;                       // jitter buffer target
   const log = (...a) => console.debug('[callguard]', ...a);
-  const stats = { mic: 'off', micSent: 0, micBack: 0, farSent: 0, farTracks: 0, rttMs: null };
+  const stats = { mic: 'off', micSent: 0, micBack: 0, farSent: 0, farTracks: 0, rttMs: null, ctxSuspended: 0,
+                  rawSwaps: 0 };
   const NativePC = window.RTCPeerConnection;
   const md = navigator.mediaDevices;
   const nativeGUM = md && md.getUserMedia ? md.getUserMedia.bind(md) : null;
@@ -45,7 +47,12 @@ class CallGuardTap extends AudioWorkletProcessor {
     // ponytail: boxcar anti-alias + linear interpolation; fine for speech at 16 kHz, a polyphase filter if not.
     this.box = new Float32Array(Math.max(1, Math.round(this.step))); this.bi = 0; this.sum = 0;
     this.prev = 0; this.pos = 0; this.blk = new Float32Array(320); this.k = 0;
-    this.q = new Fifo(16000); this.target = o.targetMs * 16; this.live = false; this.starve = 0;
+    // jitter buffer target (16 kHz samples): +20 ms after each underflow up to 150 ms, -10 ms per 10 s without one
+    this.q = new Fifo(16000); this.base = this.target = o.targetMs * 16; this.live = false; this.dry = false;
+    this.clean = 0;
+    // starved 16 kHz samples per render quantum over the last 500 ms: more than 15 % missing -> raw mic
+    this.win = new Float32Array(Math.ceil(0.5 * sampleRate / 128)); this.wi = 0; this.wsum = 0;
+    this.g = 0; this.dg = 1 / (0.01 * sampleRate);   // raw (0) <-> processed (1): a 10 ms crossfade on every switch
     this.a = 0; this.b = 0; this.frac = 0;
     this.port.onmessage = (e) => {
       const d = e.data;
@@ -55,7 +62,11 @@ class CallGuardTap extends AudioWorkletProcessor {
       } else if (d && d.reset) { this.q.drop(this.q.n); this.setLive(false); }
     };
   }
-  setLive(v) { if (v !== this.live) { this.live = v; this.port.postMessage({ live: v }); } }
+  setLive(v) {
+    if (v === this.live) return;
+    this.live = v; this.win.fill(0); this.wsum = 0;
+    this.port.postMessage({ live: v });
+  }
   tap(x) {                                     // native rate -> 16 kHz blocks -> main thread
     for (let i = 0; i < x.length; i++) {
       this.sum += x[i] - this.box[this.bi]; this.box[this.bi] = x[i]; this.bi = (this.bi + 1) % this.box.length;
@@ -73,19 +84,31 @@ class CallGuardTap extends AudioWorkletProcessor {
     if (x) this.tap(x);
     if (!this.mic) return true;
     const out = outputs[0][0];
-    if (!this.live && this.q.n >= this.target) { this.setLive(true); this.starve = 0; }
-    if (!this.live) { if (x) out.set(x); return true; }           // fail open: the raw mic
+    if (!this.live && this.q.n >= this.target) this.setLive(true);
+    if (!this.live && this.g === 0) { if (x) out.set(x); return true; }   // fail open: the raw mic
     const up = 16000 / sampleRate;
+    let starved = 0;
     for (let i = 0; i < out.length; i++) {
-      this.frac += up;
-      while (this.frac >= 1) {
-        this.frac -= 1; this.a = this.b;
-        const v = this.q.shift();
-        if (v === null) { this.b = 0; this.starve++; } else { this.b = v; this.starve = 0; }
+      let p = 0;
+      if (this.live) {
+        this.frac += up;
+        while (this.frac >= 1) {
+          this.frac -= 1; this.a = this.b;
+          const v = this.q.shift();
+          if (v !== null) { this.b = v; this.dry = false; continue; }
+          this.b = 0; starved++;
+          if (!this.dry) { this.dry = true; this.target = Math.min(this.target + 320, 2400); }   // underflow
+        }
+        p = this.a + (this.b - this.a) * this.frac;
       }
-      out[i] = this.a + (this.b - this.a) * this.frac;
+      this.g = this.live ? Math.min(1, this.g + this.dg) : Math.max(0, this.g - this.dg);
+      out[i] = this.g * p + (1 - this.g) * (x ? x[i] : 0);
     }
-    if (this.starve > 200 * 16) this.setLive(false);              // 200 ms without answers: raw again
+    if (!this.live) return true;
+    this.wsum += starved - this.win[this.wi]; this.win[this.wi] = starved; this.wi = (this.wi + 1) % this.win.length;
+    if (this.wsum > 0.15 * this.win.length * out.length * up) { this.setLive(false); return true; }   // raw again
+    this.clean = starved ? 0 : this.clean + out.length;
+    if (this.clean > 10 * sampleRate) { this.clean = 0; this.target = Math.max(this.base, this.target - 160); }
     return true;
   }
 }
@@ -113,10 +136,12 @@ registerProcessor('callguard-tap', CallGuardTap);
       let ws;
       try { ws = new WebSocket(BASE + kind); } catch (e) { retry(); return; }
       ws.binaryType = 'arraybuffer';
-      ws.onopen = () => { s.open = true; s.delay = 500; log(kind, 'connected'); if (s.onopen) s.onopen(); };
+      ws.onopen = () => { s.open = true; log(kind, 'connected'); if (s.onopen) s.onopen(); };
       ws.onmessage = (e) => { if (onBlock && e.data instanceof ArrayBuffer) onBlock(new Float32Array(e.data)); };
       ws.onclose = (e) => {
         if (s.open) log(kind, 'disconnected', e.code);
+        // a session that ran and ended: back in 0.5 s. 1013 (another tab owns the stream) keeps backing off.
+        if (s.open && e.code !== 1013) s.delay = 500;
         s.open = false; s.ws = null;
         if (s.onclose) s.onclose();
         retry();
@@ -133,10 +158,26 @@ registerProcessor('callguard-tap', CallGuardTap);
     return s;
   }
 
+  // ---- the peer connections (hooked below): which of our tracks is actually being sent -------------------------
+  const pcs = new Set();
+  const senderOf = (tracks) => {
+    const found = [];
+    for (const pc of pcs) {
+      if (pc.signalingState === 'closed') { pcs.delete(pc); continue; }
+      for (const s of pc.getSenders()) if (s.track && tracks.includes(s.track)) found.push(s);
+    }
+    return found;
+  };
+
   // ---- mic -----------------------------------------------------------------------------------------------------
-  let chains = [];                             // wrapped mics, newest last; only the newest is processed
+  // Wrapped mics, newest last. One is processed: the newest whose track a connection sends (the call, not Meet's
+  // mic preview), else the newest.
+  let chains = [];
   let micSock = null, stamps = [];
-  const active = () => chains[chains.length - 1];
+  const active = () => {
+    const sent = chains.filter((c) => senderOf([c.track, c.raw]).length);
+    return sent.length ? sent[sent.length - 1] : chains[chains.length - 1];
+  };
   const setMicState = () => { const c = active(); stats.mic = !c ? 'off' : c.live ? 'processed' : 'raw'; };
 
   function ensureMicSock() {
@@ -172,7 +213,7 @@ registerProcessor('callguard-tap', CallGuardTap);
     const dest = ctx.createMediaStreamDestination();
     ctx.createMediaStreamSource(new MediaStream([raw])).connect(node).connect(dest);
     const track = dest.stream.getAudioTracks()[0];
-    const chain = { node, live: false };
+    const chain = { node, track, raw, live: false, swapped: [] };
     chains.push(chain);
     stamps = [];
     ensureMicSock();
@@ -188,6 +229,28 @@ registerProcessor('callguard-tap', CallGuardTap);
       }
     };
     let ended = false;
+    // The context gets suspended / interrupted mid-call (device change, OS audio session): the processed track goes
+    // silent and the worklet can't fail open. Resume it; if that doesn't take, the call sends the raw mic meanwhile.
+    ctx.onstatechange = () => {
+      if (ended || ctx.state === 'closed') return;
+      if (ctx.state === 'running') {
+        for (const s of chain.swapped) if (s.track === raw) s.replaceTrack(track).catch(() => {});
+        if (chain.swapped.length) log('audio context running again; call sends the processed mic');
+        chain.swapped = [];
+        return;
+      }
+      stats.ctxSuspended++;
+      ctx.resume().catch(() => {});
+      setTimeout(() => {
+        if (ended || ctx.state === 'running' || ctx.state === 'closed') return;
+        for (const s of senderOf([track])) {
+          s.replaceTrack(raw).catch(() => {});
+          chain.swapped.push(s);
+          stats.rawSwaps++;
+        }
+        log('audio context', ctx.state, '; call sends the raw mic');
+      }, 300);
+    };
     const nativeStop = track.stop.bind(track);
     const end = () => {
       if (ended) return;
@@ -257,9 +320,13 @@ registerProcessor('callguard-tap', CallGuardTap);
     }
   }
   if (NativePC) {
+    const P = NativePC.prototype, addTrack = P.addTrack, addTransceiver = P.addTransceiver;
+    P.addTrack = function (...a) { pcs.add(this); return addTrack.apply(this, a); };
+    P.addTransceiver = function (...a) { pcs.add(this); return addTransceiver.apply(this, a); };
     const Hooked = class RTCPeerConnection extends NativePC {
       constructor(...args) {
         super(...args);
+        pcs.add(this);
         this.addEventListener('track', (e) => farAdd(e.track));
       }
     };

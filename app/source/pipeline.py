@@ -89,6 +89,30 @@ def load_scenario(name: str, root: Path = SCENARIOS, audio: Path = DEMO_AUDIO) -
     return Scenario(name, far, mic, keys, actions, spec.get("segments", []))
 
 
+class ArrivalAnchor:
+    """Meet mode's KeyClock anchor: when was stream sample `s` captured, given when its block arrived? arrival -
+    s / SR = a constant (capture + one-way latency) + positive jitter (socket bursts, page scheduling). Its lower
+    envelope over the last `window_s` rejects the jitter and still follows slow clock drift. The constant part left
+    over is calibrated with devices.meet_key_offset_s."""
+
+    def __init__(self, window_s: float = 3.0):
+        self.window_s = window_s
+        self._q: deque[tuple[float, float]] = deque()   # (arrival, offset), offsets increasing: [0] is the min
+
+    def reset(self) -> None:
+        self._q.clear()
+
+    def __call__(self, sample: int, arrival: float) -> float:
+        """Monotonic time at which `sample` was (least-delayed estimate) captured."""
+        off, q = arrival - sample / SR, self._q
+        while q and q[-1][1] >= off:
+            q.pop()
+        q.append((arrival, off))
+        while q[0][0] < arrival - self.window_s:
+            q.popleft()
+        return sample / SR + q[0][1]
+
+
 class Pipeline:
     """Owns the drivers (built once; models are slow to load) and one run's state (rebuilt by `reset`)."""
 
@@ -114,6 +138,7 @@ class Pipeline:
         self.mode = "idle"                      # idle | live | replay | meet
         self.meet_session = None                # launcher.MeetSession while a Meet window is open
         self.meet_port: int | None = None       # the server the bridge talks to (None: cfg.server.port)
+        self.meet_owners: dict[str, str | None] = {"mic": None, "far": None}   # origin of each /meet stream's page
         self._run_stop: threading.Event | None = None
         self._run_thread: threading.Thread | None = None
         self._live: list = []
@@ -466,14 +491,18 @@ class Pipeline:
     # --- Google Meet (app/source/connectors/meet) ----------------------------------------------------------------
     def start_meet(self, keyclock: KeyClock | None = None) -> None:
         """Meet mode: no local audio devices; the bridge in the Meet page feeds meet_mic / meet_far over the
-        server's /meet WebSockets. `keyclock` is for tests (default: the pynput KeyClock)."""
-        kc = keyclock or KeyClock(offset_s=self.cfg.devices.key_offset_s)
+        server's /meet WebSockets. `keyclock` is for tests (default: the pynput KeyClock). Needs no server: it can
+        run before the server starts; sockets that are already open keep their owner (meet_owners). Idempotent."""
+        if self.mode == "meet":
+            return
+        kc = keyclock or KeyClock(offset_s=self.cfg.devices.meet_key_offset_s)
         self.reset(kc, clock=time.monotonic)
         self.mode = "meet"
         self._run_stop = stop = threading.Event()
         kc.start()
         self._live = [kc]
-        self._meet = {"mic": 0.0, "far": 0.0, "links": {"mic": 0, "far": 0}, "rtt_ms": 0.0, "last": None}
+        self._meet = {"mic": 0.0, "far": 0.0, "rtt_ms": 0.0, "last": None}
+        self._meet_anchor = ArrivalAnchor()
         self._workers(stop)
         self.engine.start()
         threading.Thread(target=self._meet_watch, args=(stop,), name="callguard-meet-state", daemon=True).start()
@@ -485,9 +514,9 @@ class Pipeline:
         block = np.nan_to_num(np.asarray(block, np.float32).reshape(-1))
         if self.mode != "meet":
             return block
-        self._meet["mic"] = time.monotonic()
-        # the block's last sample was captured about now (plus browser + socket latency: devices.key_offset_s)
-        self.keyclock.anchor(self.mic.position + len(block))
+        self._meet["mic"] = now = time.monotonic()
+        end = self.mic.position + len(block)            # the block's last sample: its arrival, jitter removed
+        self.keyclock.anchor(end, self._meet_anchor(end, now))
         return self.mic.process(block)
 
     def meet_far(self, block: np.ndarray) -> None:
@@ -496,14 +525,29 @@ class Pipeline:
             self._meet["far"] = time.monotonic()
             self.far.write(np.nan_to_num(np.asarray(block, np.float32).reshape(-1)))
 
-    def meet_link(self, kind: str, delta: int = 0, rtt_ms: float | None = None) -> None:
-        """Router bookkeeping: a /meet/<kind> socket opened (+1) / closed (-1); the bridge's measured round trip."""
+    def meet_link(self, kind: str, delta: int = 0, rtt_ms: float | None = None, owner: str | None = None) -> None:
+        """Router bookkeeping, on the server loop: `owner` = the origin of the page that owns /meet/<kind> now (None:
+        nobody); delta +1 = a new owner, -1 = it left; the bridge's measured round trip."""
+        self.meet_owners[kind] = owner                  # kept outside meet mode too: start_meet may come later
         if self.mode != "meet":
             return
-        self._meet["links"][kind] += delta
+        if kind == "mic" and delta > 0:
+            self._meet_flush()
         if rtt_ms is not None:
             self._meet["rtt_ms"] = float(rtt_ms)
         self._publish_meet()
+
+    def _meet_flush(self) -> None:
+        """A new mic socket: drop what the previous one left in the delay line (it would go out ~0.5 s into the new
+        stream) and the shield's lookahead, and re-fit the key anchor. Called on the server loop, the thread that
+        runs meet_mic, so it lands between blocks."""
+        r = self.redactor
+        if r is not None:
+            kept = r.leaked_samples, r.redacted_samples
+            r.reset()
+            r.leaked_samples, r.redacted_samples = kept
+        self.shield.reset()
+        self._meet_anchor.reset()
 
     def _meet_watch(self, stop: threading.Event) -> None:
         while not stop.wait(0.25):                      # mic/far flip to False a second after frames stop
@@ -513,7 +557,9 @@ class Pipeline:
         m, now, sess = getattr(self, "_meet", None), time.monotonic(), self.meet_session
         if m is None or self.mode != "meet":
             return
-        state = dict(connected=bool(sum(m["links"].values())) or bool(sess and sess.alive),
+        owners = self.meet_owners
+        state = dict(connected=any(owners.values()) or bool(sess and sess.alive),
+                     owner=owners["mic"] or owners["far"],  # the page being protected
                      url=sess.url if sess and sess.alive else None,
                      mic=now - m["mic"] < 1.0, far=now - m["far"] < 1.0,
                      browser=sess.browser if sess and sess.alive else None,
