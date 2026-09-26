@@ -3,6 +3,7 @@ PASS/FAIL report, the driver loader, timing and probe audio."""
 from __future__ import annotations
 
 import importlib
+import inspect
 import time
 from typing import Any, Callable
 
@@ -60,10 +61,10 @@ def load_driver(spec: Any, factory: str, key: str, **kw: Any) -> Any:
     if not cls:
         raise ValueError(f"driver must be mock | real | module.path:ClassName, got {spec!r}")
     klass = getattr(importlib.import_module(mod), cls)
-    try:
-        return klass(**kw)
-    except TypeError:
-        return klass()
+    params = inspect.signature(klass).parameters          # pass only what it takes; a TypeError inside __init__
+    if not any(q.kind is q.VAR_KEYWORD for q in params.values()):  # is the driver's bug and must surface
+        kw = {k: v for k, v in kw.items() if k in params}
+    return klass(**kw)
 
 
 def timed(fn: Callable[[], Any], n: int) -> np.ndarray:

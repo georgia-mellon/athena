@@ -22,10 +22,14 @@ log = logging.getLogger("callguard.desktop")
 STOP = threading.Event()  # set it to shut a headless main() down (tests; window-less runs use Ctrl+C)
 
 
-def _wait_healthy(url: str, server, timeout: float = 30.0) -> bool:
-    """True once GET /api/health answers; False if the server died or the timeout passed."""
+def _wait_healthy(url: str, server, thread: threading.Thread | None = None, timeout: float = 30.0) -> bool:
+    """True once OUR server answers GET /api/health; False if it died (e.g. the port is taken by another CallGuard,
+    which would answer the health check itself) or the timeout passed."""
     end = time.monotonic() + timeout
-    while time.monotonic() < end and not server.should_exit:
+    while time.monotonic() < end and not server.should_exit and (thread is None or thread.is_alive()):
+        if not server.started:
+            time.sleep(0.1)
+            continue
         try:
             with urllib.request.urlopen(url + "api/health", timeout=1) as r:
                 if r.status == 200:
@@ -74,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[callguard] loading drivers: voice={cfg.drivers.voice} attacker={cfg.drivers.attacker} "
           f"shield={cfg.drivers.shield} secret={cfg.drivers.secret} ...", flush=True)
     pipe = Pipeline(cfg, bus)
+    pipe.meet_port = port                               # the injected Meet bridge dials this server, not the default
+    if hasattr(pipe, "start_meet"):
+        pipe.start_meet()                               # before the server: no dashboard Arm can race its reset
+    else:
+        print("[callguard] this build has no meet mode yet; the pipeline stays idle", flush=True)
     app = create_app(bus, controls=pipe)
     try:
         from app.source.connectors.meet.router import make_router
@@ -85,13 +94,9 @@ def main(argv: list[str] | None = None) -> int:
     srv = threading.Thread(target=server.run, name="callguard-server", daemon=True)
     srv.start()
     try:
-        if not _wait_healthy(url, server):
+        if not _wait_healthy(url, server, srv):
             print(f"[callguard] server did not come up on {url}", file=sys.stderr, flush=True)
             return 1
-        if hasattr(pipe, "start_meet"):
-            pipe.start_meet()
-        else:
-            print("[callguard] this build has no meet mode yet; the pipeline stays idle", flush=True)
         print(f"[callguard] dashboard: {url}", flush=True)
         if args.meet_url and hasattr(pipe, "meet"):
             try:

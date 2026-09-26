@@ -14,7 +14,7 @@ INSTALL_STEPS = """VB-CABLE (virtual microphone) not found.
   2. Right-click VBCABLE_Setup_x64.exe -> Run as administrator -> Install Driver.
   3. Reboot, then run `callguard devices` again.
   4. In Zoom: Settings > Audio > Microphone = "CABLE Output (VB-Audio Virtual Cable)"; Suppress background noise = Low.
-  (macOS: install BlackHole 2ch instead, `brew install blackhole-2ch`.) Full guide: docs/zoom_setup.md"""
+  (macOS: install BlackHole 2ch instead, `brew install blackhole-2ch`.) Full guide: docs/meeting_setup.md"""
 
 
 def list_devices() -> list[dict]:
@@ -80,7 +80,7 @@ def routing_status(devices: list[dict] | None = None, speakers: list[str] | None
         lines += ["", INSTALL_STEPS]
     if not speakers:
         lines += ["", "No loopback-capable speaker: inbound voice scoring needs WASAPI loopback (Windows) "
-                      "or a second virtual cable as the meeting speaker (docs/zoom_setup.md)."]
+                      "or a second virtual cable as the meeting speaker (docs/meeting_setup.md)."]
     return ok, "\n".join(lines)
 
 

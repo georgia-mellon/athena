@@ -61,6 +61,9 @@ def cmd_run(args) -> int:
     server = uvicorn.Server(uvicorn.Config(app, host=cfg.server.host, port=port, log_level="warning"))
     url = f"http://{cfg.server.host}:{port}/"
 
+    if args.mode == "meet":
+        pipe.start_meet()                               # before the server: a dashboard Arm can't race its reset
+
     def begin():
         while not server.started:
             time.sleep(0.1)
@@ -71,7 +74,6 @@ def cmd_run(args) -> int:
             pipe.start_live()
             print("[callguard] live: mic -> shield -> virtual mic; scoring the meeting's output. Ctrl+C to stop.")
         elif args.mode == "meet":
-            pipe.start_meet()
             print(f"[callguard] meet: test room {url}meet/testroom", flush=True)
             if not args.no_browser:
                 try:
@@ -98,6 +100,7 @@ def cmd_app(args) -> int:
     argv = ["--config", args.config] if args.config else []
     argv += ["--meet-url", args.meet_url] if args.meet_url else []
     argv += ["--port", str(args.port)] if args.port else []
+    argv += ["--drivers", args.drivers] if args.drivers else []
     return desktop_main(argv)
 
 
@@ -177,8 +180,9 @@ def main(argv: list[str] | None = None) -> int:
     a = sub.add_parser("app", help="desktop app: dashboard in a native window, Google Meet connector")
     a.add_argument("--meet-url", help="a Meet link or code to open at start")
     a.add_argument("--port", type=int)
+    a.add_argument("--drivers", choices=("real", "mock"), help="override every driver slot")
     a.set_defaults(fn=cmd_app)
-    sub.add_parser("devices", help="list audio devices and check the Zoom routing").set_defaults(fn=cmd_devices)
+    sub.add_parser("devices", help="list audio devices and check the virtual-device routing (Zoom/Teams)").set_defaults(fn=cmd_devices)
     b = sub.add_parser("bench", help="per-driver latency")
     b.add_argument("--drivers", choices=("real", "mock"), help="override every driver slot")
     b.set_defaults(fn=cmd_bench)
