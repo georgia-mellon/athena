@@ -5,7 +5,7 @@ const MAXC = 20;               // characters shown per keyboard row (the threat 
 const SPARK_S = 60;            // sparkline window, seconds
 const TL_MAX = 4000;           // timeline points kept
 const LOG_MAX = 200;
-const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict", "secret.state"]);
+const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict", "secret.state", "meet.state"]);
 
 const st = { voice: [], threat: [], typed: 0, vclass: null, alarmTimer: 0 };
 
@@ -136,6 +136,24 @@ function renderSecretBlocked(d, t) {
 function renderShield(mode) {
   for (const b of document.querySelectorAll("[data-mode]")) b.classList.toggle("on", b.dataset.mode === mode);
 }
+// outgoing latency: shield.state.latency_ms is the whole lag (Keyguard lookahead + secret delay line)
+function renderPipeline() {
+  const tot = st.shieldLat, sec = st.secretDelay || 0;
+  $("pipe-lat").textContent = tot == null ? "–" : Math.round(tot) + " ms";
+  $("pipe-split").textContent = tot == null ? "" : `(shield ${Math.round(Math.max(0, tot - sec))} + secret ${Math.round(sec)})`;
+}
+function renderMeet(d) {
+  const pill = $("meet-pill");
+  const ok = (b) => (b ? "✓" : "✗");
+  if (d.connected) {
+    pill.textContent = `in meeting: mic ${ok(d.mic)} far ${ok(d.far)}`;
+    pill.className = "pill " + (d.mic && d.far ? "ok" : "wait");
+  } else if (st.meetJoining) { pill.textContent = "joining…"; pill.className = "pill wait"; }
+  else { pill.textContent = "not in a meeting"; pill.className = "pill off"; }
+  if (d.connected) st.meetJoining = false;
+  if (d.url && !$("meet-url").value) $("meet-url").value = d.url;
+  pill.title = d.browser ? `${d.browser}${d.latency_ms != null ? ` · bridge ${Math.round(d.latency_ms)} ms` : ""}` : "";
+}
 
 // ---------- dispatch ----------
 function handle(m) {
@@ -150,8 +168,9 @@ function handle(m) {
     case "voice.verdict": renderVoice(d, t); break;
     case "keys.stroke": renderStroke(); break;
     case "keys.readout": renderReadout(d); break;
-    case "shield.state": renderShield(d.mode); break;
-    case "secret.state": renderSecretState(d); break;
+    case "shield.state": renderShield(d.mode); st.shieldLat = d.latency_ms; renderPipeline(); break;
+    case "secret.state": renderSecretState(d); st.secretDelay = d.enabled ? d.delay_ms : 0; renderPipeline(); break;
+    case "meet.state": renderMeet(d); break;
     case "secret.blocked": renderSecretBlocked(d, t); break;
     case "driver.error": if (!m.replay) alarm(`Driver ${d.driver || "?"} failed: ${d.error || ""} (audio keeps flowing)`); break;
   }
@@ -161,6 +180,7 @@ function handle(m) {
     else if (m.topic === "shield.state") text = `shield → ${d.mode}`;
     else if (m.topic === "secret.blocked") text = `${d.category === "digits" ? d.length + "-digit code" : d.category} ${d.allowed ? "allowed" : "blocked"} from your voice`;
     else if (m.topic === "secret.request") text = "caller asked for a code";
+    else if (m.topic === "control.meet") text = `meeting → ${d.action}${d.url ? " " + d.url : ""}`;
     else if (m.topic === "driver.error") text = `driver ${d.driver} error: ${d.error}`;
     else text += " " + JSON.stringify(d);
     log(t, text, m.topic === "driver.error" || (m.topic === "threat.level_change" && (d.level || d.to) === "CRITICAL") ? "alert-c" : "");
@@ -185,10 +205,25 @@ connect();
 async function post(path, body) {
   try {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!r.ok) alarm(`${path}: ${r.status} ${(await r.text()).slice(0, 200)}`);
-  } catch (e) { alarm(`${path}: ${e}`); }
+    if (!r.ok) { alarm(`${path}: ${r.status} ${(await r.text()).slice(0, 200)}`); return false; }
+    return true;
+  } catch (e) { alarm(`${path}: ${e}`); return false; }
 }
 for (const b of document.querySelectorAll("[data-mode]")) b.onclick = () => post("/api/control/shield", { mode: b.dataset.mode });
 for (const b of document.querySelectorAll("[data-sec]")) b.onclick = () => post("/api/control/secret", { action: b.dataset.sec });
 $("scn-start").onclick = () => post("/api/control/scenario", { action: "start", name: $("scn-name").value || "ai_caller" });
 $("scn-stop").onclick = () => post("/api/control/scenario", { action: "stop", name: $("scn-name").value || "ai_caller" });
+
+// ---------- meeting ----------
+function meetUrl() {  // accept a full link, "meet.google.com/abc-defg-hij" or a bare code; blank = Meet's home page
+  const v = $("meet-url").value.trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  return v.includes("/") ? "https://" + v : "https://meet.google.com/" + v;
+}
+$("meet-join").onclick = async () => {
+  st.meetJoining = true; renderMeet({});
+  if (!(await post("/api/control/meet", { action: "join", url: meetUrl() }))) { st.meetJoining = false; renderMeet({}); }
+};
+$("meet-url").onkeydown = (e) => { if (e.key === "Enter") $("meet-join").click(); };
+$("meet-leave").onclick = () => { st.meetJoining = false; renderMeet({}); post("/api/control/meet", { action: "leave" }); };

@@ -25,6 +25,7 @@ dependencies = [
     "pesq>=0.0.4",
     "praat-parselmouth>=0.4.7",
     "vosk>=0.3.45",
+    "pywebview>=5",
 ]
 
 [project.optional-dependencies]
