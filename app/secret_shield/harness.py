@@ -18,7 +18,7 @@ from typing import Any
 
 import numpy as np
 
-from app.hearsay.harness import Report, Skip, load_driver, probe_audio
+from app.source.harness import Report, Skip, load_driver, probe_audio
 from app.source.types import BLOCK, SR, SecretSpan, SecretSpotterDriver
 
 BUDGET_MS = 10.0            # mean per 20 ms block: the spotter shares a worker with the rest of the pipeline

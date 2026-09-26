@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from app.hearsay.harness import Report, Skip, load_driver, probe_audio, timed
+from app.source.harness import Report, Skip, load_driver, probe_audio, timed
 from app.source.types import BLOCK, SR, KeyGuess, KeystrokeAttackerDriver, ShieldDriver
 
 ATTACK_BUDGET_MS = 50.0     # per keystroke: the readout keeps up with fast typing
@@ -69,7 +69,7 @@ def _attacker(rep: Report, spec: Any, box: dict) -> None:
 
     def read() -> str:
         out = a.read(audio, onsets)
-        assert isinstance(out, list) and len(out) == len(onsets), f"read() must return one KeyGuess per onset"
+        assert isinstance(out, list) and len(out) == len(onsets), "read() must return one KeyGuess per onset"
         for g, o in zip(out, onsets):
             assert isinstance(g, KeyGuess), f"got {type(g).__name__}, not KeyGuess"
             assert g.onset == int(o), f"KeyGuess.onset {g.onset} != onset {o}"
