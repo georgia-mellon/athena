@@ -4,7 +4,7 @@ Paused by the owner so that a dedicated Claude session can continue CallGuard he
 only on Hearsay. **Start by reading `CLAUDE.md`, then `docs/plans/00_brief.md`** (owner intent), then plans 01-05.
 
 ## Where things stand
-Phase 1 ran as a workflow (script saved in `plans/phase1_workflow.js`) with 7 parallel work packages (plan 05 §2),
+Phase 1 ran as a workflow (script saved in `docs/plans/phase1_workflow.js`) with 7 parallel work packages (plan 05 §2),
 then integration (WP8), then review. It was stopped during the build phase. **`pytest`: 52 passed** (mock drivers,
 no devices), at the commit that added this file.
 
@@ -17,7 +17,7 @@ no devices), at the commit that added this file.
 | WP6 server + dashboard | **done**, 6 tests | FastAPI `create_app(bus, state_provider, controls)`, `/ws`, static dashboard with no CDNs. |
 | WP3 Hearsay driver | **partial**: `app/hearsay/driver.py` written, no report | calibration cached in `runs/hearsay_calibration.json`: r4ft thr −2.82, s 6.27; r5 thr 0.61, s 3.89 (from Hearsay `val_testlike`). Verify it, then write `tests/test_hearsay_driver.py`. |
 | WP7 attack proof | **partial**: `app/keystroke_guard/eval/attack_under_speech.py` written, not run to a report | finish, run, and write `docs/reports/attack_under_speech.md` (plan 04). |
-| WP8 integrate | **not started** | `pipeline.py`, `cli.py`, demo scenario, e2e replay, README, runbook. The prompt is in `plans/phase1_workflow.js`. |
+| WP8 integrate | **not started** | `pipeline.py`, `cli.py`, demo scenario, e2e replay, README, runbook. The prompt is in `docs/plans/phase1_workflow.js`. |
 | Review | not started | |
 
 ## Contract mismatches WP8 must reconcile (reported by the packages)
@@ -75,3 +75,25 @@ the upstream repos + Vosk model present.
   ElevenLabs clone of a LibriSpeech speaker, brief constraint 4 wants a consenting teammate's clone); confirm
   whether CallGuard should keep Hearsay's current 4:1 threshold or follow Pspoof=0.3/Cfa=4 once the Hearsay
   session recomputes it (delete runs/hearsay_calibration.json after it changes).
+
+## Update 2026-09-26 night: desktop app + Google Meet, repo restructured
+Branch `restructure-app-layout` (docs on `docs-desktop-meet`); not merged to `main` yet.
+- **Layout:** `app/source` (runtime), `app/hearsay` | `app/keystroke_guard` | `app/secret_shield` (driver around the
+  real model, mock, harness, eval, README), `dashboard/`, `demo/`, `docs/` (plans, reports, experiments,
+  demo_runbook, meeting_setup), `tests/`. Console script: `callguard = app.source.cli:main`.
+- **Desktop app:** `uv run callguard app` (pywebview window; system browser fallback). **Google Meet connector**
+  (`app/source/connectors/meet`): CallGuard opens Meet in its own Chrome/Edge profile and injects an audio bridge
+  over DevTools, so Meet needs no VB-CABLE. `callguard run --mode meet` is the same engine with the dashboard in the
+  browser. Local test room at `/meet/testroom`. VB-CABLE (`--mode live`) is now only for Zoom/Teams: see the
+  appendix of `docs/meeting_setup.md` (renamed from `docs/zoom_setup.md`).
+- **Pillar harnesses:** `python -m app.<pillar>.harness` checks any driver (mock, real, `module:Class`) against its
+  contract and real-time budget; the real runs are recorded in each pillar README.
+- **Measured:** full-stack meeting-room test (headless Chrome test room → bridge → meet mode, real drivers) blocked
+  a spoken 6-digit code with ~1 s leaked at its start. `uv run pytest -q`: 90 passed (84 passed + 7 skipped in a
+  checkout without the Vosk model).
+- **Hearsay for the main track:** used via the fork [swail-labs/hearsay](https://github.com/swail-labs/hearsay) and
+  a dedicated README section, per the NSA organizers' guidance. The NSA challenge submission stays separate and frozen.
+- **Still blocked upstream:** Keyguard's final attacker weights, the adversarial shield stage, the CTC free-typing
+  attacker (teammate); the owner's consenting victim recording of a fake code (Secret Shield eval + demo beat).
+- **Code follow-up (not docs):** `app/source/audio/devices.py` still points at `docs/zoom_setup.md`; it should say
+  `docs/meeting_setup.md`.
