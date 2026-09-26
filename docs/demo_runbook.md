@@ -22,7 +22,7 @@ starts 3 s later with its audio on the speakers (`--mute` to stay silent). **Sta
 |---|---|---|
 | 0-12 s | a colleague talks; voice light **green (real)**; score SAFE | "CallGuard listens to the call. Right now it's a real colleague: Hearsay says real." |
 | 12-22 s | the "IT agent" takes over; voice light turns **red (synthetic)**; score climbs to WATCH/WARN | "This is an AI voice. You can't hear the difference; Hearsay can." |
-| 22-27 s | the user types the reset code; *Eavesdropper reads, no shield* spells out the code; score **CRITICAL** | "The agent asks for the reset code. Anyone recording the call can read your keystrokes from the audio: this is what they get." |
+| 22-27 s | the user types the reset code; *Eavesdropper reads, no shield* fills in (green = read exactly, amber = true key in its top 3); score WARN, then **CRITICAL** once a few keys are read | "The agent asks for the reset code. Anyone recording the call can run a keystroke classifier on it. The true key is in its top 3 almost every time: a 9-character code drops to about 20,000 guesses." |
 | 28 s | shield switches on (scripted) | "Now Keyguard's shield turns on. It only touches the few milliseconds around each key press." |
 | 29-34 s | code typed again; the *shielded* row reads noise; the raw row still reads it | "Same typing. The meeting now gets the shielded mic, and the eavesdropper reads garbage. Your voice is untouched." |
 | 40-60 s | agent hangs up, colleague returns; score decays to SAFE/WATCH | "The alert decays when the synthetic voice leaves." |

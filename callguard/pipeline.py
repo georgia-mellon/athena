@@ -199,10 +199,10 @@ class Pipeline:
             g = guesses[0]
             g.truth = truth
             top1, p = g.top[0]
-            hit[stream] = top1 == truth
-            self._readout[stream].append({"top1": top1, "p": round(float(p), 3), "truth": truth})
-        acc = {s: float(np.mean([r["top1"] == r["truth"] for r in q])) for s, q in self._readout.items()}
-        self.bus.emit("keys.readout", hit=hit, k=len(classes), chance=1 / len(classes),
+            hit[stream] = truth in [k for k, _ in g.top[:3]]   # exposure = true key in the top 3 (see threat.py)
+            self._readout[stream].append({"top1": top1, "p": round(float(p), 3), "truth": truth, "hit": hit[stream]})
+        acc = {s: float(np.mean([r["hit"] for r in q])) for s, q in self._readout.items()}
+        self.bus.emit("keys.readout", hit=hit, k=len(classes), chance=min(3, len(classes)) / len(classes),
                       raw=list(self._readout["raw"]), shielded=list(self._readout["shielded"]),
                       acc_raw=acc["raw"], acc_shielded=acc["shielded"], driver=self.attacker.name)
 
@@ -312,6 +312,8 @@ class Pipeline:
             raise ValueError(f"shield mode must be one of {SHIELD_MODES}")
         if mode == "adversarial":
             raise ValueError("adversarial shield not available yet (waits for Keyguard's streaming D); use dsp")
+        if mode != self.shield_mode:
+            self._readout["shielded"].clear()         # the shielded readout restarts with the new mode
         self.shield_mode = mode
         self.bus.publish(Event("control.shield", {"mode": mode}))
         self._publish_shield()

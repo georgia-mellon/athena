@@ -70,7 +70,7 @@ function renderVoice(d, t) {
   $("vlabel").textContent = c;
   $("vp").textContent = p.toFixed(2);
   $("vlat").textContent = d.latency_ms == null ? "–" : Math.round(d.latency_ms) + " ms";
-  if (c !== st.vclass) { log(t, `voice → ${c} (p=${p.toFixed(2)})`, c === "synthetic" ? "bad-c" : ""); st.vclass = c; }
+  if (c !== st.vclass) { log(t, `voice → ${c} (p=${p.toFixed(2)})`, c === "synthetic" ? "alert-c" : ""); st.vclass = c; }
   st.voice.push([t, p]);
   renderSpark();
 }
@@ -91,7 +91,8 @@ function readoutRow(el, guesses) {
   for (const g of (guesses || []).slice(-MAXC)) {
     const s = document.createElement("span");
     s.textContent = g.top1 == null || g.top1 === "" ? "?" : String(g.top1);
-    if (g.truth != null) s.className = g.top1 === g.truth ? "ok-c" : "bad-c";
+    if (g.truth != null) s.className = g.top1 === g.truth ? "ok-c" : g.hit ? "near-c" : "bad-c";
+    if (g.truth != null && g.hit && g.top1 !== g.truth) s.title = "true key in the attacker's top 3";
     if (g.p != null) s.title = `p=${Number(g.p).toFixed(2)}`;
     el.appendChild(s);
   }
@@ -135,7 +136,7 @@ function handle(m) {
     else if (m.topic === "shield.state") text = `shield → ${d.mode}`;
     else if (m.topic === "driver.error") text = `driver ${d.driver} error: ${d.error}`;
     else text += " " + JSON.stringify(d);
-    log(t, text, m.topic === "driver.error" || (m.topic === "threat.level_change" && (d.level || d.to) === "CRITICAL") ? "bad-c" : "");
+    log(t, text, m.topic === "driver.error" || (m.topic === "threat.level_change" && (d.level || d.to) === "CRITICAL") ? "alert-c" : "");
   }
 }
 

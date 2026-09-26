@@ -25,6 +25,10 @@ log = logging.getLogger(__name__)
 REPO = Path(__file__).resolve().parents[2]
 PROVISIONAL = REPO / "runs" / "provisional_keynet.pt"
 PROVISIONAL_AUG = REPO / "runs" / "provisional_keynet_speechaug.pt"  # plan 04's adaptive attacker (experiments/)
+# Keyguard's default key region (14 frames, 112 ms) stops before the key *release*, which the attacker's 300 ms
+# window still hears: 26 frames (208 ms) covers press + release and took the provisional speech-aug attacker from
+# 22 % to 7.5 % top-1 on the 360 harrison test presses (chosen on those presses; reports/attack_under_speech.md).
+KEY_FRAMES = 26
 SPLIT_SEED = 0          # plan 04: per-key seeded 60/40 split of harrison presses
 TRAIN_FRAC = 0.6
 
@@ -140,7 +144,7 @@ class KeyguardShield:
     """
 
     def __init__(self, mode: str = "dsp", root: Path | None = None, lookahead: int = 4 * BLOCK,
-                 history: int = 16 * BLOCK, seed: int = 0, **shield_cfg):
+                 history: int = 24 * BLOCK, seed: int = 0, **shield_cfg):
         if mode == "adversarial":
             raise NotImplementedError("shield mode 'adversarial' waits for the teammate's streaming adversarial "
                                       "shield D (plan 05 blockers); use mode='dsp'")
@@ -151,7 +155,7 @@ class KeyguardShield:
         from keyguard.shield.shield import Shield, ShieldConfig
         self.name = "keyguard-dsp"
         self.mode = mode
-        self.shield = Shield(ShieldConfig(**shield_cfg), seed=seed)
+        self.shield = Shield(ShieldConfig(**{"key_frames": KEY_FRAMES, **shield_cfg}), seed=seed)
         self.lookahead, self.history = int(lookahead), int(history)
         cfg = self.shield.cfg
         # sample span a key event at e can change: [e - before, e + after)

@@ -145,11 +145,14 @@ def test_real_replay_ai_caller():
     ro = seen["readouts"][-1]
     print("  raw read:", "".join(r["top1"] for r in ro["raw"]), " shielded read:",
           "".join(r["top1"] for r in ro["shielded"]))
-    lv = [x[1] for x in changes]
-    assert "CRITICAL" in lv and lv[-1] in ("SAFE", "WATCH")
-    typed = [r for r in seen["readouts"]]
-    raw_hits = sum(r["hit"]["raw"] for r in typed)
-    shd_hits_on = sum(r["hit"]["shielded"] for r in typed[len(typed) // 2:])
-    assert raw_hits > shd_hits_on
+    at = lambda t: [lv for tt, lv, _ in seen["levels"] if tt <= t][-1]  # noqa: E731
+    assert at(11) == "SAFE"                                        # real colleague
+    assert "CRITICAL" in [lv for tt, lv, _ in seen["levels"] if 22 <= tt < 28]  # agent + readable typing
+    assert at(36) != "CRITICAL"                                    # shield on (28 s)
+    assert at(sc.seconds) in ("SAFE", "WATCH")                     # agent gone
+    n = len(seen["readouts"]) // 2                                 # first burst: shield off; second: on
+    raw_off = sum(r["hit"]["raw"] for r in seen["readouts"][:n])
+    shd_on = sum(r["hit"]["shielded"] for r in seen["readouts"][n:])
+    assert raw_off > 2 * shd_on, (raw_off, shd_on)                 # top-3 hits
     pipe.stop()
     bus.close()

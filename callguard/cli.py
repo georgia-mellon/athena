@@ -120,9 +120,10 @@ def cmd_bench(args) -> int:
             blk = speech[:BLOCK]
             d.reset()
             rows.append((d.name, "20 ms block, no key", load, *_time(lambda: d.process(blk, []), 50)))
+            d.reset()
             n = [0]
 
-            def keyed():  # a key event every block, so every block is key-touched (the worst case)
+            def keyed():  # a key event every block (absolute index = samples since reset): every block is touched
                 n[0] += 1
                 return d.process(blk, [n[0] * BLOCK])
             rows.append((d.name, "20 ms block, key active", load, *_time(keyed, 50)))

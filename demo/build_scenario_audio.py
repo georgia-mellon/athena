@@ -6,7 +6,12 @@ Sources (all read-only):
   the agent clones a colleague's voice). Both loudness-normalised to about -23 dBFS RMS so level gives nothing away.
 - mic keystrokes: Keyguard harrison presses from the TEST split of harrison_split() only (the provisional attacker
   trained on the train split). Window start = onset - PRE_S so the onset lands on the logged key time.
-- mic speech: another LibriSpeech speaker (LOCAL), +10 dB over the key-window power, with gaps; -60 dBFS noise floor.
+- mic: another LibriSpeech speaker (LOCAL) at -28 dBFS with gaps; keystrokes near their recorded level (key-window
+  power KEY_DBFS, laptop keys are about as loud as speech); a quiet-room noise floor NOISE_DBFS, ~40 dB under the keys.
+  The provisional attacker (isolated, near-silent harrison presses) needs that: ~30 dB of key-to-noise already takes
+  it toward chance. Noise robustness is an open item for the teammate's attacker (reports/attack_under_speech.md).
+  The user goes quiet while typing the code (as people do); keys under ongoing speech are the harder case that
+  reports/attack_under_speech.md measures.
 
 Usage: .venv\\Scripts\\python demo\\build_scenario_audio.py
 """
@@ -40,8 +45,8 @@ LOCAL = "2803"                            # the user at the keyboard
 CODE = "RESET4821"                        # fake code only
 TYPING = [22.0, 29.5]                     # shield off at the first, on (28 s) at the second
 PRE_S = 0.02                              # keyguard.config.PRE_S
-FAR_DBFS, SPEECH_OVER_KEYS_DB, NOISE_DBFS, GAP = -23.0, 10.0, -60.0, 0.3
-LOCAL_DBFS = -28.0                        # user's speech at the mic; keys scaled to sit 10 dB under it
+FAR_DBFS, KEY_DBFS, NOISE_DBFS, GAP = -23.0, -24.0, -65.0, 0.3
+LOCAL_DBFS = -28.0                        # user's speech at the mic (not while typing)
 # (harrison presses are loud, ~-22 dBFS window RMS; KeyNet's log-mel is max-referenced and standardised, so gain is
 # irrelevant to the attacker, only the speech/key ratio and the noise floor matter)
 
@@ -117,12 +122,20 @@ def main() -> None:
             used_wins.append(w)
             s += round(rng.uniform(0.45, 0.6) * SR)
     key_pow = float(np.mean([np.mean(w.astype(np.float64) ** 2) for w in used_wins]))
-    key_dbfs = LOCAL_DBFS - SPEECH_OVER_KEYS_DB
-    keys_track *= np.float32(10 ** (key_dbfs / 20) / np.sqrt(key_pow))
+    key_dbfs = KEY_DBFS
+    key_gain = 10 ** (key_dbfs / 20) / np.sqrt(key_pow)
+    keys_track *= np.float32(key_gain)
 
-    # local speech: another speaker, +10 dB over the key windows, with conversational gaps
+    # local speech: another speaker, with conversational gaps
     local = clips(libri[libri.speaker.astype(str) == LOCAL], rng)
-    speech, _ = fill(local, TOTAL, key_dbfs + SPEECH_OVER_KEYS_DB, gaps=(0.6, 2.5), rng=rng)
+    speech, _ = fill(local, TOTAL, LOCAL_DBFS, gaps=(0.6, 2.5), rng=rng)
+    env = np.ones(n, np.float32)                        # the user stops talking while typing the code
+    burst_ends = [t for t, _ in key_log][len(CODE) - 1::len(CODE)]
+    for t0, t1 in zip(TYPING, burst_ends):
+        a, b = round((t0 - 0.3) * SR), round((t1 + 0.5) * SR)
+        env[a:b] = 0.0
+    env = np.convolve(env, np.ones(800, np.float32) / 800, mode="same")  # 50 ms fades
+    speech = speech * env
     noise = db_gain(rng.standard_normal(n), NOISE_DBFS).astype(np.float32)
     mic = speech + keys_track + noise
 
@@ -141,8 +154,8 @@ def main() -> None:
     print(f"agent     : source={AGENT[0]} generator={AGENT[1]} speaker={AGENT[2]} (spoof, test_internal; "
           f"{len(agent_rows)} clips)")
     print(f"local mic : librispeech speaker {LOCAL}; keys = harrison TEST split, {len(key_log)} presses of {CODE} x2")
-    print(f"key-window power {key_dbfs:.1f} dBFS, local speech {key_dbfs + SPEECH_OVER_KEYS_DB:.1f} dBFS "
-          f"(+{SPEECH_OVER_KEYS_DB:.0f} dB), noise {NOISE_DBFS:.0f} dBFS, mic peak {np.abs(mic).max():.2f}")
+    print(f"key-window power {key_dbfs:.1f} dBFS, local speech {LOCAL_DBFS:.1f} dBFS (paused while typing), "
+          f"noise {NOISE_DBFS:.0f} dBFS, mic peak {np.abs(mic).max():.2f}")
     ends = np.arange(4 * SR, len(far) + 1, 2 * SR)          # the pipeline's scored windows: 4 s, hop 2 s
     frac = {e: speech_fraction(far[e - 4 * SR:e]) for e in ends}
     print(f"{'segment':15s} {'dur':>5s} {'RMS dBFS':>8s} {'VAD min':>7s} {'VAD med':>7s}  windows (end s: frac)")

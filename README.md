@@ -65,7 +65,27 @@ Dashboard: <http://127.0.0.1:8765/>. Config: copy `callguard.example.toml` to `c
 The runbook for the expo is [docs/demo_runbook.md](docs/demo_runbook.md).
 
 ## Results
-RESULTS_PLACEHOLDER
+All numbers from this laptop's CPU (AMD, 16 threads). The keystroke attacker is **provisional** (a KeyNet we trained on
+Keyguard's public harrison bank, one keyboard) until the teammate's weights ship.
+
+**End-to-end replay** (`ai_caller`, real drivers, `tests/test_e2e_replay.py`): SAFE → WATCH (synthetic voice) →
+CRITICAL (typing the code while the agent speaks, shield off) → WARN (shield on) → WATCH → SAFE after the agent
+hangs up. Hearsay median p_synthetic per segment: real colleague 0.19, ElevenLabs clone of that colleague 0.83,
+colleague again 0.11. The attacker's top 3 holds the true key for ~89 % of the unshielded keystrokes and ~33 % of the
+shielded ones (chance 8 %).
+
+**Latency** (`callguard bench`): Hearsay R4ft ~0.65 s per 4 s window (every 2 s, off the audio thread); attacker
+2 ms per keystroke; DSP shield 2.8 ms median (5 ms max) per 20 ms block while a key is active, 0 ms otherwise, plus
+80 ms constant lookahead.
+
+**Attack proof** ([reports/attack_under_speech.md](reports/attack_under_speech.md)): can an eavesdropper read keys
+with someone talking over them, and does the shield stop it? Honest summary: with typing in a quiet room, the
+adaptive attacker reads ~54 % of keys top-1 (chance 2.8 %) and the shield cuts that sharply; with speech +10 dB over
+the keys the provisional attacker drops to ~16 % with perfect key timing and near chance with its own onset
+detection. Speech quality with the shield (STOI) and Hearsay's false alarms on shielded real speech are in the report.
+
+**Hearsay under keystrokes** (the reverse direction, `hearsay/reports/generalization.md` §2): with typing as loud as
+the voice, the submitted model flags ≤ 1.7 % of real speakers; with the Keyguard shield on, 1.3 %.
 
 ## Repository
 ```

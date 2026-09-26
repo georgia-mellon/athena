@@ -3,7 +3,9 @@
 Consumed payloads (producers must send these keys; extra keys are ignored):
 - `voice.verdict`  {"p_synthetic": float}              one per scored far-end speech window
 - `keys.stroke`    {}                                  one per OS key event (timing only)
-- `keys.readout`   {"hit": {"raw": bool, "shielded": bool}, "k"?: int}   one per attacked keystroke (the pipeline
+- `keys.readout`   {"hit": {"raw": bool, "shielded": bool}, "chance"?: float}   one per attacked keystroke; "hit" =
+                   the true key is in the attacker's top-3 (a 9-key code then falls to ~3^9 guesses), "chance" = the
+                   hit rate of a guessing attacker (default 3 / num_classes) (the pipeline
                    also sends the dashboard's lists: raw/shielded guesses, acc_raw, acc_shielded, chance)
 - `shield.state`   {"mode": "off"|"dsp"|"adversarial", "failed"?: bool}
 Published:
@@ -27,10 +29,13 @@ from .types import Event
 LEVELS = ("SAFE", "WATCH", "WARN", "CRITICAL")
 
 
-def _above_chance(hits: deque, k: int) -> float:
+PRIOR = 3  # pseudo-keystrokes at chance: one lucky read isn't "100 % readable"
+
+
+def _above_chance(hits: deque, chance: float) -> float:
     if not hits:
         return 0.0
-    acc, chance = sum(hits) / len(hits), 1.0 / k
+    acc = (sum(hits) + PRIOR * chance) / (len(hits) + PRIOR)
     return max(0.0, (acc - chance) / (1.0 - chance))
 
 
@@ -44,7 +49,7 @@ class ThreatEngine:
         self._t_ema = now()
         self._voice_since: float | None = None      # start of the current run of p >= se_voice, for the reasons
         self._hits = {"raw": deque(maxlen=self.cfg.readout_window), "shielded": deque(maxlen=self.cfg.readout_window)}
-        self._k = self.cfg.num_classes
+        self._chance = min(3, self.cfg.num_classes) / self.cfg.num_classes
         self._strokes: deque[float] = deque()
         self.shield = "off"
         self.shield_failed = False
@@ -70,11 +75,13 @@ class ThreatEngine:
             elif ev.topic == "keys.stroke":
                 self._strokes.append(now)
             elif ev.topic == "keys.readout":
-                if d.get("k"):
-                    self._k = int(d["k"])
+                if d.get("chance"):
+                    self._chance = float(d["chance"])
                 for stream, ok in d["hit"].items():
                     self._hits[stream].append(bool(ok))
             elif ev.topic == "shield.state":
+                if d.get("mode", self.shield) != self.shield:
+                    self._hits["shielded"].clear()     # L = what leaks with the *current* shield
                 self.shield = d.get("mode", self.shield)
                 self.shield_failed = bool(d.get("failed", False))
 
@@ -97,8 +104,8 @@ class ThreatEngine:
             while self._strokes and now - self._strokes[0] > c.typing_window_s:
                 self._strokes.popleft()
             V = self.V
-            E = _above_chance(self._hits["raw"], self._k)
-            L = _above_chance(self._hits["shielded"], self._k)
+            E = _above_chance(self._hits["raw"], self._chance)
+            L = _above_chance(self._hits["shielded"], self._chance)
             T = min(len(self._strokes), c.typing_saturation) / c.typing_saturation
             typing = T >= c.typing_on
             shield_on = self.shield != "off" and not self.shield_failed
