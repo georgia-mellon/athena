@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KeyGuard — Diagram</title>
+<style>
+  body{margin:0;background:#f7f2e8;color:#2b2f38;
+       font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 16px 40px}
+  svg{width:100%;height:auto;display:block}
+</style></head>
+<body><div class="wrap">
+<svg viewBox="0 0 1200 900" role="img" aria-label="KeyGuard diagram" font-family="inherit">
+ <defs>
+   <marker id="g" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#98a2b0"/></marker>
+   <marker id="p" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#8b6df0"/></marker>
+   <marker id="r" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#e5544e"/></marker>
+   <marker id="t" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#1fae9f"/></marker>
+   <marker id="o" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#37a35f"/></marker>
+   <marker id="y" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#d9a520"/></marker>
+   <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0000001f"/></filter>
+   <style>
+     .nt{font-weight:700;font-size:15px;fill:#242a35}
+     .ns{font-size:12.5px;fill:#6b7280}
+     .chip{font-weight:800;font-size:13px;letter-spacing:.5px}
+     .obj{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;fill:#7a5b00;font-weight:600}
+     .cap{font-size:12px;fill:#9a8b52}
+     .lbl{font-size:12.5px;font-weight:700}
+     .step{font-weight:700;font-size:12px}
+     .badge{font-weight:800;font-size:13px}
+   </style>
+ </defs>
+
+ <text x="40" y="44" font-size="27" font-weight="800">KeyGuard</text>
+ <text x="40" y="70" font-size="15" fill="#6b7280">an acoustic keystroke attacker (Ares) vs an LLM defender (Athena) — a computer guardian for calls</text>
+
+ <!-- DATA node -->
+ <g filter="url(#sh)"><rect x="450" y="96" width="300" height="60" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+ <circle cx="470" cy="118" r="6" fill="#8b6df0"/>
+ <text class="nt" x="486" y="122">Data</text>
+ <text class="ns" x="486" y="142">your Mac · SKAID 67k · Harrison MacBook · wordfreq</text>
+
+ <!-- ===== ARES lane ===== -->
+ <rect x="40" y="188" width="340" height="648" rx="16" fill="#fbeceb" stroke="#f0d5d1"/>
+ <g filter="url(#sh)"><rect x="64" y="204" width="174" height="30" rx="15" fill="#e5544e"/></g>
+ <text class="chip" x="151" y="224" text-anchor="middle" fill="#fff">⚔  ARES · attacker</text>
+
+ <!-- ===== ATHENA lane ===== -->
+ <rect x="820" y="188" width="340" height="648" rx="16" fill="#e7f6f2" stroke="#cfe9e3"/>
+ <g filter="url(#sh)"><rect x="960" y="204" width="184" height="30" rx="15" fill="#1fae9f"/></g>
+ <text class="chip" x="1052" y="224" text-anchor="middle" fill="#fff">🦉  ATHENA · defender</text>
+
+ <!-- ARES cards -->
+ <g>
+  <!-- helper style repeated inline -->
+  <g filter="url(#sh)"><rect x="60" y="250" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="80" cy="272" r="5.5" fill="#e5544e"/><text class="nt" x="94" y="277">Keyboard sound</text><text class="ns" x="60" y="302" dx="16">your Mac on a call · 16 kHz mic</text>
+
+  <g filter="url(#sh)"><rect x="60" y="336" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="80" cy="358" r="5.5" fill="#e5544e"/><text class="nt" x="94" y="363">log-mel features</text><text class="ns" x="76" y="388">64 mels · 8 ms frames</text>
+
+  <g filter="url(#sh)"><rect x="60" y="422" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="80" cy="444" r="5.5" fill="#e5544e"/><text class="nt" x="94" y="449">CNN + BiGRU + CTC</text><text class="ns" x="76" y="474">MtlCRNN 2.2M · per-frame onset head</text>
+
+  <g filter="url(#sh)"><rect x="60" y="508" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="80" cy="530" r="5.5" fill="#e5544e"/><text class="nt" x="94" y="535">pretrain → fine-tune</text><text class="ns" x="76" y="560">synth from your keys → real typing</text>
+
+  <g filter="url(#sh)"><rect x="60" y="594" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="80" cy="616" r="5.5" fill="#e5544e"/><text class="nt" x="94" y="621">decode + Attacker-LLM</text><text class="ns" x="76" y="646">char-LM beam → Gemini reconstructs text</text>
+
+  <g filter="url(#sh)"><rect x="60" y="680" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="80" cy="702" r="5.5" fill="#e5544e"/><text class="nt" x="94" y="707">Smart-dictionary</text><text class="ns" x="76" y="732">ranks your password — #k of 36ⁿ guesses</text>
+
+  <g filter="url(#sh)"><rect x="60" y="766" width="300" height="48" rx="12" fill="#ffd7cf" stroke="#e5544e"/></g>
+  <text class="badge" x="210" y="796" text-anchor="middle" fill="#b23b34">READS ~80% NOVEL · ~89% FAMILIAR</text>
+
+  <g stroke="#c8b6b2" stroke-width="1.6" marker-end="url(#g)">
+   <line x1="210" y1="316" x2="210" y2="335"/><line x1="210" y1="402" x2="210" y2="421"/>
+   <line x1="210" y1="488" x2="210" y2="507"/><line x1="210" y1="574" x2="210" y2="593"/>
+   <line x1="210" y1="660" x2="210" y2="679"/><line x1="210" y1="746" x2="210" y2="765"/>
+  </g>
+ </g>
+
+ <!-- ATHENA cards -->
+ <g>
+  <g filter="url(#sh)"><rect x="840" y="250" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="860" cy="272" r="5.5" fill="#1fae9f"/><text class="nt" x="874" y="277">Defender-LLM · triage</text><text class="ns" x="856" y="302">which span is the secret? (Gemini)</text>
+
+  <g filter="url(#sh)"><rect x="840" y="336" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="860" cy="358" r="5.5" fill="#1fae9f"/><text class="nt" x="874" y="363">invent a decoy</text><text class="ns" x="856" y="388">a believable false secret — deception</text>
+
+  <g filter="url(#sh)"><rect x="840" y="422" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="860" cy="444" r="5.5" fill="#1fae9f"/><text class="nt" x="874" y="449">differentiable log-mel</text><text class="ns" x="856" y="474">matches Ares (corr &gt; 0.9999)</text>
+
+  <g filter="url(#sh)"><rect x="840" y="508" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="860" cy="530" r="5.5" fill="#1fae9f"/><text class="nt" x="874" y="535">adversarial shield · craft()</text><text class="ns" x="856" y="560">protect / deceive — optimize δ through Ares</text>
+
+  <g filter="url(#sh)"><rect x="840" y="594" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="860" cy="616" r="5.5" fill="#1fae9f"/><text class="nt" x="874" y="621">perceptual budget</text><text class="ns" x="856" y="646">‖δ‖ ≤ ε · STOI ≥ floor (inaudible)</text>
+
+  <g filter="url(#sh)"><rect x="840" y="680" width="300" height="66" rx="12" fill="#fff" stroke="#e6e0d2"/></g>
+  <circle cx="860" cy="702" r="5.5" fill="#1fae9f"/><text class="nt" x="874" y="707">harden · remember · deploy</text><text class="ns" x="856" y="732">min-max offline · Backboard · ~ms/keystroke</text>
+
+  <g filter="url(#sh)"><rect x="840" y="766" width="300" height="48" rx="12" fill="#c6f0e8" stroke="#1fae9f"/></g>
+  <text class="badge" x="990" y="796" text-anchor="middle" fill="#0f7a6d">SECRET → DECOY · SPEECH INTACT</text>
+
+  <g stroke="#a9d4cc" stroke-width="1.6" marker-end="url(#g)">
+   <line x1="990" y1="316" x2="990" y2="335"/><line x1="990" y1="402" x2="990" y2="421"/>
+   <line x1="990" y1="488" x2="990" y2="507"/><line x1="990" y1="574" x2="990" y2="593"/>
+   <line x1="990" y1="660" x2="990" y2="679"/><line x1="990" y1="746" x2="990" y2="765"/>
+  </g>
+ </g>
+
+ <!-- data feeds -->
+ <g fill="none" stroke="#8b6df0" stroke-width="1.6" marker-end="url(#p)">
+   <path d="M470,156 C300,180 210,190 210,249"/>
+   <path d="M730,156 C900,180 990,190 990,249"/>
+ </g>
+
+ <!-- ===== ARENA ===== -->
+ <g filter="url(#sh)"><rect x="416" y="300" width="368" height="300" rx="16" fill="#fffdf4" stroke="#e8c96b"/></g>
+ <g filter="url(#sh)"><rect x="520" y="316" width="160" height="30" rx="15" fill="#eab308"/></g>
+ <text class="chip" x="600" y="336" text-anchor="middle" fill="#3a2f05">THE ARMS RACE ⟳</text>
+ <text class="obj" x="600" y="380" text-anchor="middle">min_D max_A  Leakage(A(D(x)))</text>
+ <text class="obj" x="600" y="402" text-anchor="middle" font-size="12">s.t.  Perceptual(D(x),x) ≤ ε</text>
+
+ <g>
+   <g filter="url(#sh)"><rect x="436" y="430" width="150" height="34" rx="9" fill="#fff" stroke="#e5544e"/></g><text class="step" x="511" y="452" text-anchor="middle" fill="#c23b35">① Ares reads it</text>
+   <g filter="url(#sh)"><rect x="614" y="430" width="150" height="34" rx="9" fill="#fff" stroke="#1fae9f"/></g><text class="step" x="689" y="452" text-anchor="middle" fill="#128577">② Athena decoys</text>
+   <g filter="url(#sh)"><rect x="436" y="486" width="150" height="34" rx="9" fill="#fff" stroke="#1fae9f"/></g><text class="step" x="511" y="508" text-anchor="middle" fill="#128577">④ Athena escalates</text>
+   <g filter="url(#sh)"><rect x="614" y="486" width="150" height="34" rx="9" fill="#fff" stroke="#e5544e"/></g><text class="step" x="689" y="508" text-anchor="middle" fill="#c23b35">③ Ares retrains</text>
+   <g fill="none" stroke="#d9a520" stroke-width="1.6" marker-end="url(#y)">
+     <line x1="586" y1="447" x2="613" y2="447"/><path d="M689,464 L689,485"/>
+     <line x1="614" y1="503" x2="587" y2="503"/><path d="M511,486 L511,465"/>
+   </g>
+ </g>
+ <text class="cap" x="600" y="556" text-anchor="middle">shown live = the offline co-evolution, compressed</text>
+
+ <!-- Ares -> Arena, Arena -> Athena -->
+ <path d="M360,470 C388,470 396,455 415,455" fill="none" stroke="#e5544e" stroke-width="2.2" marker-end="url(#r)"/>
+ <text class="lbl" x="380" y="446" fill="#c23b35" text-anchor="middle">reads</text>
+ <path d="M784,455 C804,455 812,470 839,470" fill="none" stroke="#1fae9f" stroke-width="2.2" marker-end="url(#t)"/>
+ <text class="lbl" x="812" y="446" fill="#128577" text-anchor="middle">shields</text>
+
+ <!-- feedback loop: defended audio back to Ares -->
+ <path d="M840,520 C700,600 500,600 360,560" fill="none" stroke="#1fae9f" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#t)"/>
+ <g filter="url(#sh)"><rect x="486" y="612" width="228" height="28" rx="14" fill="#eafaf6" stroke="#1fae9f"/></g>
+ <text x="600" y="631" text-anchor="middle" font-size="12" font-weight="700" fill="#128577">defended audio — Ares only ever hears this</text>
+
+ <!-- deliverables -->
+ <g filter="url(#sh)"><rect x="416" y="676" width="368" height="56" rx="12" fill="#fff" stroke="#bfe6c9"/></g>
+ <circle cx="438" cy="700" r="6" fill="#37a35f"/><text class="nt" x="452" y="700">Deliverables</text>
+ <text class="ns" x="452" y="720">arena.html · replay · DEMO.md · live arms-race demo</text>
+
+ <!-- legend -->
+ <g transform="translate(40,858)" font-size="12.5" fill="#6b7280">
+   <circle cx="6" cy="-4" r="6" fill="#e5544e"/><text x="18" y="0">attacker</text>
+   <circle cx="96" cy="-4" r="6" fill="#1fae9f"/><text x="108" y="0">defender</text>
+   <circle cx="186" cy="-4" r="6" fill="#8b6df0"/><text x="198" y="0">data</text>
+   <rect x="246" y="-11" width="14" height="13" rx="3" fill="#fffdf4" stroke="#e8c96b"/><text x="266" y="0">arms race</text>
+   <text x="360" y="0">— — dashed = defended audio fed back (the loop)</text>
+ </g>
+</svg>
+</div></body></html>

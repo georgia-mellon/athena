@@ -1,10 +1,9 @@
-# Copy to callguard.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT, KEYGUARD_ROOT,
+# Copy to callguard.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT,
 # CALLGUARD_ATTACKER_WEIGHTS, CALLGUARD_<SECTION>_<FIELD> (e.g. CALLGUARD_DRIVERS_VOICE=mock),
 # CALLGUARD_WEBHOOK_URL (adds a webhook for threat.level_change; keeps the URL out of files).
 
 # hearsay_root = "../Hearsay"                    # default: sibling of this repo
-# keyguard_root = "../keyboard-acoustic-shield"
-# attacker_weights = ""                          # empty = provisional KeyNet (docs/plans/04)
+# attacker_weights = ""                          # empty = Keyguard's CTC attacker (runs/keyguard/ctc_rich_ft.pt)
 
 [drivers]
 voice = "real"            # real | mock
@@ -62,6 +61,14 @@ disarm_after_s = 60.0
 allow_s = 30.0            # dashboard "Allow" bypass
 min_digits = 3            # runs this long are reported (shorter runs are still cut)
 gap_s = 1.2
+
+[keyguard]                # live Ares-vs-Athena arms race on your typing bursts (needs drivers.attacker = "real")
+agents = true
+rounds = 2                # shield / retrain rounds per match
+burst_gap_s = 2.0         # a burst ends after this much typing silence
+snr_db = 16.0             # Athena's starting perturbation budget (dB)
+steps = 80                # craft steps per round (more = stronger shield, slower match; keyguard's demo uses 250)
+device = "auto"           # auto (= mps when available, else cpu) | cpu | mps | cuda
 
 [[hooks]]
 kind = "jsonl"

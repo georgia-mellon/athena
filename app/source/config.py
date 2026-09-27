@@ -1,7 +1,7 @@
 """Config: dataclasses, loaded from TOML (`callguard.toml`, gitignored; see `callguard.example.toml`) plus env.
 
 Precedence: defaults < TOML < env. Env overrides:
-- `HEARSAY_ROOT`, `KEYGUARD_ROOT`, `CALLGUARD_ATTACKER_WEIGHTS` (top-level paths);
+- `HEARSAY_ROOT`, `CALLGUARD_ATTACKER_WEIGHTS` (top-level paths; Keyguard is vendored, see keyguard/VENDORED.md);
 - `CALLGUARD_<SECTION>_<FIELD>` for any scalar field, e.g. `CALLGUARD_SERVER_PORT=9000`, `CALLGUARD_DRIVERS_VOICE=mock`;
 - `CALLGUARD_WEBHOOK_URL` appends a webhook hook for `threat.level_change`, so the URL never lands in a file.
 """
@@ -72,6 +72,17 @@ class SecretConfig:
 
 
 @dataclass
+class KeyguardConfig:
+    """Live Ares-vs-Athena arms race on the user's typing bursts (app/keystroke_guard/agents.py)."""
+    agents: bool = True                # needs the real CTC attacker; off = no matches
+    rounds: int = 2                    # shield / retrain rounds per match
+    burst_gap_s: float = 2.0           # a burst ends after this much typing silence
+    snr_db: float = 16.0               # Athena's starting perturbation budget
+    steps: int = 80                    # craft steps per round (keyguard's offline demo uses 250: minutes per match)
+    device: str = "auto"               # auto = mps when available, else cpu | cpu | mps | cuda
+
+
+@dataclass
 class DevicesConfig:
     """Device names (substring match; empty = system default). See docs/plans/03."""
     mic: str = ""
@@ -100,18 +111,18 @@ class HookConfig:
 @dataclass
 class Config:
     hearsay_root: Path = REPO.parent / "Hearsay"
-    keyguard_root: Path = REPO.parent / "keyboard-acoustic-shield"
-    attacker_weights: str = ""         # empty = provisional KeyNet (plan 04)
+    attacker_weights: str = ""         # empty = Keyguard's CTC attacker, runs/keyguard/ctc_rich_ft.pt
     drivers: DriversConfig = field(default_factory=DriversConfig)
     devices: DevicesConfig = field(default_factory=DevicesConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     threat: ThreatConfig = field(default_factory=ThreatConfig)
     secret: SecretConfig = field(default_factory=SecretConfig)
+    keyguard: KeyguardConfig = field(default_factory=KeyguardConfig)
     hooks: list[HookConfig] = field(default_factory=lambda: [HookConfig("console")])
 
 
 SECTIONS = {"drivers": DriversConfig, "devices": DevicesConfig, "server": ServerConfig, "threat": ThreatConfig,
-            "secret": SecretConfig}
+            "secret": SecretConfig, "keyguard": KeyguardConfig}
 
 
 def _coerce(value, like):
@@ -144,8 +155,7 @@ def load(path: str | Path | None = None, env: dict[str, str] | None = None) -> C
         _fill(getattr(cfg, name), raw.pop(name, {}), name)
     _fill(cfg, raw, "root")
 
-    for key, attr in (("HEARSAY_ROOT", "hearsay_root"), ("KEYGUARD_ROOT", "keyguard_root"),
-                      ("CALLGUARD_ATTACKER_WEIGHTS", "attacker_weights")):
+    for key, attr in (("HEARSAY_ROOT", "hearsay_root"), ("CALLGUARD_ATTACKER_WEIGHTS", "attacker_weights")):
         if env.get(key):
             setattr(cfg, attr, _coerce(env[key], getattr(cfg, attr)))
     for name, cls in SECTIONS.items():
@@ -179,6 +189,9 @@ def _validate(cfg: Config) -> None:
             raise ValueError(f"unknown hook kind {h.kind!r}")
         if h.kind == "webhook" and not h.url:
             raise ValueError("webhook hook needs a url")
+    k = cfg.keyguard
+    if k.rounds < 1 or k.burst_gap_s <= 0 or k.steps < 1:
+        raise ValueError("keyguard.rounds and keyguard.steps must be >= 1 and keyguard.burst_gap_s > 0")
     t = cfg.threat
     if not (0 < t.watch < t.warn < t.critical <= 100) or t.tick_hz < 2:
         raise ValueError("threat thresholds must satisfy 0 < watch < warn < critical <= 100, tick_hz >= 2")

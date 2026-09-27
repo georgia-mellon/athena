@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keyguard</title>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#121821; --panel2:#0f141c; --line:#1e2733;
+  --ink:#e6edf3; --dim:#8b98a8; --accent:#3ddc97; --danger:#ff5d5d;
+  --warn:#ffb454; --blue:#4aa8ff; --planned:#2a3543;
+  --mono:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px 80px}
+header.hero{padding:56px 16px 40px;text-align:center;border-bottom:1px solid var(--line);
+  background:radial-gradient(circle at 50% -20%,rgba(61,220,151,.10),transparent 60%)}
+.hero h1{margin:0 0 10px;font-size:clamp(24px,4vw,40px);letter-spacing:-.5px}
+.hero h1 .grn{color:var(--accent)}
+.hero p{margin:0;color:var(--dim);font-size:clamp(14px,2vw,18px)}
+h2{font-size:20px;margin:44px 0 6px;letter-spacing:-.3px}
+.sub{color:var(--dim);font-size:13px;margin:0 0 18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.grid-pipes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.pipe h3{margin:0 0 12px;font-size:14px;color:var(--ink)}
+svg{display:block;width:100%;overflow:visible}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin-top:8px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+/* demo */
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:820px){.demo-grid{grid-template-columns:1fr}}
+textarea{width:100%;min-height:120px;background:var(--panel2);color:var(--ink);
+  border:1px solid var(--line);border-radius:10px;padding:12px;font-family:var(--mono);
+  font-size:13px;resize:vertical}
+.controls{display:flex;align-items:center;gap:16px;margin:14px 0;flex-wrap:wrap}
+button{background:var(--accent);color:#04120c;border:0;border-radius:10px;padding:12px 22px;
+  font-weight:700;font-size:15px;cursor:pointer;transition:filter .15s}
+button:hover{filter:brightness(1.08)} button:disabled{opacity:.5;cursor:wait}
+.toggle{display:flex;align-items:center;gap:10px;font-size:14px;user-select:none;cursor:pointer}
+.switch{width:52px;height:28px;border-radius:16px;background:var(--danger);position:relative;transition:background .2s}
+.switch.on{background:var(--accent)}
+.switch b{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+  background:#fff;transition:left .2s} .switch.on b{left:27px}
+.bignum{font-size:44px;font-weight:800;font-family:var(--mono);line-height:1}
+.metric-row{display:flex;gap:28px;margin:6px 0 16px;flex-wrap:wrap}
+.metric .lab{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.recon{font-family:var(--mono);font-size:26px;letter-spacing:2px;min-height:40px;word-break:break-all}
+.recon .ok{color:var(--accent)} .recon .bad{color:var(--danger)}
+.typed{font-family:var(--mono);color:var(--dim);font-size:14px;word-break:break-all}
+canvas{width:100%;height:90px;background:var(--panel2);border-radius:10px;border:1px solid var(--line)}
+.arena-grid{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;align-items:start}
+.arena-chart{height:300px}
+.arena-log{font-family:var(--mono);font-size:12px;color:var(--dim);height:212px;overflow:auto;
+  background:var(--panel2);border-radius:10px;border:1px solid var(--line);padding:10px;white-space:pre-wrap;line-height:1.6}
+.arena-log .win{color:var(--accent)} .arena-log .claw{color:var(--warn)}
+@media(max-width:720px){.arena-grid{grid-template-columns:1fr}}
+.agent-flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.af-box{flex:1;min-width:120px;text-align:center;padding:10px 8px;border-radius:10px;
+  font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--panel2)}
+.af-box small{display:block;font-weight:400;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.af-red{border-color:var(--danger);color:var(--danger)} .af-blue{border-color:var(--blue);color:var(--blue)}
+.af-green{border-color:var(--accent);color:var(--accent)} .af-amber{border-color:var(--warn);color:var(--warn)}
+.af-arrow{align-self:center;color:var(--dim);font-size:18px}
+@media(max-width:720px){.agent-flow{flex-direction:column}.af-arrow{transform:rotate(90deg)}}
+/* table */
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 10px;text-align:center;border:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;background:var(--panel2)}
+td.rowh{text-align:left;color:var(--dim)}
+.node-tip{position:fixed;pointer-events:none;background:#000d;border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;font-size:12px;color:var(--ink);z-index:50;display:none;font-family:var(--mono)}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--dim);margin-left:8px}
+.empty{color:var(--dim);font-style:italic;font-size:13px}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Keyguard — reading keystrokes through a call, then <span class="grn">silencing them</span>.</h1>
+  <p>An acoustic keystroke eavesdropper, defeated by an AI shield in an LLM-driven red/blue evolutionary arena.</p>
+</header>
+
+<div class="wrap">
+
+  <h2>Demo mode</h2>
+  <p class="sub">Type into the box, hit <b>Run attack</b>. Flip the shield ON and re-run — the reconstruction falls apart while speech stays intelligible.</p>
+  <div class="panel">
+    <div class="demo-grid">
+      <div>
+        <textarea id="demoText">password hunter2-DEMO</textarea>
+        <div class="controls">
+          <label class="toggle" id="shieldToggle">
+            <span class="switch" id="switch"><b></b></span>
+            <span>Shield: <b id="shieldLabel">OFF</b></span>
+          </label>
+          <label class="toggle" id="demoToggle" title="Cache-backed, always-lands fallback for a noisy expo floor">
+            <span class="switch on" id="demoSwitch"><b></b></span>
+            <span>Demo mode: <b id="demoLabel">ON</b></span>
+          </label>
+          <button id="runBtn">Run attack</button>
+        </div>
+        <canvas id="wave" width="560" height="90"></canvas>
+        <p class="sub" style="margin-top:8px">Waveform the attacker hears (downsampled).</p>
+      </div>
+      <div>
+        <div class="metric-row">
+          <div class="metric"><div class="lab">Attack accuracy</div><div class="bignum" id="accNum">—</div></div>
+          <div class="metric"><div class="lab">Speech STOI</div><div class="bignum" id="stoiNum">—</div></div>
+        </div>
+        <div class="lab" style="color:var(--dim);font-size:11px;text-transform:uppercase">Reconstructed keystrokes <span style="color:var(--dim)">· acoustic only</span></div>
+        <div class="recon" id="recon"></div>
+        <div class="lab" style="color:var(--dim);font-size:11px;text-transform:uppercase;margin-top:14px">+ Gemini language model <span style="color:var(--dim)">· Pillar 2</span></div>
+        <div class="recon" id="reconLm"></div>
+        <div class="sub" id="lmLift" style="margin-top:4px"></div>
+        <div class="lab" style="color:var(--dim);font-size:11px;text-transform:uppercase;margin-top:14px">Actually typed <span class="pill" id="srcPill" style="display:none"></span></div>
+        <div class="typed" id="typedOut"></div>
+        <div class="empty" id="demoErr" style="color:var(--danger)"></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Attack &amp; shield pipelines</h2>
+  <p class="sub">Three attackers versus one shield. <span class="dot" style="background:var(--accent)"></span>implemented &nbsp; <span class="dot" style="background:var(--planned)"></span>planned</p>
+  <div class="grid-pipes" id="pipes"></div>
+
+  <h2>Adversarial arena — one shield vs a population of attackers <span class="pill" id="arenaPill">no run</span></h2>
+  <p class="sub">The real defense: shield <b>D</b> optimizes ONE inaudible perturbation against a whole <b>population of diverse attacker agents</b> at once. Each round every agent retrains against D and claws back; D re-solves against the entire retrained population — so this isn't overfit to one network. Real numbers, streamed live, at a fixed <b>inaudible −18 dB</b> budget.</p>
+  <div class="agent-flow">
+    <span class="af-box af-red">Attacker agents<br><small>population · Pillar 1</small></span><span class="af-arrow">→</span>
+    <span class="af-box af-blue">Gemini language agent<br><small>Pillar 2</small></span><span class="af-arrow">→</span>
+    <span class="af-box af-green">Defender D<br><small>the shield</small></span><span class="af-arrow">→</span>
+    <span class="af-box af-amber">Perceptual Critic<br><small>STOI / PESQ / Whisper</small></span>
+  </div>
+  <div class="panel">
+    <div class="controls">
+      <button id="arenaBtn">▶ Replay arms race</button>
+      <span class="legend" id="arenaLegend"></span>
+    </div>
+    <div class="arena-grid">
+      <canvas id="arenaChart" width="720" height="300" class="arena-chart"></canvas>
+      <div>
+        <div class="lab" style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px">Live co-training log</div>
+        <div id="arenaLog" class="arena-log"></div>
+        <div class="lab" style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-top:12px">Runs the shield remembers <span style="text-transform:none;color:var(--dim)">· Backboard</span></div>
+        <div id="arenaHistory" class="sub" style="margin-top:6px"></div>
+      </div>
+    </div>
+    <div id="arenaHeadline" style="margin-top:14px;font-size:15px;color:var(--ink)"></div>
+  </div>
+
+  <h2>The proof — leakage vs. speech preserved</h2>
+  <p class="sub">Every defense trades speech quality for privacy. Ours doesn't: attacker driven to chance <b>and</b> speech intact — and a different, unseen attacker architecture collapses to chance too (not overfit to one net).</p>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <iframe src="static/pareto.html" title="Leakage vs speech-preserved Pareto chart"
+      style="width:100%;height:520px;border:0;display:block;background:var(--panel2)"></iframe>
+  </div>
+
+  <h2>Results grid</h2>
+  <p class="sub">Protection × attacker. Greener = safer (lower leakage / higher speech quality).</p>
+  <div class="panel" id="gridPanel"><div class="empty" id="gridEmpty">Loading…</div></div>
+
+</div>
+<div class="node-tip" id="tip"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const tip=$('#tip');
+function showTip(html,e){tip.innerHTML=html;tip.style.display='block';
+  tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px';}
+function hideTip(){tip.style.display='none';}
+
+// fitness -> color ramp (red->amber->green)
+function fitColor(f){f=clamp(f,0,1);
+  if(f<.5){const t=f/.5;return `rgb(${255},${Math.round(93+t*(180-93))},${Math.round(93-t*30)})`;}
+  const t=(f-.5)/.5;return `rgb(${Math.round(255-t*194)},${Math.round(180+t*40)},${Math.round(63+t*88)})`;}
+
+/* ---------------- pipelines ---------------- */
+const NODE_W=150,NODE_H=38,VGAP=20;
+function drawPipeline(p){
+  const n=p.nodes.length, h=n*(NODE_H+VGAP)+10;
+  let svg=`<svg viewBox="0 0 200 ${h}" height="${h}">`;
+  // edges (vertical chain + feedback curves)
+  const pos={}; p.nodes.forEach((nd,i)=>pos[nd.id]=25+i*(NODE_H+VGAP));
+  p.edges.forEach(([a,b])=>{
+    const ya=pos[a]+NODE_H, yb=pos[b];
+    if(yb>ya-NODE_H){ // forward
+      svg+=`<line x1="100" y1="${ya}" x2="100" y2="${yb}" stroke="#2f3d4d" stroke-width="2" marker-end="url(#arr)"/>`;
+    }else{ // feedback loop, curve out to the right
+      svg+=`<path d="M175 ${pos[a]+NODE_H/2} C 198 ${pos[a]}, 198 ${yb+NODE_H}, 175 ${yb+NODE_H/2}" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr)"/>`;
+    }
+  });
+  p.nodes.forEach((nd,i)=>{
+    const y=pos[nd.id], done=nd.status==='implemented';
+    const fill=done?'rgba(61,220,151,.14)':'var(--panel2)';
+    const stroke=done?'var(--accent)':'var(--planned)';
+    const col=done?'var(--ink)':'var(--dim)';
+    svg+=`<rect x="25" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="9" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+    svg+=`<text x="100" y="${y+NODE_H/2+4}" text-anchor="middle" font-size="11" fill="${col}" font-family="var(--sans)">${nd.label}</text>`;
+  });
+  svg+=`<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2f3d4d"/></marker></defs></svg>`;
+  return `<div class="panel pipe"><h3>${p.title}</h3>${svg}</div>`;
+}
+fetch('api/pipelines').then(r=>r.json()).then(d=>{
+  $('#pipes').innerHTML=Object.values(d).map(drawPipeline).join('');
+});
+
+/* ---------------- adversarial arena (min-max arms race) ---------------- */
+const C={accent:'#3ddc97',danger:'#ff5d5d',warn:'#ffb454',dim:'#8b98a8',grid:'#26313f'};
+// distinct color per attacker agent (population mode)
+const AGENT_COLORS=['#4aa8ff','#ffb454','#d17bff','#3ddc97','#ff8a5d','#6ee7ff'];
+let arena=null, arenaPoll=null, arenaAnim=null;
+
+const isPop=()=>arena&&arena.mode==='population';
+// ordered attacker names for population mode
+function agentNames(){
+  if(arena&&arena.attackers) return arena.attackers.map(a=>a.name);
+  const r0=arena&&arena.rounds&&arena.rounds[0];
+  return r0&&r0.per_attacker?Object.keys(r0.per_attacker):[];
+}
+
+function drawArena(reveal){
+  const cv=$('#arenaChart'), g=cv.getContext('2d');
+  const W=cv.width, H=cv.height, L=44, R=16, T=16, B=30;
+  const x0=L, x1=W-R, yBot=H-B, yTop=T;
+  g.clearRect(0,0,W,H);
+  if(!arena){ g.fillStyle=C.dim; g.font='13px system-ui';
+    g.fillText('No arena run yet — start co-training and it streams here live.',L,H/2); return; }
+  const rounds=arena.rounds||[];
+  const maxR=Math.max(3, rounds.length-1);
+  const px=i=>x0+(x1-x0)*(i/maxR);
+  const py=v=>yBot+(yTop-yBot)*Math.max(0,Math.min(1,v));   // v 0..1 -> pixels
+  const clean=arena.clean_acc??0.88, chance=arena.chance??0.028;
+  // grid + y labels
+  g.font='11px system-ui'; g.lineWidth=1; g.textAlign='left';
+  [0,.25,.5,.75,1].forEach(v=>{ const y=py(v);
+    g.strokeStyle=C.grid; g.beginPath(); g.moveTo(x0,y); g.lineTo(x1,y); g.stroke();
+    g.fillStyle=C.dim; g.fillText((v*100).toFixed(0)+'%',6,y+4); });
+  // unprotected baseline (dashed red) + chance (faint)
+  const baseLab=isPop()?'unprotected (mean) '+(clean*100).toFixed(0)+'%':'unprotected '+(clean*100).toFixed(0)+'%';
+  g.setLineDash([6,4]); g.strokeStyle=C.danger; g.beginPath(); g.moveTo(x0,py(clean)); g.lineTo(x1,py(clean)); g.stroke();
+  g.setLineDash([]); g.fillStyle=C.danger; g.fillText(baseLab,x1-172,py(clean)-6);
+  g.setLineDash([2,4]); g.strokeStyle=C.dim; g.beginPath(); g.moveTo(x0,py(chance)); g.lineTo(x1,py(chance)); g.stroke();
+  g.setLineDash([]); g.fillStyle=C.dim; g.fillText('chance',x0+4,py(chance)-4);
+  const pts=rounds.slice(0, reveal==null?rounds.length:reveal);
+  if(!pts.length){ return; }
+  const xlab=()=>{ g.fillStyle=C.dim; g.textAlign='center';
+    pts.forEach(r=>g.fillText('r'+r.round,px(r.round),H-10)); g.textAlign='left'; };
+
+  if(isPop()){
+    const doneFinal=arena.status==='done'&&arena.final&&(reveal==null||reveal>=rounds.length);
+    const fx=maxR+ (doneFinal?1:0);           // extra x slot for the deployed-shield column
+    const pxF=i=>x0+(x1-x0)*(i/Math.max(1,fx));
+    agentNames().forEach((name,j)=>{
+      const col=AGENT_COLORS[j%AGENT_COLORS.length];
+      // dashed thin line: attacker after retraining (the claw-back D must beat)
+      g.setLineDash([5,4]); g.strokeStyle=col; g.lineWidth=1.4; g.globalAlpha=.85; g.beginPath();
+      pts.forEach((r,i)=>{const v=(r.per_attacker[name]||{}).retrained_acc??chance;
+        const x=pxF(r.round),y=py(v); i?g.lineTo(x,y):g.moveTo(x,y);}); g.stroke();
+      g.setLineDash([]); g.globalAlpha=1;
+      // solid thick line: shielded acc (D's move) — pinned at the chance floor
+      g.strokeStyle=col; g.lineWidth=2.4; g.beginPath();
+      pts.forEach((r,i)=>{const v=(r.per_attacker[name]||{}).shielded_acc??chance;
+        const x=pxF(r.round),y=py(v); i?g.lineTo(x,y):g.moveTo(x,y);});
+      if(doneFinal){const fv=(arena.final.per_attacker||{})[name]??chance; g.lineTo(pxF(fx),py(fv));}
+      g.stroke();
+      g.fillStyle=col; pts.forEach(r=>{const v=(r.per_attacker[name]||{}).shielded_acc??chance;
+        g.beginPath(); g.arc(pxF(r.round),py(v),3.5,0,7); g.fill();});
+      if(doneFinal){const fv=(arena.final.per_attacker||{})[name]??chance;
+        g.beginPath(); g.arc(pxF(fx),py(fv),3.5,0,7); g.fill();}
+    });
+    // x labels (rounds + final deployed-shield column)
+    g.fillStyle=C.dim; g.textAlign='center';
+    pts.forEach(r=>g.fillText('r'+r.round,pxF(r.round),H-10));
+    if(doneFinal) g.fillText('deployed',pxF(fx),H-10);
+    g.textAlign='left'; return;
+  }
+  // ---- single-adversary mode (legacy) ----
+  g.fillStyle='rgba(255,180,84,.12)'; g.beginPath(); g.moveTo(px(pts[0].round),py(chance));
+  pts.forEach(r=>g.lineTo(px(r.round),py(r.retrained_acc)));
+  g.lineTo(px(pts[pts.length-1].round),py(chance)); g.closePath(); g.fill();
+  const line=(key,color)=>{ g.strokeStyle=color; g.lineWidth=2.4; g.beginPath();
+    pts.forEach((r,i)=>{const x=px(r.round),y=py(r[key]); i?g.lineTo(x,y):g.moveTo(x,y);}); g.stroke();
+    g.fillStyle=color; pts.forEach(r=>{g.beginPath(); g.arc(px(r.round),py(r[key]),4,0,7); g.fill();}); };
+  line('retrained_acc',C.warn);
+  line('shielded_acc',C.accent);
+  xlab();
+}
+function renderLegend(){
+  const el=$('#arenaLegend'); if(!el) return;
+  if(isPop()){
+    el.innerHTML=`<span><span class="dot" style="background:${C.danger}"></span>unprotected</span>`
+      +agentNames().map((n,j)=>`<span><span class="dot" style="background:${AGENT_COLORS[j%AGENT_COLORS.length]}"></span>${n}</span>`).join('')
+      +`<span style="color:var(--dim)">— solid = shielded (D), dashed = after retrain</span>`;
+  }else{
+    el.innerHTML=`<span><span class="dot" style="background:${C.danger}"></span>unprotected attacker</span>`
+      +`<span><span class="dot" style="background:${C.warn}"></span>attacker after retraining</span>`
+      +`<span><span class="dot" style="background:${C.accent}"></span>shielded (D wins the round)</span>`;
+  }
+}
+function arenaLogLine(r){
+  const el=$('#arenaLog');
+  if(isPop()){
+    const names=agentNames();
+    const worst=Math.max(...names.map(n=>(r.per_attacker[n]||{}).retrained_acc??0));
+    el.innerHTML+=`round ${r.round}: D re-solves vs population · worst retrained <span class="claw">${(worst*100).toFixed(1)}%</span>\n`
+      +names.map(n=>{const p=r.per_attacker[n]||{};
+        return `   ${n}: shield <span class="win">${((p.shielded_acc||0)*100).toFixed(1)}%</span> → retrain <span class="claw">${((p.retrained_acc||0)*100).toFixed(1)}%</span>`;}).join('\n')+'\n';
+  }else{
+    el.innerHTML+=`round ${r.round}: D shields → <span class="win">${(r.shielded_acc*100).toFixed(1)}%</span>`
+      +`  ·  A retrains → <span class="claw">${(r.retrained_acc*100).toFixed(1)}%</span>\n`;
+  }
+  el.scrollTop=el.scrollHeight;
+}
+function arenaHeadline(){
+  if(!arena||!arena.rounds.length) return;
+  if(isPop()){
+    const names=agentNames();
+    const clawback=Math.max(...arena.rounds.flatMap(r=>names.map(n=>(r.per_attacker[n]||{}).retrained_acc??0)));
+    const topClean=Math.max(...(arena.attackers||[]).map(a=>a.clean_acc||0), arena.clean_acc||0);
+    const wf=(arena.final&&arena.final.worst_final_shielded);
+    const worst=(wf!=null?wf:arena.chance);
+    $('#arenaHeadline').innerHTML=`<b>D defeats a population of ${names.length} attacker architectures</b> with one inaudible −18 dB perturbation. `
+      +`Unprotected they read up to <b style="color:${C.danger}">${(topClean*100).toFixed(0)}%</b> of keys. `
+      +`Every agent retrains and claws back (to <b style="color:${C.warn}">${(clawback*100).toFixed(0)}%</b>) — but D re-solves against the whole retrained population, and its final shield holds <b>all ${names.length}</b> at <b style="color:${C.accent}">${(worst*100).toFixed(1)}%</b> — chance.`;
+    return;
+  }
+  const clean=arena.clean_acc, worst=Math.max(...arena.rounds.map(r=>r.retrained_acc));
+  const drop=Math.round((clean-worst)*100);
+  $('#arenaHeadline').innerHTML=`Unprotected, the attacker reads <b style="color:${C.danger}">${(clean*100).toFixed(0)}%</b> of keys. `
+    +`Under the shield, even after retraining it never beats <b style="color:${C.accent}">${(worst*100).toFixed(0)}%</b> — `
+    +`a <b>${drop}-point</b> collapse, held at an inaudible −18 dB.`;
+}
+function renderHistory(h){
+  const el=$('#arenaHistory');
+  if(!h||!h.length){ el.textContent='no past runs yet'; return; }
+  el.innerHTML=h.map(r=>`<div>${(r.created||'').slice(5,16).replace('T',' ')} · `
+    +`${(r.clean_acc*100).toFixed(0)}% → <b style="color:${C.accent}">${(r.final_shielded*100).toFixed(0)}%</b></div>`).join('');
+}
+async function loadArena(animate){
+  let d; try{ d=await (await fetch('api/arena')).json(); }catch(e){ return; }
+  arena=d.latest; renderHistory(d.history); renderLegend();
+  $('#arenaPill').textContent = !arena?'no run'
+    : arena.status==='running'?'running…':((arena.created||'').slice(5,16).replace('T',' ')||'done');
+  if(!arena){ drawArena(); return; }
+  if(animate){ animateArena(); }
+  else { drawArena(); $('#arenaLog').innerHTML=''; arena.rounds.forEach(arenaLogLine); arenaHeadline(); }
+  if(arena.status==='running'){ if(!arenaPoll) arenaPoll=setInterval(()=>loadArena(false),1500); }
+  else if(arenaPoll){ clearInterval(arenaPoll); arenaPoll=null; }
+}
+function animateArena(){
+  if(arenaAnim) clearInterval(arenaAnim);
+  $('#arenaLog').innerHTML=''; let i=0; drawArena(0);
+  arenaAnim=setInterval(()=>{
+    i++; drawArena(i); if(arena.rounds[i-1]) arenaLogLine(arena.rounds[i-1]);
+    if(i>=arena.rounds.length){ clearInterval(arenaAnim); arenaAnim=null; arenaHeadline(); }
+  },700);
+}
+$('#arenaBtn').onclick=()=>loadArena(true);
+loadArena(false);
+window.addEventListener('resize',()=>drawArena());
+
+/* ---------------- results grid ---------------- */
+fetch('api/grid').then(r=>r.json()).then(d=>{
+  const cells=d.cells||[];
+  if(!cells.length){$('#gridEmpty').textContent='No grid yet — run the evaluation grid to populate runs/grid.json.';return;}
+  const prot=[...new Set(cells.map(c=>c.protection))];
+  const atk=[...new Set(cells.map(c=>c.attacker))];
+  const get=(p,a)=>cells.find(c=>c.protection===p&&c.attacker===a);
+  let h=`<table><tr><th>protection \\ attacker</th>${atk.map(a=>`<th>${a}</th>`).join('')}</tr>`;
+  prot.forEach(p=>{
+    h+=`<tr><td class="rowh">${p}</td>`;
+    atk.forEach(a=>{const c=get(p,a);
+      if(!c){h+=`<td>—</td>`;return;}
+      const acc=c.text_accuracy??0; const safe=1-acc; // higher acc = worse
+      h+=`<td style="background:${fitColor(safe)};color:#04120c;font-weight:600">${(100*acc).toFixed(0)}%<br><small style="opacity:.7">${(c.mi_bits??0).toFixed(2)} bits · stoi ${c.stoi!=null?(+c.stoi).toFixed(2):'—'}</small></td>`;
+    });
+    h+=`</tr>`;
+  });
+  h+=`</table>`;
+  $('#gridPanel').innerHTML=h;
+});
+
+/* ---------------- demo ---------------- */
+let shieldOn=false, demoMode=true;
+$('#shieldToggle').onclick=()=>{shieldOn=!shieldOn;
+  $('#switch').classList.toggle('on',shieldOn);
+  $('#shieldLabel').textContent=shieldOn?'ON':'OFF';};
+$('#demoToggle').onclick=()=>{demoMode=!demoMode;
+  $('#demoSwitch').classList.toggle('on',demoMode);
+  $('#demoLabel').textContent=demoMode?'ON':'OFF';};
+
+function drawWave(pts){
+  const cv=$('#wave'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
+  if(!pts||!pts.length)return;
+  const mx=Math.max(...pts.map(Math.abs),1e-6);
+  ctx.strokeStyle=shieldOn?'#3ddc97':'#ff5d5d';ctx.lineWidth=1.2;ctx.beginPath();
+  pts.forEach((v,i)=>{const x=i/(pts.length-1)*W;const y=H/2-(v/mx)*(H/2-4);
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+    ctx.lineTo(x,H/2+(v/mx)*(H/2-4));});
+  ctx.stroke();
+}
+
+async function runAttack(){
+  const btn=$('#runBtn'); btn.disabled=true; $('#demoErr').textContent='';
+  $('#recon').textContent='analyzing…';
+  try{
+    const res=await fetch('api/demo',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:$('#demoText').value,protect:shieldOn?'keyguard':'none',demo_mode:demoMode})});
+    const d=await res.json();
+    if(d.error){$('#demoErr').textContent=d.error;$('#recon').textContent='';btn.disabled=false;return;}
+    $('#typedOut').textContent=d.typed;
+    const pill=$('#srcPill');
+    if(d.source){pill.style.display='inline-block';
+      pill.textContent=d.source==='cache'?'cached (insurance)':d.source==='live-weak'?'live · no cache':'live';
+      pill.style.color=d.source==='cache'?'var(--warn)':'var(--accent)';}
+    else{pill.style.display='none';}
+    $('#accNum').textContent=(100*d.attack_acc).toFixed(0)+'%';
+    $('#accNum').style.color=d.attack_acc>.5?'var(--danger)':'var(--accent)';
+    $('#stoiNum').textContent=d.stoi!=null?(+d.stoi).toFixed(2):'—';
+    $('#stoiNum').style.color='var(--accent)';
+    drawWave(d.waveform);
+    // animate reconstruction char by char
+    const rec=$('#recon'); rec.innerHTML='';
+    const pk=d.per_key;
+    for(let i=0;i<pk.length;i++){
+      await new Promise(r=>setTimeout(r,45));
+      const sp=document.createElement('span');
+      sp.className=pk[i].correct?'ok':'bad'; sp.textContent=pk[i].pred;
+      rec.appendChild(sp);
+    }
+    // Pillar 2: Gemini reconstruction from the top-3 lattice
+    const recLm=$('#reconLm'); recLm.innerHTML='';
+    const lm=d.reconstructed_lm||'', typed=d.typed;
+    for(let i=0;i<lm.length;i++){
+      const sp=document.createElement('span');
+      sp.className=(typed[i]===lm[i])?'ok':'bad'; sp.textContent=lm[i];
+      recLm.appendChild(sp);
+    }
+    if(d.attack_acc_lm!=null){
+      const a=Math.round(100*d.attack_acc),g=Math.round(100*d.attack_acc_lm);
+      $('#lmLift').innerHTML=`acoustic ${a}% → +Gemini <b style="color:${g>a?'var(--danger)':'var(--accent)'}">${g}%</b>`
+        +(g>a?` (language redundancy recovers what the keys alone can't)`:` (shielded: even an LLM can't rebuild garbage)`);
+    }else{
+      $('#lmLift').textContent='set GEMINI_API_KEY to enable Pillar-2 reconstruction';
+    }
+  }catch(e){$('#demoErr').textContent='request failed: '+e;}
+  btn.disabled=false;
+}
+$('#runBtn').onclick=runAttack;
+</script>
+</body>
+</html>

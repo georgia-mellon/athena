@@ -23,12 +23,23 @@ In [`app/source/types.py`](../source/types.py):
 |---|---|---|
 | placeholder attacker | `app.keystroke_guard.mock:MockAttacker` | reads the true key with a set accuracy when the pipeline hands it the truth, chance otherwise and on shielded onsets |
 | placeholder shield | `app.keystroke_guard.mock:MockShield` | adds a quiet 7.6 kHz pilot tone for 100 ms after each key event (the mock attacker listens for it) |
-| real attacker | `app.keystroke_guard.driver:KeyguardAttacker` | Keyguard's `KeyNet` on `torch_logmel` features. Weights: `CALLGUARD_ATTACKER_WEIGHTS` / `attacker_weights`, else the **provisional** speech-augmented KeyNet CallGuard trained on Keyguard's harrison presses (`runs/provisional_keynet_speechaug.pt`), else a clean one it trains on first use |
+| real attacker | `app.keystroke_guard.driver:KeyguardCTCAttacker` | Keyguard's current attacker ("Ares"): `MtlCRNN` (CNN + BiGRU + CTC + per-frame onset head) on Keyguard's `ctc.model.logmel`, 37 keys (A-Z, 0-9, space). Weights: `CALLGUARD_ATTACKER_WEIGHTS` / `attacker_weights`, else `runs/keyguard/ctc_rich_ft.pt`. Each onset is read like Keyguard's `onset_gated_decode` reads a peak (non-blank logits, +/-1 frame at the onset frame, 1 s window) |
+| older attacker | `app.keystroke_guard.driver:KeyguardAttacker` | the **provisional** KeyNet CallGuard trained on harrison presses; no longer the default, kept because `adversarial.py`'s deltas are trained against it |
 | real shield | `app.keystroke_guard.driver:KeyguardShield` | Keyguard's DSP `Shield`, streamed with an 80 ms lookahead; `key_frames=26` (press + release) |
 
-Real code comes read-only from the teammate's repo
-[LordKarV/keyboard-acoustic-shield](https://github.com/LordKarV/keyboard-acoustic-shield) at `KEYGUARD_ROOT`
-(default `../keyboard-acoustic-shield`). Config ([`callguard.example.toml`](../../callguard.example.toml)):
+Real code is the teammate's Keyguard
+([LordKarV/keyboard-acoustic-shield](https://github.com/LordKarV/keyboard-acoustic-shield), commit `55bb112`),
+**vendored** as the top-level `keyguard/` package (`import keyguard...`; local edits listed in
+[`keyguard/VENDORED.md`](../../keyguard/VENDORED.md)). CallGuard never imports from the teammate's checkout.
+
+**Weights and data** (gitignored): `uv run python -m app.keystroke_guard.get_assets` copies them once from a Keyguard
+checkout (`KEYGUARD_ROOT`, else `upstream/keyguard`, `../../keyboard`, `../keyboard-acoustic-shield`; `--root PATH`)
+into `runs/keyguard/` (`ctc_rich_ft.pt`, `demo_attacker.pt`, `supervised_mbp.pt`, `arena/`, `arena_memory.jsonl`, ...)
+and `data/keyguard/` (`live_bank_rich.npz`, `pool/harrison.npz`, `speech/`, `harrison/MBPWavs/`, ~300 MB), which is
+where `keyguard.config.RUNS` / `DATA` point. `.env` (`GEMINI_API_KEY`, `BACKBOARD_API_KEY`) is callguard's own, loaded by
+`keyguard.config`. Keyguard's tools run from here, e.g. `uv run python -m keyguard.agents.arms_race_demo` (Ares vs Athena;
+writes `runs/keyguard/arms_race_data.js`), `uv run uvicorn keyguard.server:app --port 8000`, `uv run python -m keyguard.agents.live
+record --defend`. Config ([`callguard.example.toml`](../../callguard.example.toml)):
 `[drivers] attacker`, `shield` = `"real"|"mock"`, `shield_mode = "off"|"dsp"|"adversarial"` (see below),
 top-level `attacker_weights`.
 
@@ -48,7 +59,7 @@ python -m app.keystroke_guard.harness [--attacker mock|real|module:Class|none] [
 ```
 
 Contract and latency checks for both drivers, then two informational rows on Keyguard's harrison TEST-split presses
-(per-key seeded 60/40 split, the 40 %: 360 presses; skipped without `KEYGUARD_ROOT`): the attacker's keys-only top-1 /
+(per-key seeded 60/40 split, the 40 %: 360 presses; skipped without the Keyguard data): the attacker's keys-only top-1 /
 top-3 at the true onsets vs chance, and the same attacker on those presses streamed through the shield (presses
 250 ms apart, 20 ms blocks, each key event one block late). Exit code 1 on any FAIL. Real run (CPU, 2026-09-26):
 
@@ -158,8 +169,23 @@ Harness (`--shield-mode`, same attacker as above): shielded top-1 11.4 % (dsp), 
 
 ## Known limits
 
-- The attacker is **provisional** (CallGuard-trained, one MacBook keyboard, isolated presses, in-domain). It is
-  replaced when the teammate's weights ship.
+- **The CTC attacker is trained on the teammate's MacBook** (`ctc_rich_ft`, rich-synth fine-tune), so on harrison
+  presses it is near chance (`--data harrison`: top-1 5.0 %, top-3 9.7 %; Keyguard's own `onset_gated_decode` fails the
+  same way). The harness's quality rows therefore default to Keyguard's per-key bank (`data/live_bank_rich.npz`, 10
+  presses per key, its 0.002 synth noise floor; it is the model's training bank, so optimistic): **raw top-1 54.1 % /
+  top-3 74.1 %, DSP shield 14.6 % / 26.2 %** (n = 370, chance 2.7 / 8.1 %, 2026-09-26). On typing synthesized from the
+  bank (40-75 wpm, n = 458): raw 77.1 % / 89.3 %, DSP 62.9 % / 78.4 %: with neighbours in context
+  the DSP shield dents it far less, as Keyguard's DEMO.md says; the adversarial deltas were trained against KeyNet, not this model.
+  Retrain them against it with `adversarial train --attacker ctc` ([docs/gpu_retrain.md](../../docs/gpu_retrain.md)).
+- **CTC deltas, first run** (2026-09-27, `train --attacker ctc --speech keyguard`: Keyguard's 10 speech clips, 1000
+  steps, 873 s CPU, margin loss 4.16 -> 2.89, still falling). Isolated bank presses (harness, n = 370): top-1 54.1 % raw,
+  14.6 % dsp, 21.1 % adversarial, **3.8 % dsp+adversarial** (chance 2.7 %). Typing synthesized from the bank at
+  40-75 wpm (neighbours in context, n = 458): 77.1 % raw, 62.9 % dsp, 54.8 % dsp+adversarial: the deltas are trained
+  on isolated windows and don't hold up under overlap. Next: rerun with Hearsay speech (`--speech hearsay`), and train
+  on typing contexts rather than isolated presses.
+
+- The default attacker is now the teammate's (above). The KeyNet rows and the adversarial table describe the older
+  **provisional** KeyNet (CallGuard-trained, one MacBook keyboard, isolated presses, in-domain).
 - The shield misses plan 04's bar against the adaptive attacker at +10 dB (5.8 % vs <= 5.6 %) and its STOI is just
   under 0.9. `key_frames=26` was chosen on the same test presses (mild selection effect).
 - Synthetic mixing, no codec or meeting noise suppression; the real-world attack is capped by onset detection

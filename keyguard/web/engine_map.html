@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>CallGuard — Engine Map</title>
+<style>
+  body{margin:0;background:#0a0e15;color:#e8edf4;
+       font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1200px;margin:0 auto;padding:20px 14px}
+  svg{width:100%;height:auto;display:block}
+</style></head>
+<body><div class="wrap">
+<svg viewBox="0 0 1080 560" role="img" aria-label="CallGuard engine map">
+ <defs>
+   <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6a7a8e"/></marker>
+   <marker id="ao" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#e8963f"/></marker>
+   <marker id="am" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#db5b98"/></marker>
+   <marker id="ab" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5f8ff0"/></marker>
+   <marker id="at" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#33c4bd"/></marker>
+   <filter id="go" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#e8963f" flood-opacity=".55"/></filter>
+   <filter id="gt" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#33c4bd" flood-opacity=".5"/></filter>
+   <filter id="gm" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#db5b98" flood-opacity=".5"/></filter>
+   <filter id="gb" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#5f8ff0" flood-opacity=".5"/></filter>
+   <style>
+     .gl{font:700 10.5px sans-serif;letter-spacing:1.5px;fill:#7d8ca0}
+     .gs{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#6c7a8d}
+     .nt{font:700 11.5px sans-serif;fill:#eef2f8}
+     .ns{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#8493a6}
+     .el{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#7d8ca0}
+     .em{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#db5b98}
+     .eb{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#7fa4f2}
+     .eo{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#e8963f}
+     .note{font:italic 10px sans-serif;fill:#7d8ca0}
+   </style>
+ </defs>
+
+ <!-- ===== group lanes ===== -->
+ <rect x="24" y="40" width="176" height="496" rx="8" fill="#0c1119" stroke="#26313f" stroke-dasharray="3 4"/>
+ <text class="gl" x="40" y="64">CHROME · MEET TAB</text><text class="gs" x="40" y="80">bridge.js, injected</text>
+ <rect x="236" y="40" width="560" height="496" rx="8" fill="#0c1119" stroke="#26313f" stroke-dasharray="3 4"/>
+ <text class="gl" x="252" y="64">CALLGUARD ENGINE · PYTHON</text><text class="gs" x="252" y="80">one pipeline for Meet, replay and live</text>
+ <text class="gl" x="888" y="64">OUTPUTS</text>
+
+ <!-- vertical local-websockets label -->
+ <text class="gs" x="216" y="300" transform="rotate(-90 216 300)" text-anchor="middle" letter-spacing="1">LOCAL WEBSOCKETS · float32 blocks</text>
+
+ <!-- ===== CHROME nodes ===== -->
+ <g>
+  <rect x="40" y="96" width="150" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="52" y="118">What the call hears</text><text class="ns" x="52" y="134">RTCPeerConnection</text>
+  <rect x="40" y="152" width="150" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="52" y="174">Your microphone</text><text class="ns" x="52" y="190">getUserMedia</text>
+  <text class="note" x="40" y="286">If CallGuard stops</text><text class="note" x="40" y="300">answering, the page</text><text class="note" x="40" y="314">sends your raw mic.</text>
+  <rect x="40" y="460" width="150" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="52" y="482">Other participants</text><text class="ns" x="52" y="498">remote tracks, mixed</text>
+ </g>
+
+ <!-- ===== AUDIO THREAD inner box ===== -->
+ <rect x="250" y="92" width="540" height="98" rx="8" fill="#0b1b1a" stroke="#2f4a48" stroke-dasharray="3 4"/>
+ <text class="gl" x="264" y="112" fill="#5fb9b2">AUDIO THREAD · EVERY 20 MS</text>
+ <rect x="312" y="126" width="156" height="50" rx="6" fill="#161219" stroke="#e8963f" filter="url(#go)"/><text class="nt" x="326" y="150">Keystroke shield</text><text class="ns" x="326" y="166">DSP + adversarial · 80 ms</text>
+ <rect x="560" y="126" width="156" height="50" rx="6" fill="#1a121a" stroke="#db5b98" filter="url(#gm)"/><text class="nt" x="574" y="150">Secret delay line</text><text class="ns" x="574" y="166">bleeps marks · 500 ms</text>
+
+ <!-- ===== rings ===== -->
+ <g>
+  <rect x="262" y="224" width="150" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="274" y="246">KeyClock</text><text class="ns" x="274" y="262">pynput → sample index</text>
+  <rect x="430" y="224" width="118" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="442" y="246">Raw mic ring</text><text class="ns" x="442" y="262">before shield</text>
+  <rect x="558" y="224" width="118" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="570" y="246">Shielded ring</text><text class="ns" x="570" y="262">what Meet gets</text>
+  <rect x="686" y="224" width="104" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="698" y="246">Outbound ring</text><text class="ns" x="698" y="262">before delay</text>
+ </g>
+
+ <!-- ===== workers ===== -->
+ <rect x="262" y="300" width="340" height="56" rx="6" fill="#161219" stroke="#e8963f" filter="url(#go)"/><text class="nt" x="278" y="324">Attacker worker</text><text class="ns" x="278" y="342">CTC attacker (Ares) reads every key twice: raw vs shielded</text>
+ <rect x="640" y="300" width="150" height="56" rx="6" fill="#1a121a" stroke="#db5b98" filter="url(#gm)"/><text class="nt" x="654" y="324">Secret spotter</text><text class="ns" x="654" y="342">Vosk · your voice</text>
+
+ <rect x="262" y="440" width="110" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="274" y="462">Far-end ring</text><text class="ns" x="274" y="478">caller audio</text>
+ <rect x="392" y="436" width="208" height="56" rx="6" fill="#121722" stroke="#5f8ff0" filter="url(#gb)"/><text class="nt" x="408" y="460">Voice worker</text><text class="ns" x="408" y="478">Hearsay E5 · 4 s every 2 s</text>
+ <rect x="628" y="436" width="162" height="56" rx="6" fill="#1a121a" stroke="#db5b98" filter="url(#gm)"/><text class="nt" x="644" y="460">Request listener</text><text class="ns" x="644" y="478">Vosk · "read me the code"</text>
+
+ <!-- ===== EVENT BUS ===== -->
+ <rect x="812" y="92" width="26" height="430" rx="8" fill="#33c4bd" filter="url(#gt)"/>
+ <text x="825" y="307" transform="rotate(-90 825 307)" text-anchor="middle" font-weight="800" font-size="11" letter-spacing="2" fill="#04211f">EVENT BUS · PUB/SUB</text>
+
+ <!-- ===== OUTPUTS ===== -->
+ <rect x="876" y="126" width="180" height="50" rx="6" fill="#0e1a1a" stroke="#33c4bd" filter="url(#gt)"/><text class="nt" x="890" y="150">Threat engine</text><text class="ns" x="890" y="166">0-100 · SAFE → CRITICAL</text>
+ <rect x="876" y="250" width="180" height="58" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="890" y="274">Dashboard</text><text class="ns" x="890" y="290">FastAPI · /ws live push</text><text class="ns" x="890" y="303">buttons control the engine</text>
+ <rect x="876" y="386" width="180" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="890" y="408">Hooks</text><text class="ns" x="890" y="424">console · JSONL · webhook</text>
+
+ <!-- ===== edges ===== -->
+ <g fill="none">
+   <!-- processed block back to the page -->
+   <path d="M478,126 L478,85 L196,85 L196,119" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <text class="el" x="640" y="82" text-anchor="middle">processed block back to the page</text>
+   <!-- key events (orange up) -->
+   <path d="M356,224 L356,200 L378,200 L378,177" stroke="#e8963f" stroke-width="1.3" marker-end="url(#ao)"/>
+   <text class="eo" x="388" y="212">key events</text>
+   <!-- copied every block (down to rings) -->
+   <path d="M489,190 L489,223" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <path d="M617,190 L617,223" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <path d="M735,190 L735,223" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <text class="el" x="512" y="212" text-anchor="middle">copied every block</text>
+   <!-- rings -> attacker worker -->
+   <path d="M489,272 L489,290 L440,290 L440,299" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <path d="M617,272 L617,290 L520,290 L520,299" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <!-- outbound ring -> secret spotter -->
+   <path d="M735,272 L735,290 L715,290 L715,299" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <!-- marks spans to cut (magenta up right) -->
+   <path d="M715,300 L715,206 L638,206 L638,177" stroke="#db5b98" stroke-width="1.3" marker-end="url(#am)"/>
+   <text class="em" x="800" y="200" text-anchor="end">marks spans to cut</text>
+   <!-- arms (magenta up) -->
+   <path d="M709,436 L709,357" stroke="#db5b98" stroke-width="1.3" marker-end="url(#am)"/>
+   <text class="em" x="716" y="400">arms</text>
+   <!-- V >= 0.5 arms (blue dashed elbow) -->
+   <path d="M520,436 L520,392 L660,392 L660,357" stroke="#5f8ff0" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#ab)"/>
+   <text class="eb" x="560" y="386" text-anchor="middle">V ≥ 0.5 arms</text>
+   <!-- far-end -> voice worker -->
+   <path d="M372,462 L391,462" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <!-- other participants -> far-end ring -->
+   <path d="M190,483 L226,483 L226,462 L261,462" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <!-- same caller audio (bottom U) -->
+   <path d="M317,488 L317,516 L709,516 L709,493" stroke="#6a7a8e" stroke-width="1.3" marker-end="url(#a)"/>
+   <text class="el" x="513" y="530" text-anchor="middle">same caller audio</text>
+   <!-- engine -> event bus -->
+   <path d="M790,328 L811,328" stroke="#33c4bd" stroke-width="1.3" marker-end="url(#at)"/>
+   <path d="M790,464 L802,464 L802,360 L811,360" stroke="#33c4bd" stroke-width="1.3" marker-end="url(#at)"/>
+   <!-- bus -> outputs -->
+   <path d="M838,150 L875,150" stroke="#33c4bd" stroke-width="1.3" marker-end="url(#at)"/>
+   <path d="M875,164 L850,164 L850,150" stroke="#33c4bd" stroke-width="1.3" marker-end="url(#at)"/>
+   <path d="M838,278 L875,278" stroke="#33c4bd" stroke-width="1.3" marker-end="url(#at)"/>
+   <path d="M838,410 L875,410" stroke="#33c4bd" stroke-width="1.3" marker-end="url(#at)"/>
+ </g>
+</svg>
+</div></body></html>

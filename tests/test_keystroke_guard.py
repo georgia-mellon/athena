@@ -1,4 +1,4 @@
-"""Keyguard drivers (WP4). Skips when KEYGUARD_ROOT is missing; the attacker test trains/caches the provisional
+"""Keyguard drivers (WP4). Skips when the Keyguard data (get_assets) is missing; the attacker test trains/caches the provisional
 KeyNet on first run (~2 min CPU) and reuses runs/provisional_keynet.pt after that."""
 import time
 
@@ -8,7 +8,7 @@ import pytest
 from app.keystroke_guard import driver as kr
 from app.source.types import BLOCK, SR, KeystrokeAttackerDriver, ShieldDriver
 
-pytestmark = pytest.mark.skipif(not (kr.keyguard_root() / "keyguard").is_dir(), reason="KEYGUARD_ROOT not available")
+pytestmark = pytest.mark.skipif(not kr.HARRISON.exists(), reason="Keyguard data missing (python -m app.keystroke_guard.get_assets)")
 
 
 def run(shield, x, events):
@@ -71,3 +71,22 @@ def test_attacker_reads_held_out_presses_well_above_chance():
     top3 = np.mean([a.classes[y] in [k for k, _ in g.top] for g, y in zip(guesses, yte)])
     print(f"held-out harrison: top1={top1:.3f} top3={top3:.3f} (chance {1/36:.3f}, n={len(yte)})")
     assert top1 > 10 / 36   # >10x chance
+
+
+@pytest.mark.skipif(not kr.CTC_WEIGHTS.exists(), reason="Keyguard CTC weights not available")
+def test_ctc_attacker_reads_keyguard_bank_typing():
+    """Keyguard's current attacker (MtlCRNN, ctc_rich_ft) on typing synthesized from the teammate's own key bank
+    (its training domain; harrison is out of domain for it). Checks the onset -> frame alignment, not generalization."""
+    from keyguard.ctc.data import VOCAB, random_text, synth_line
+    a = kr.KeyguardCTCAttacker()
+    assert isinstance(a, KeystrokeAttackerDriver) and len(a.classes) == 37
+    rng = np.random.default_rng(0)
+    hits = n = 0
+    for _ in range(5):
+        y, lab, on = synth_line(random_text(rng), rng, wpm=(40, 75), root=str(kr.BANK))
+        guesses = a.read(y, on)
+        assert len(guesses) == len(on) and len(guesses[0].top) == 3
+        hits += sum(g.top[0][0] == VOCAB[j] for g, j in zip(guesses, lab))
+        n += len(guesses)
+    print(f"keyguard bank typing: top1={hits / n:.3f} (chance {1 / 37:.3f}, n={n})")
+    assert hits / n > 0.5

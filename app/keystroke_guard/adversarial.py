@@ -198,8 +198,6 @@ def _torch(threads: int):
     sys.dont_write_bytecode = True
     import torch
     torch.set_num_threads(threads)
-    from app.keystroke_guard.driver import _import_keyguard
-    _import_keyguard()
     from keyguard.config import KEY_WIN as KW, PRE_S, SR
     assert (KW, int(PRE_S * SR)) == (KEY_WIN, PRE), "Keyguard's window changed: update KEY_WIN / PRE here"
     return torch
@@ -213,6 +211,24 @@ def speech_bank(which: str, n: int, seed: int, length: int = KEY_WIN) -> np.ndar
     rng = np.random.default_rng(aus.SEED)
     aus.load_keys(rng)
     pool = aus.load_speech(rng)[0][which]
+    r = np.random.default_rng(seed)
+    out = np.empty((n, length), np.float32)
+    for i in range(n):
+        x = pool[r.integers(len(pool))]
+        a = r.integers(0, len(x) - length + 1)
+        out[i] = x[a:a + length]
+    return out
+
+
+def keyguard_speech(n: int, seed: int, length: int = KEY_WIN) -> np.ndarray:
+    """(n, length) excerpts of Keyguard's own speech clips (data/speech/*.wav, a few LibriSpeech speakers): the
+    stand-in when Hearsay's pools aren't on the machine. Far fewer speakers than speech_bank."""
+    from keyguard.config import DATA
+    from app.source.audio.replay import load_wav
+    pool = [load_wav(p) for p in sorted((DATA / "speech").glob("*.wav"))]
+    pool = [x for x in pool if len(x) > length]
+    if not pool:
+        raise FileNotFoundError(f"no speech clips in {DATA / 'speech'} (run python -m app.keystroke_guard.get_assets)")
     r = np.random.default_rng(seed)
     out = np.empty((n, length), np.float32)
     for i in range(n):
@@ -274,6 +290,32 @@ def _keynet(torch, path=None):
     return net.eval()
 
 
+def _ctc_keys(torch):
+    """Keyguard's CTC attacker (driver.KeyguardCTCAttacker, MtlCRNN) as a differentiable window classifier:
+    (B, KEY_WIN) windows, onset PRE in -> (B, 37) non-blank logits at the onset frame +/-1, read exactly as the driver
+    reads it (1 s context, Keyguard's noise floor) through defense_audio.torch_logmel (Keyguard's differentiable match
+    of ctc.model.logmel). Takes the raw waveform (`wants_wave`), not KeyNet's features."""
+    from app.keystroke_guard.driver import CTC_CTX, CTC_WIN, KeyguardCTCAttacker
+    from keyguard.agents.defense_audio import torch_logmel as ctc_logmel
+    from keyguard.ctc.model import HOP
+
+    class CTCKeys(torch.nn.Module):
+        wants_wave = True
+
+        def __init__(self):
+            super().__init__()
+            self.net = KeyguardCTCAttacker().net
+            self.floor = 0.002 * torch.randn(2 * CTC_CTX, generator=torch.Generator().manual_seed(0))
+
+        def forward(self, w):
+            a = CTC_CTX - PRE
+            x = torch.nn.functional.pad(w, (a, 2 * CTC_CTX - a - w.shape[1])) + self.floor
+            logits, _ = self.net(torch.stack([ctc_logmel(r) for r in x]))
+            f = CTC_CTX // HOP
+            return logits[:, f - CTC_WIN:f + CTC_WIN + 1, 1:].mean(1)
+    return CTCKeys().eval()
+
+
 def _margin(torch, logits, y, kappa):
     true = logits.gather(1, y[:, None])[:, 0]
     other = logits.masked_fill(torch.nn.functional.one_hot(y, logits.shape[1]).bool(), -1e9).amax(1)
@@ -296,8 +338,10 @@ def optimize(torch, U, nets, X, y, S, gain, radius, steps, lr, lam, kappa, bs=64
         k = torch.arange(bs) % K                                   # every delta gets gradient each step
         j = torch.randint(-jitter, jitter + 1, (bs,))
         g = 10 ** (torch.empty(bs, 1).uniform_(-6, 6) / 20)
-        feats = torch_logmel(g * _perturb(torch, m, U, gain, k, j))
-        attack = sum(_margin(torch, net(feats), y[i], kappa) for net in nets.values())
+        wave = g * _perturb(torch, m, U, gain, k, j)
+        feats = torch_logmel(wave) if any(not getattr(n, "wants_wave", False) for n in nets.values()) else None
+        attack = sum(_margin(torch, net(wave if getattr(net, "wants_wave", False) else feats), y[i], kappa)
+                     for net in nets.values())
         un = U / U.norm(dim=1, keepdim=True)
         c = un @ un.T
         div = (c - torch.eye(K)).pow(2).sum() / (K * (K - 1))    # mean squared pairwise cosine
@@ -312,6 +356,51 @@ def optimize(torch, U, nets, X, y, S, gain, radius, steps, lr, lam, kappa, bs=64
             print(f"  step {step:4d}  margin loss {attack.item() / len(nets):.3f}/attacker  mean cos^2 {div.item():.3f}",
                   flush=True)
     return U.detach()
+
+
+def train_ctc(args) -> dict:
+    """Deltas vs Keyguard's CTC attacker (CallGuard's default attacker) on Keyguard's per-key bank (the teammate's
+    MacBook: the demo keyboard), 10 presses per key held out. Same budget, EOT, speech and runtime format as `train`;
+    no adaptive-retrain phase (that step is KeyNet-specific), so both phases run against the CTC attacker."""
+    torch = _torch(args.threads)
+    from app.keystroke_guard.driver import keyguard_bank
+    from keyguard.config import CLS_IDX
+    t0 = time.perf_counter()
+    torch.manual_seed(args.seed)
+    rng, Xs, ys = np.random.default_rng(args.seed), [], []
+    for key, clips in sorted(keyguard_bank().items()):
+        for c in clips[rng.permutation(len(clips))[10:]]:          # the first 10 per key stay out (harness uses 10/key)
+            Xs.append(np.pad(c, (0, max(0, KEY_WIN - len(c))))[:KEY_WIN])
+            ys.append(CLS_IDX[key])
+    Xtr = np.stack(Xs).astype(np.float32)
+    X, y = torch.from_numpy(Xtr), torch.tensor(ys).long()
+    S = torch.from_numpy(speech_bank("train", 4000, args.seed) if args.speech == "hearsay"
+                         else keyguard_speech(4000, args.seed))
+    xr = np.sqrt(np.mean(Xtr.astype(np.float64) ** 2, 1))
+    gain = float(np.median(xr / np.sqrt(np.mean(Xtr[:, :EST].astype(np.float64) ** 2, 1))))
+    radius = 10 ** (args.budget_db / 20) * np.sqrt(KEY_WIN)
+    nets = {"keyguard-ctc (ctc_rich_ft)": _ctc_keys(torch)}
+    print(f"bank presses {len(X)}, speech excerpts {len(S)}, level_gain {gain:.3f}, budget {args.budget_db} dB, "
+          f"K={args.k}, vs {list(nets)}", flush=True)
+    g = torch.Generator().manual_seed(args.seed)
+    U = torch.randn(args.k, KEY_WIN, generator=g)
+    U *= radius / U.norm(dim=1, keepdim=True)
+    U = optimize(torch, U, nets, X, y, S, gain, radius, 2 * args.steps, args.lr, args.lam, args.kappa)
+    un = U / U.norm(dim=1, keepdim=True)
+    cos = (un @ un.T)[~torch.eye(args.k, dtype=bool)]
+    meta = {"budget_db": args.budget_db, "K": args.k, "level_gain": gain, "level_window": EST, "pre": PRE,
+            "key_win": KEY_WIN, "sr": 16000, "seed": args.seed, "steps": 2 * args.steps, "lr": args.lr,
+            "lam": args.lam, "kappa": args.kappa, "jitter": JITTER, "gain_db": [-6, 6],
+            "speech": ("attack_under_speech train-speaker pool" if args.speech == "hearsay"
+                       else "Keyguard data/speech clips") + ", +0..+20 dB, p=0.7",
+            "split": "Keyguard bank (live_bank_rich), all but 10 presses per key", "attackers": list(nets),
+            "pairwise_cos_mean_abs": float(cos.abs().mean()), "pairwise_cos_max": float(cos.max()),
+            "train_seconds": round(time.perf_counter() - t0), "threads": args.threads}
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    torch.save({"deltas": U.float(), "meta": meta}, args.out)
+    print(json.dumps(meta, indent=1))
+    print(f"saved {args.out} ({meta['train_seconds']} s)")
+    return meta
 
 
 def train(args) -> dict:
@@ -480,8 +569,16 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--out", default=str(DELTAS))
+    ap.add_argument("--attacker", default="keynet", choices=["keynet", "ctc"],
+                    help="train: optimize vs the provisional KeyNets on harrison (default) or vs Keyguard's CTC attacker "
+                         "on Keyguard's bank (CallGuard's default attacker)")
+    ap.add_argument("--speech", default="hearsay", choices=["hearsay", "keyguard"],
+                    help="--attacker ctc: speech for EOT, Hearsay's pools (HEARSAY_ROOT) or Keyguard's data/speech clips")
     a = ap.parse_args(argv)
-    (train if a.cmd == "train" else evaluate)(a)
+    if a.cmd == "train":
+        (train_ctc if a.attacker == "ctc" else train)(a)
+    else:
+        evaluate(a)
     return 0
 
 

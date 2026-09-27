@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KeyGuard — End-to-End Map</title>
+<style>
+  body{margin:0;background:#0a0e15;color:#e8edf4;
+       font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1200px;margin:0 auto;padding:20px 14px}
+  svg{width:100%;height:auto;display:block}
+</style></head>
+<body><div class="wrap">
+<svg viewBox="0 0 1120 700" role="img" aria-label="KeyGuard end-to-end map">
+ <defs>
+   <marker id="a"  markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6a7a8e"/></marker>
+   <marker id="ac" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#f0714e"/></marker>
+   <marker id="at" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#33c4bd"/></marker>
+   <marker id="ag" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#e8c96b"/></marker>
+   <marker id="ap" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#9b7cf0"/></marker>
+   <filter id="fc" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#f0714e" flood-opacity=".5"/></filter>
+   <filter id="ft" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#33c4bd" flood-opacity=".5"/></filter>
+   <filter id="fg" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="0" stdDeviation="3.5" flood-color="#e8c96b" flood-opacity=".45"/></filter>
+   <style>
+     .gl{font:700 10.5px sans-serif;letter-spacing:1.5px}
+     .gs{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#6c7a8d}
+     .nt{font:700 11.5px sans-serif;fill:#eef2f8}
+     .ns{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#8493a6}
+     .el{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#7d8ca0}
+     .ec{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#f0714e}
+     .et{font:9px ui-monospace,Menlo,Consolas,monospace;fill:#39cabf}
+     .obj{font:600 12px ui-monospace,Menlo,Consolas,monospace;fill:#e6c874}
+     .step{font:700 10px sans-serif}
+     .badge{font:800 11px sans-serif}
+   </style>
+ </defs>
+
+ <text x="24" y="30" font-size="19" font-weight="800">KeyGuard <tspan fill="#7d8ca0" font-weight="500" font-size="13">— acoustic keystroke attack ⇄ LLM defense, end to end</tspan></text>
+
+ <!-- ===== group lanes ===== -->
+ <rect x="24" y="52" width="168" height="512" rx="8" fill="#0c1119" stroke="#26313f" stroke-dasharray="3 4"/>
+ <text class="gl" x="40" y="76" fill="#9b7cf0">INPUTS</text><text class="gs" x="40" y="91">your Mac + online corpora</text>
+
+ <rect x="208" y="52" width="300" height="512" rx="8" fill="#0f0d0c" stroke="#4a2f26" stroke-dasharray="3 4"/>
+ <text class="gl" x="224" y="76" fill="#f0714e">⚔ ARES · ATTACKER</text><text class="gs" x="224" y="91">reads keystrokes from sound</text>
+
+ <rect x="760" y="52" width="300" height="512" rx="8" fill="#0a1413" stroke="#1f4340" stroke-dasharray="3 4"/>
+ <text class="gl" x="776" y="76" fill="#33c4bd">🦉 ATHENA · DEFENDER</text><text class="gs" x="776" y="91">fools the attacker, keeps speech</text>
+
+ <!-- ===== INPUT nodes ===== -->
+ <g>
+  <rect x="40" y="104" width="136" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="52" y="126">Keyboard sound</text><text class="ns" x="52" y="142">your Mac · 16 kHz</text>
+  <rect x="40" y="170" width="136" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="52" y="192">Your typing data</text><text class="ns" x="52" y="208">onsets + SPACE labels</text>
+  <rect x="40" y="236" width="136" height="56" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="52" y="258">Online corpora</text><text class="ns" x="52" y="274">SKAID 67k · Harrison</text><text class="ns" x="52" y="286">MacBook · wordfreq</text>
+ </g>
+
+ <!-- ===== ARES nodes ===== -->
+ <g>
+  <rect x="224" y="104" width="268" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="238" y="126">log-mel front-end</text><text class="ns" x="238" y="142">64 mels · 8 ms frames</text>
+  <rect x="224" y="168" width="268" height="46" rx="6" fill="#181210" stroke="#f0714e" filter="url(#fc)"/><text class="nt" x="238" y="190">CNN + BiGRU + CTC</text><text class="ns" x="238" y="206">MtlCRNN 2.2M · onset head</text>
+  <rect x="224" y="232" width="268" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="238" y="254">pretrain → fine-tune</text><text class="ns" x="238" y="270">synth from your keys → real typing</text>
+  <rect x="224" y="296" width="268" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="238" y="318">decode</text><text class="ns" x="238" y="334">greedy · onset-gated · char-LM beam</text>
+  <rect x="224" y="360" width="268" height="46" rx="6" fill="#181210" stroke="#f0714e" filter="url(#fc)"/><text class="nt" x="238" y="382">Attacker-LLM (Gemini)</text><text class="ns" x="238" y="398">reconstructs the typed text</text>
+  <rect x="224" y="424" width="268" height="46" rx="6" fill="#181210" stroke="#f0714e" filter="url(#fc)"/><text class="nt" x="238" y="446">Smart-dictionary</text><text class="ns" x="238" y="462">ranks your password — #k of 36ⁿ</text>
+  <rect x="224" y="500" width="268" height="44" rx="6" fill="#2a1512" stroke="#f0714e" filter="url(#fc)"/><text class="badge" x="358" y="527" text-anchor="middle" fill="#ff8b6b">READS ~80% NOVEL · ~89% FAMILIAR</text>
+  <g stroke="#5a4038" stroke-width="1.3" marker-end="url(#a)">
+   <line x1="358" y1="150" x2="358" y2="167"/><line x1="358" y1="214" x2="358" y2="231"/>
+   <line x1="358" y1="278" x2="358" y2="295"/><line x1="358" y1="342" x2="358" y2="359"/>
+   <line x1="358" y1="406" x2="358" y2="423"/><line x1="358" y1="470" x2="358" y2="499"/>
+  </g>
+ </g>
+
+ <!-- ===== ATHENA nodes ===== -->
+ <g>
+  <rect x="776" y="104" width="268" height="46" rx="6" fill="#0e1a19" stroke="#33c4bd" filter="url(#ft)"/><text class="nt" x="790" y="126">Defender-LLM · triage</text><text class="ns" x="790" y="142">which span is the secret? (Gemini)</text>
+  <rect x="776" y="168" width="268" height="46" rx="6" fill="#0e1a19" stroke="#33c4bd" filter="url(#ft)"/><text class="nt" x="790" y="190">invent a decoy</text><text class="ns" x="790" y="206">a believable false secret — deception</text>
+  <rect x="776" y="232" width="268" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="790" y="254">differentiable log-mel</text><text class="ns" x="790" y="270">matches Ares (corr &gt; 0.9999)</text>
+  <rect x="776" y="296" width="268" height="46" rx="6" fill="#0e1a19" stroke="#33c4bd" filter="url(#ft)"/><text class="nt" x="790" y="318">adversarial shield · craft()</text><text class="ns" x="790" y="334">protect / deceive — optimize δ</text>
+  <rect x="776" y="360" width="268" height="46" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="790" y="382">perceptual budget</text><text class="ns" x="790" y="398">‖δ‖ ≤ ε · STOI ≥ floor (inaudible)</text>
+  <rect x="776" y="424" width="268" height="46" rx="6" fill="#0e1a19" stroke="#33c4bd" filter="url(#ft)"/><text class="nt" x="790" y="446">harden · remember · deploy</text><text class="ns" x="790" y="462">min-max offline · Backboard · ~ms/key</text>
+  <rect x="776" y="500" width="268" height="44" rx="6" fill="#0d2422" stroke="#33c4bd" filter="url(#ft)"/><text class="badge" x="910" y="527" text-anchor="middle" fill="#5fe0d5">SECRET → DECOY · SPEECH INTACT</text>
+  <g stroke="#1f4744" stroke-width="1.3" marker-end="url(#a)">
+   <line x1="910" y1="150" x2="910" y2="167"/><line x1="910" y1="214" x2="910" y2="231"/>
+   <line x1="910" y1="278" x2="910" y2="295"/><line x1="910" y1="342" x2="910" y2="359"/>
+   <line x1="910" y1="406" x2="910" y2="423"/><line x1="910" y1="470" x2="910" y2="499"/>
+  </g>
+ </g>
+
+ <!-- ===== ARENA (center) ===== -->
+ <rect x="536" y="214" width="196" height="220" rx="10" fill="#141207" stroke="#e8c96b" stroke-dasharray="4 4" filter="url(#fg)"/>
+ <rect x="566" y="228" width="136" height="26" rx="13" fill="#e8c96b"/><text class="step" x="634" y="246" text-anchor="middle" fill="#2c2405">THE ARMS RACE ⟳</text>
+ <text class="obj" x="634" y="282" text-anchor="middle">min_D max_A</text>
+ <text class="obj" x="634" y="300" text-anchor="middle" font-size="10">Leakage(A(D(x))) ≤ ε</text>
+ <g>
+   <rect x="552" y="320" width="76" height="28" rx="7" fill="#1c1206" stroke="#f0714e"/><text class="step" x="590" y="338" text-anchor="middle" fill="#ff8b6b">① reads</text>
+   <rect x="640" y="320" width="80" height="28" rx="7" fill="#0e1a19" stroke="#33c4bd"/><text class="step" x="680" y="338" text-anchor="middle" fill="#5fe0d5">② decoys</text>
+   <rect x="552" y="356" width="76" height="28" rx="7" fill="#0e1a19" stroke="#33c4bd"/><text class="step" x="590" y="374" text-anchor="middle" fill="#5fe0d5">④ escalate</text>
+   <rect x="640" y="356" width="80" height="28" rx="7" fill="#1c1206" stroke="#f0714e"/><text class="step" x="680" y="374" text-anchor="middle" fill="#ff8b6b">③ retrain</text>
+   <g fill="none" stroke="#d9a520" stroke-width="1.3" marker-end="url(#ag)">
+     <line x1="628" y1="334" x2="639" y2="334"/><path d="M680,348 L680,355"/>
+     <line x1="640" y1="370" x2="629" y2="370"/><path d="M590,356 L590,349"/>
+   </g>
+ </g>
+ <text class="el" x="634" y="412" text-anchor="middle" fill="#9a8b52">offline co-evolution,</text>
+ <text class="el" x="634" y="424" text-anchor="middle" fill="#9a8b52">shown live</text>
+
+ <!-- ===== edges ===== -->
+ <g fill="none">
+   <!-- inputs -> ares log-mel -->
+   <path d="M176,127 L200,127 L200,127 L223,127" stroke="#9b7cf0" stroke-width="1.3" marker-end="url(#ap)"/>
+   <path d="M176,193 L192,193 L192,138 L223,138" stroke="#9b7cf0" stroke-width="1.3" marker-end="url(#ap)"/>
+   <path d="M176,262 L188,262 L188,250 L223,250" stroke="#9b7cf0" stroke-width="1.3" marker-end="url(#ap)"/>
+   <text class="el" x="200" y="315" fill="#9b7cf0" text-anchor="middle">audio +</text>
+   <text class="el" x="200" y="327" fill="#9b7cf0" text-anchor="middle">labels</text>
+
+   <!-- ares -> arena (reads) -->
+   <path d="M492,324 L514,324 L514,300 L535,300" stroke="#f0714e" stroke-width="1.6" marker-end="url(#ac)"/>
+   <text class="ec" x="516" y="292" text-anchor="middle">reads</text>
+   <!-- arena -> athena (shields) -->
+   <path d="M732,300 L752,300 L752,324 L775,324" stroke="#33c4bd" stroke-width="1.6" marker-end="url(#at)"/>
+   <text class="et" x="752" y="292" text-anchor="middle">shields</text>
+
+   <!-- feedback loop over the top: defended audio back to Ares (routed in the gap) -->
+   <path d="M776,300 L746,300 L746,34 L358,34 L358,103" stroke="#33c4bd" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#at)"/>
+   <rect x="470" y="22" width="330" height="24" rx="12" fill="#0c1c1b" stroke="#2f6b66"/>
+   <text class="et" x="635" y="38" text-anchor="middle" fill="#5fe0d5">defended audio — Ares only ever hears this</text>
+ </g>
+
+ <!-- ===== OUTPUTS bus + nodes ===== -->
+ <rect x="300" y="596" width="520" height="16" rx="8" fill="#2fb8b0" filter="url(#ft)"/>
+ <text class="gs" x="308" y="590" fill="#5fb9b2" letter-spacing="1">ARENA OUTPUTS</text>
+ <path d="M634,434 L634,595" stroke="#33c4bd" stroke-width="1.4" marker-end="url(#at)"/>
+
+ <rect x="300" y="628" width="168" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="314" y="650">Live demo</text><text class="ns" x="314" y="666">type → read → shield</text>
+ <rect x="476" y="628" width="176" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="490" y="650">Move-by-move replay</text><text class="ns" x="490" y="666">ARMS_RACE_REPLAY.md</text>
+ <rect x="660" y="628" width="160" height="48" rx="6" fill="#10161f" stroke="#3c4a5d"/><text class="nt" x="674" y="650">Metrics</text><text class="ns" x="674" y="666">CER · guess-rank · STOI</text>
+ <g stroke="#2fb8b0" stroke-width="1.3" marker-end="url(#at)">
+   <line x1="384" y1="612" x2="384" y2="627"/><line x1="564" y1="612" x2="564" y2="627"/><line x1="740" y1="612" x2="740" y2="627"/>
+ </g>
+</svg>
+</div></body></html>
