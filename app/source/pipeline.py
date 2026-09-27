@@ -12,6 +12,9 @@ The workers are step functions keyed on *audio* sample counters, not wall time:
 - `secret_step` (plan 06): while armed (unverified voice, an inbound "read me the code" trigger, or manual), feed the
   outbound audio (after the Keyguard shield, before the delay line) to the spotter and mark its spans on the
   Redactor; the audio thread applies them as the samples leave the constant delay line -> secret.blocked.
+- keyguard bursts: attack_step also collects the typed keys into a burst; after `keyguard.burst_gap_s` of silence
+  the raw mic clip around it goes to the AgentWorker (app/keystroke_guard/agents.py), which plays one
+  Ares-vs-Athena match on its own thread (keyguard.* events). Only with the real CTC attacker.
 Live and realtime replay run them on worker threads; fast replay (tests) calls them inline after every block, which
 makes a run deterministic. The audio thread only ever runs the shield; a raising driver is quarantined and the
 block passes through (MicShieldStream + drivers.base.Quarantine).
@@ -161,6 +164,7 @@ class Pipeline:
         self._run_stop: threading.Event | None = None
         self._run_thread: threading.Thread | None = None
         self._live: list = []
+        self.agents = self._make_agents()
         self.reset(ScriptedKeyClock([]), clock=lambda: 0.0)
 
     # --- state ------------------------------------------------------------------------------------------------
@@ -178,6 +182,7 @@ class Pipeline:
         self._mic_errors = 0
         self._next_voice = VOICE_WIN
         self._last_speech: int | None = None    # far-end sample where the last scored speech window ended
+        self._burst: list[tuple[int, str]] = []  # (absolute sample, key char) of the current typing burst
         self._readout = {"raw": deque(maxlen=self.cfg.threat.readout_window),
                          "shielded": deque(maxlen=self.cfg.threat.readout_window)}
         if getattr(self, "engine", None):
@@ -194,6 +199,21 @@ class Pipeline:
         self.armed, self.armed_by, self._auto_by, self._run = False, "", "", None
         self._publish_shield()
         self._publish_secret()
+
+    def _make_agents(self):
+        """AgentWorker for the live arms race, or None (off in config, or not the real CTC attacker)."""
+        k = self.cfg.keyguard
+        drv = getattr(self.attacker, "driver", self.attacker)   # unwrap the Quarantine
+        net = getattr(drv, "net", None)
+        if not k.agents or net is None or type(drv).__name__ != "KeyguardCTCAttacker":
+            return None
+        try:
+            from app.keystroke_guard.agents import AgentWorker, ArmsRace
+            return AgentWorker(ArmsRace(net, self.bus.emit, rounds=k.rounds, snr_db=k.snr_db, steps=k.steps,
+                                        device=k.device), self.bus)
+        except Exception as e:                          # noqa: BLE001 - the matches are extra; the call is not
+            log.warning("keyguard agents unavailable: %s", e)
+            return None
 
     def _on_error(self, ev: Event) -> None:
         self.bus.publish(ev)
@@ -277,12 +297,39 @@ class Pipeline:
                 self._clear_shielded = False
             if mode == self.shield_mode:                # typed under another mode: not evidence for this one
                 self._attack(e, lag)
+            self._track_burst(e)
             did = True
+        self._flush_burst()
         if self.mic.errors != self._mic_errors:        # the hook failed and passed raw audio: say so
             self._mic_errors = self.mic.errors
             self.bus.emit("driver.error", driver="audio hook", kind="stream", error=self.mic.last_error,
                           failures=self.mic.errors, quarantined=False)
         return did
+
+    def _track_burst(self, e) -> None:
+        if self.agents is None:
+            return
+        k = str(e.key)
+        ch = " " if k.lower() == "space" else k.upper()
+        if len(ch) == 1 and (ch.isalnum() and ch.isascii() or ch == " "):
+            self._burst.append((e.sample, ch))
+
+    def _flush_burst(self) -> None:
+        """Hand the finished burst (burst_gap_s of silence, its tail in the raw ring) to the agents. Never waits."""
+        b = self._burst
+        if not b or self.agents is None:
+            return
+        last = b[-1][0]
+        if self.mic.position - last < self.cfg.keyguard.burst_gap_s * SR or self.mic.raw.total < last + SR // 2:
+            return
+        self._burst = []
+        start = max(0, b[0][0] - SR // 2)
+        audio = self.mic.raw.read_range(start, last + SR // 2)
+        if audio is None or not "".join(c for _, c in b).strip():   # overwritten (burst too long) / only spaces
+            return
+        from app.keystroke_guard.agents import Burst
+        self.agents.submit(Burst(audio, np.array([s - start for s, _ in b]), "".join(c for _, c in b),
+                                 round(b[0][0] / SR, 3), self.shield_mode))
 
     def _attack(self, e, lag: int) -> None:
         classes = list(self.attacker.classes)
@@ -692,6 +739,8 @@ class Pipeline:
         return result
 
     def stop(self) -> None:
+        if self.agents is not None:
+            self.agents.stop()
         if self.meet_session is not None:
             self.meet_session.close()
             self.meet_session = None

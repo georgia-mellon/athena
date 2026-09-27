@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KeyGuard Arena — Ares vs Athena</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#121722; --panel2:#0f1420; --ink:#e7ecf3; --muted:#93a0b4;
+    --line:#1e2634; --ares:#ff5d5d; --ares2:#ff9d5c; --athena:#38d6c6; --athena2:#5aa2ff;
+    --good:#39d98a; --warn:#ffb020; --bad:#ff5d5d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -200px,#141b2b,var(--bg));
+       color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       padding:24px 16px 64px}
+  .wrap{max-width:1040px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 2px;letter-spacing:.3px}
+  h1 .k{color:var(--athena)} h1 .a{color:var(--ares)}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:13.5px}
+  .sub code{background:#0d1220;padding:2px 6px;border-radius:6px;color:#cdd7e6}
+  .fighters{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch;margin:14px 0 20px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+        border-radius:14px;padding:16px}
+  .fighter{position:relative;overflow:hidden}
+  .fighter .role{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+  .fighter .name{font-size:22px;font-weight:700;margin:2px 0 6px}
+  .fighter .desc{font-size:13px;color:#c3cede}
+  .ares .name{color:var(--ares)} .ares{border-color:#3a1e22}
+  .athena .name{color:var(--athena)} .athena{border-color:#123531}
+  .fighter .glow{position:absolute;inset:auto -40px -60px auto;width:180px;height:180px;border-radius:50%;filter:blur(50px);opacity:.25}
+  .ares .glow{background:var(--ares)} .athena .glow{background:var(--athena)}
+  .vs{display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--muted);font-size:15px}
+  .secretbar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 22px}
+  .secretbar .cell{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .secretbar .lbl{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+  .secretbar .val{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:20px;margin-top:4px;font-weight:700}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .section-title{font-size:13px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin:26px 0 12px}
+  /* timeline */
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
+  .legend b{color:var(--ink)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  /* moves */
+  .feed{display:flex;flex-direction:column;gap:10px}
+  .move{display:grid;grid-template-columns:44px 1fr;gap:12px;background:var(--panel);border:1px solid var(--line);
+        border-radius:12px;padding:12px 14px}
+  .move .ava{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px}
+  .move.ares{border-left:3px solid var(--ares)} .move.athena{border-left:3px solid var(--athena)}
+  .move.outcome{border-left:3px solid var(--good)}
+  .move.ares .ava{background:#2a1519} .move.athena .ava{background:#0f2b28} .move.outcome .ava{background:#10281d}
+  .move .hd{font-weight:700;margin-bottom:3px}
+  .move .who{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .move .row{font-size:13.5px;margin:3px 0}
+  .move .row .k{color:var(--muted)}
+  .move .res{color:#dfe7f2}
+  .badge{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px}
+  .b-fool{background:#0f2b28;color:var(--athena)} .b-break{background:#2a1519;color:var(--ares)}
+  .b-plan{background:#141b2b;color:var(--athena2)} .b-mv{background:#141b2b;color:var(--muted)}
+  .b-good{background:#10281d;color:var(--good)}
+  mono,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .foot{color:var(--muted);font-size:12.5px;margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
+  @media (max-width:720px){.fighters{grid-template-columns:1fr}.vs{transform:rotate(90deg)}.secretbar{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="a">⚔ Ares</span> vs <span class="k">🦉 Athena</span> — <span style="color:var(--muted);font-weight:600">KeyGuard Arena</span></h1>
+  <p class="sub" id="sub">the acoustic keystroke arms race · loading…</p>
+
+  <div class="fighters">
+    <div class="card fighter ares"><div class="glow"></div>
+      <div class="role">Attacker</div><div class="name">⚔ ARES</div>
+      <div class="desc">Hears your keyboard. A CNN+BiGRU+CTC model reads keystrokes from sound; an LLM reconstructs the text. Retrains to break any fixed shield.</div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="card fighter athena"><div class="glow"></div>
+      <div class="role">Defender</div><div class="name">🦉 ATHENA</div>
+      <div class="desc">An LLM strategist. Triages the sensitive span, invents a believable <b>decoy</b>, and steers Ares to it with an inaudible perturbation — under a hard perceptual budget.</div>
+    </div>
+  </div>
+
+  <div class="secretbar">
+    <div class="cell"><div class="lbl">🔒 True secret</div><div class="val mono" id="s-true">—</div><span class="tag" id="s-kind"></span></div>
+    <div class="cell"><div class="lbl">⚔ Ares reads (no defense)</div><div class="val mono" style="color:var(--ares)" id="s-read">—</div></div>
+    <div class="cell"><div class="lbl">🦉 Athena's decoy</div><div class="val mono" style="color:var(--athena)" id="s-decoy">—</div></div>
+  </div>
+
+  <div class="section-title">🔓 Smart-dictionary attack — how few guesses to your secret</div>
+  <div class="chart" id="sd"></div>
+
+  <div class="section-title">Evolution — speech stays untouched while Athena re-blinds Ares</div>
+  <div class="chart"><div id="tl"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--athena)"></span><b>STOI</b> (speech quality, 1.0 = identical)</span>
+      <span><span class="dot" style="background:var(--ares2)"></span><b>budget</b> (perturbation SNR, lower = stronger)</span>
+      <span><span class="dot" style="background:var(--good)"></span>Athena ahead</span>
+      <span><span class="dot" style="background:var(--bad)"></span>Ares broke through</span>
+    </div>
+  </div>
+
+  <div class="section-title">Move by move</div>
+  <div class="feed" id="feed"></div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script src="arms_race_data.js"></script>
+<script>
+// ---- fallback sample so the page renders even before a run ----
+window.ARMS_RACE = window.ARMS_RACE || {
+  line:"hey meet me at noon my password is hunter2 thanks", secret:"HUNTER2", kind:"password",
+  decoy:"FALCON7", backend:"(sample)", clean_span_read:"HUNTEFI2", attacker:"Ares", defender:"Athena",
+  rounds:[
+   {round:0,decoy:"BADGER5",span_read:"BADGGEER",stoi:0.993,snr_db:16,reads_true_secret:false,after_retrain_read:"HUNTER2",after_retrain_reads_true:true},
+   {round:1,decoy:"FALCON9",span_read:"FALCOON",stoi:0.990,snr_db:13,reads_true_secret:false,after_retrain_read:"HUNTER2",after_retrain_reads_true:true},
+   {round:2,decoy:"FALCON7",span_read:"FALCON",stoi:0.979,snr_db:10,reads_true_secret:false}
+  ],
+  smart_dict_clean:{n_slots:7,search_space:78364164096,shortlist:50,secret_rank:8,decoy_rank:null,
+    top5:[{guess:"HUNTERY",prob:.092},{guess:"HUNTERP",prob:.091},{guess:"HUNTERW",prob:.081},{guess:"HUNTERT",prob:.07},{guess:"HUNTER1",prob:.063}]},
+  smart_dict_defended:{n_slots:7,search_space:78364164096,shortlist:50,secret_rank:null,decoy_rank:2,
+    top5:[{guess:"FALCONY",prob:.10},{guess:"FALCON7",prob:.096},{guess:"FALCONN",prob:.08},{guess:"FALCOND",prob:.07},{guess:"FALCORY",prob:.05}]},
+  moves:[
+   {agent:"⚔ ARES",title:"Opening read (no defense)",action:"Transcribe audio, then reconstruct with the LLM.",result:"acoustic: HEY … PASSWORD IS HUNTEFI2 … → LLM: hey meet me at noon my password is hunter2 thanks",tag:"🔓 secret exposed"},
+   {agent:"🦉 ATHENA",title:"Triage + deception plan",reasoning:"HUNTER2 is a plaintext password.",action:"Fabricate a coherent decoy BADGER5.",result:"Plan: steer Ares to read BADGER5 instead of HUNTER2.",tag:"🎭 lie prepared"}
+  ]
+};
+
+const D = window.ARMS_RACE;
+const clean = s => (s||"").replace(/(.)\1{2,}/g,"$1");
+const esc = s => (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+document.getElementById("sub").innerHTML =
+  `“<code>${esc(D.line)}</code>” · LLM backend <b>${esc(D.backend)}</b>`;
+document.getElementById("s-true").textContent = D.secret||"—";
+document.getElementById("s-kind").textContent = D.kind||"";
+document.getElementById("s-read").textContent = clean(D.clean_span_read)||"—";
+document.getElementById("s-decoy").textContent = D.decoy||"—";
+
+// ---- smart-dictionary panel ----
+const num = x => x>=1e12?(x/1e12).toFixed(1)+" trillion":x>=1e9?(x/1e9).toFixed(1)+" billion":
+                 x>=1e6?(x/1e6).toFixed(1)+" million":x>=1e3?(x/1e3).toFixed(1)+"K":String(x|0);
+function sdList(sd,which){
+  if(!sd) return "";
+  const rk = sd.secret_rank;
+  const rankTxt = which==="clean"
+    ? (rk?`🔓 your secret is guess <b style="color:var(--ares)">#${rk}</b>`:`not in top ${sd.shortlist}`)
+    : (rk?`still shortlisted at #${rk}`:`✅ your secret <b style="color:var(--good)">fell off the list</b>`);
+  const rows = (sd.top5||[]).map((c,i)=>{
+    const isSecret = c.guess===(D.secret||"").toUpperCase();
+    const isDecoy  = c.guess===(D.decoy||"").toUpperCase();
+    const col = isSecret?"var(--ares)":isDecoy?"var(--athena)":"var(--ink)";
+    const tagx = isSecret?" ← real":isDecoy?" ← decoy":"";
+    const bar = Math.round((c.prob/(sd.top5[0].prob||1))*100);
+    return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0">
+      <span style="width:16px;color:var(--muted);font-size:12px">${i+1}</span>
+      <span class="mono" style="color:${col};min-width:92px">${c.guess}${tagx}</span>
+      <span style="flex:1;height:7px;background:#0d1424;border-radius:4px;overflow:hidden">
+        <span style="display:block;height:100%;width:${bar}%;background:${col};opacity:.6"></span></span>
+      <span style="color:var(--muted);font-size:11px;width:38px;text-align:right">${(c.prob*100).toFixed(0)}%</span>
+    </div>`;
+  }).join("");
+  return `<div class="card" style="flex:1">
+    <div class="lbl" style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">
+      ${which==="clean"?"⚔ No defense":"🦉 With Athena"}</div>
+    <div style="margin:4px 0 10px">${rankTxt}</div>${rows}</div>`;
+}
+{
+  const sc=D.smart_dict_clean, sd=D.smart_dict_defended;
+  const head = sc?`Ares turns <b>${num(sc.search_space)}</b> possibilities (${sc.n_slots} keys) into a top-${sc.shortlist} shortlist.`:"";
+  document.getElementById("sd").innerHTML =
+    `<div style="color:var(--muted);font-size:13px;margin-bottom:10px">${head}</div>
+     <div style="display:flex;gap:12px;flex-wrap:wrap">${sdList(sc,"clean")}${sdList(sd,"defended")}</div>`;
+}
+
+// ---- moves feed ----
+const kind = a => /ARES/.test(a)?"ares":/ATHENA/.test(a)?"athena":"outcome";
+const ava = a => /ARES/.test(a)?"⚔":/ATHENA/.test(a)?"🦉":"🏁";
+const badgeClass = t => /broke|🔓/.test(t)?"b-break":/fool|🎭/.test(t)?"b-fool":/protect|🏁|🛡/.test(t)?"b-good":/plan/.test(t)?"b-plan":"b-mv";
+document.getElementById("feed").innerHTML = (D.moves||[]).map((m,i)=>{
+  const k=kind(m.agent);
+  return `<div class="move ${k}">
+    <div class="ava">${ava(m.agent)}</div>
+    <div>
+      <div class="who">Move ${i} · ${esc(m.agent)}</div>
+      <div class="hd">${esc(m.title||"")}</div>
+      ${m.reasoning?`<div class="row"><span class="k">thinks:</span> ${esc(m.reasoning)}</div>`:""}
+      ${m.action?`<div class="row"><span class="k">move:</span> ${esc(m.action)}</div>`:""}
+      ${m.result?`<div class="row res"><span class="k">result:</span> ${esc(m.result)}</div>`:""}
+      ${m.tag?`<span class="badge ${badgeClass(m.tag)}">${esc(m.tag)}</span>`:""}
+    </div></div>`;
+}).join("");
+
+// ---- timeline SVG ----
+const R = D.rounds||[];
+const W=Math.max(560, R.length*150+120), H=210, padL=44, padR=16, padT=16, padB=54;
+const x = i => padL + (R.length<=1?0:i*(W-padL-padR)/(R.length-1));
+const yS = v => padT + (1-((v-0.80)/0.20))*(H-padT-padB);   // STOI 0.80..1.00
+let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" font-family="inherit">`;
+// gridlines
+[0.80,0.85,0.90,0.95,1.00].forEach(v=>{ const y=yS(v);
+  svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#1a2230"/>`+
+       `<text x="6" y="${y+4}" fill="#5f6c7f" font-size="10">${v.toFixed(2)}</text>`;});
+// budget bars (map dB 6..20 -> height)
+const bw=18; R.forEach((r,i)=>{ const bh=((r.snr_db-4)/18)*(H-padT-padB);
+  svg+=`<rect x="${x(i)-bw/2}" y="${H-padB-bh}" width="${bw}" height="${bh}" rx="3" fill="url(#g)" opacity="0.5"/>`
+     + `<text x="${x(i)}" y="${H-padB+14}" fill="#93a0b4" font-size="10" text-anchor="middle">R${r.round}</text>`
+     + `<text x="${x(i)}" y="${H-padB+27}" fill="#ff9d5c" font-size="10" text-anchor="middle">${r.snr_db}dB</text>`;});
+// STOI line
+svg+=`<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9d5c"/><stop offset="1" stop-color="#ff5d5d"/></linearGradient></defs>`;
+let path=R.map((r,i)=>`${i?"L":"M"}${x(i)},${yS(r.stoi)}`).join(" ");
+svg+=`<path d="${path}" fill="none" stroke="#38d6c6" stroke-width="2.5"/>`;
+R.forEach((r,i)=>{ const broke=r.after_retrain_reads_true;
+  svg+=`<circle cx="${x(i)}" cy="${yS(r.stoi)}" r="5" fill="#38d6c6"/>`
+     + `<text x="${x(i)}" y="${yS(r.stoi)-10}" fill="#cfe" font-size="10" text-anchor="middle">${r.stoi.toFixed(3)}</text>`
+     + `<circle cx="${x(i)}" cy="${padT+2}" r="4" fill="${r.reads_true_secret?'#ff5d5d':'#39d98a'}"/>`;
+});
+svg+=`</svg>`;
+document.getElementById("tl").innerHTML = svg;
+
+// ---- footer summary ----
+const last = R[R.length-1]||{};
+const protectedOK = last && !last.reads_true_secret;
+document.getElementById("foot").innerHTML =
+ `Final: Ares reads <span class="mono" style="color:var(--ares)">${clean(last.span_read)||"—"}</span> `+
+ `(target decoy <span class="mono" style="color:var(--athena)">${esc(last.decoy||"")}</span>, true secret `+
+ `<span class="mono">${esc(D.secret||"")}</span>) · speech STOI <b>${(last.stoi||0).toFixed(3)}</b>. `+
+ `<b style="color:${protectedOK?'var(--good)':'var(--bad)'}">${protectedOK?'🦉 Athena protected the secret':'⚔ Ares broke through'}</b>. `+
+ `Each fixed shield is beatable by retraining — Athena re-solves every round under the perceptual budget. That live min-max is the point.`;
+</script>
+</body>
+</html>

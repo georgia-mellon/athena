@@ -4,8 +4,8 @@ Sources (all read-only):
 - far end, real colleague: Hearsay test_internal bonafide LibriSpeech, one speaker (COLLEAGUE).
 - far end, AI agent: Hearsay test_internal DiffSSD ElevenLabs clone of that same LibriSpeech speaker (the story:
   the agent clones a colleague's voice). Both loudness-normalised to about -23 dBFS RMS so level gives nothing away.
-- mic keystrokes: Keyguard harrison presses from the TEST split of harrison_split() only (the provisional attacker
-  trained on the train split). Window start = onset - PRE_S so the onset lands on the logged key time.
+- mic keystrokes: presses from Keyguard's per-key bank (driver.keyguard_bank, the teammate's MacBook: the CTC
+  attacker's domain, as in Keyguard's own demos). Clip start = onset - PRE_S so the onset lands on the logged key time.
 - mic: another LibriSpeech speaker (LOCAL) at -28 dBFS with gaps; keystrokes near their recorded level (key-window
   power KEY_DBFS, laptop keys are about as loud as speech); a quiet-room noise floor NOISE_DBFS, ~40 dB under the keys.
   The provisional attacker (isolated, near-silent harrison presses) needs that: ~30 dB of key-to-noise already takes
@@ -32,7 +32,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 from app.source.audio.replay import load_wav  # noqa: E402
 from app.source.audio.vad import speech_fraction  # noqa: E402
-from app.keystroke_guard.driver import harrison_split  # noqa: E402
+from app.keystroke_guard.driver import keyguard_bank  # noqa: E402
 from app.source.types import SR  # noqa: E402
 
 HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT") or REPO.parent / "Hearsay")
@@ -112,16 +112,15 @@ def main() -> None:
         far.append(seg)
     far = np.concatenate(far)
 
-    # keystrokes: test-split presses only, each press used once
-    _, _, Xte, yte = harrison_split()
-    from keyguard.config import CLS_IDX
-    pools = {k: list(rng.permutation(np.flatnonzero(yte == CLS_IDX[k]))) for k in sorted(set(CODE))}  # sorted: set order is per-process
+    # keystrokes: Keyguard bank presses, each press used once
+    bank = keyguard_bank()
+    pools = {k: list(rng.permutation(len(bank[k]))) for k in sorted(set(CODE))}  # sorted: set order is per-process
     n = round(TOTAL * SR)
     keys_track, key_log, used_wins = np.zeros(n, np.float32), [], []
     for t0 in TYPING:
         s = round(t0 * SR)
         for ch in CODE:
-            w = Xte[pools[ch].pop()]
+            w = bank[ch][pools[ch].pop()]
             a = s - round(PRE_S * SR)
             keys_track[a:a + len(w)] += w
             key_log.append((s / SR, ch))
@@ -180,7 +179,7 @@ def main() -> None:
     print(f"colleague : librispeech speaker {COLLEAGUE} (bonafide, test_internal)")
     print(f"agent     : source={AGENT[0]} generator={AGENT[1]} speaker={AGENT[2]} (spoof, test_internal; "
           f"{len(agent_rows)} clips)")
-    print(f"local mic : librispeech speaker {LOCAL}; keys = harrison TEST split, {len(key_log)} presses of {CODE} x2")
+    print(f"local mic : librispeech speaker {LOCAL}; keys = Keyguard bank, {len(key_log)} presses of {CODE} x2")
     print(f"key-window power {key_dbfs:.1f} dBFS, local speech {LOCAL_DBFS:.1f} dBFS (paused while typing), "
           f"noise {NOISE_DBFS:.0f} dBFS, mic peak {np.abs(mic).max():.2f}")
     ends = np.arange(4 * SR, len(far) + 1, 2 * SR)          # the pipeline's scored windows: 4 s, hop 2 s

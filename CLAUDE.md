@@ -11,6 +11,7 @@ and **Secret Shield** (redacts codes you read aloud to an unverified caller), fe
 4. Before touching a pillar: its `app/<pillar>/README.md` (contract, placeholder vs real, harness).
 
 ## Layout
+- `keyguard/`: vendored Keyguard (Ares/Athena agents, CTC attacker, shields, its FastAPI UI in `keyguard/web`).
 - `app/source/`: runtime (types.py contracts, pipeline, threat, bus, hooks, config, registry, cli, desktop.py,
   harness.py, audio/, connectors/meet/ = Meet bridge + launcher + /meet router + test room).
 - `app/hearsay/`, `app/keystroke_guard/`, `app/secret_shield/`: driver around the real model, mock, harness
@@ -20,8 +21,10 @@ and **Secret Shield** (redacts codes you read aloud to an unverified caller), fe
 - Run: `uv run callguard app` (desktop + Meet), `callguard run --mode meet|replay|live`, `/meet/testroom`.
 
 ## Hard rules
-- **Never write to the upstream repos.** Hearsay (`HEARSAY_ROOT`, default `../Hearsay`) and Keyguard (`KEYGUARD_ROOT`,
-  the teammate's) are imported read-only. The Hearsay freeze is lifted (the NSA review confirmed the scorer: Pspoof 0.3,
+- **Never write to the upstream repos.** Hearsay (`HEARSAY_ROOT`, default `../Hearsay`) is imported read-only.
+  Keyguard (the teammate's `../../keyboard`) is **vendored** as the top-level `keyguard/` package (`keyguard/VENDORED.md`;
+  keep edits minimal and marked `# CallGuard:`); its weights/data go to gitignored `runs/keyguard/` + `data/keyguard/`
+  via `uv run python -m app.keystroke_guard.get_assets`. Never import from or write to the teammate's checkout. The Hearsay freeze is lifted (the NSA review confirmed the scorer: Pspoof 0.3,
   Cfa 4, higher score = real); CallGuard uses Hearsay's final model E5 (R4ft + R6 + R1 fusion).
 - Contracts live in `app/source/types.py`; change them only deliberately, and update every driver and test.
 - Commit no audio, weights, recordings, `.env`, or webhook URLs. The repo is private but stays clean.

@@ -40,7 +40,7 @@ import sys
 import threading
 import time
 import webbrowser
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import urlsplit
 
 log = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def find_browser() -> Path | None:
             if (p := Path(root) / rel).is_file():
                 return p
         mac = {"chrome.exe": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-               "msedge.exe": "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"}[Path(rel).name]
+               "msedge.exe": "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"}[PureWindowsPath(rel).name]
         if sys.platform == "darwin" and Path(mac).is_file():
             return Path(mac)
         for n in names:

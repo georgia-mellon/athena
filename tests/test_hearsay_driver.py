@@ -24,7 +24,10 @@ needs_hearsay = pytest.mark.skipif(not real_ok, reason="HEARSAY_ROOT models not 
 
 def _clips(n=4):
     import pandas as pd
-    m = pd.read_parquet(hr.HEARSAY_ROOT / "data" / "processed" / "manifest.parquet")
+    manifest = hr.HEARSAY_ROOT / "data" / "processed" / "manifest.parquet"
+    if not manifest.exists():
+        pytest.skip("Hearsay dataset manifest not present (models only)")
+    m = pd.read_parquet(manifest)
     t = m[m.test_internal_testlike & m.path.map(lambda p: (hr.HEARSAY_ROOT / p).exists())]
     if t.empty:
         pytest.skip("test_internal_testlike audio not present")

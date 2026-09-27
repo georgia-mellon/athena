@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keyguard Pareto</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#121821; --line:#1e2733; --ink:#e6edf3; --dim:#8b98a8;
+    --accent:#3ddc97; --danger:#ff5d5d; --warn:#ffb454; --blue:#4aa8ff;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: light){ :root{ --bg:#eef2f6; } }
+  html,body{margin:0}
+  body{background:var(--bg);font-family:var(--sans);padding:24px 16px;
+       display:flex;justify-content:center}
+  .wrap{max-width:820px;width:100%}
+  h1{color:var(--ink);font-size:clamp(20px,3.4vw,30px);margin:0 0 4px;line-height:1.15;
+     font-weight:800;letter-spacing:-.3px}
+  h1 .grn{color:var(--accent)}
+  .sub{color:var(--dim);font-size:13px;margin:0 0 16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+        padding:14px 10px 6px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+  svg{width:100%;height:auto;display:block;font-family:var(--sans)}
+  .foot{color:var(--dim);font-size:11px;margin:10px 6px 0;line-height:1.5;font-family:var(--mono)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--dim);font-size:12px;margin:10px 6px 0}
+  .legend b{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Every defense trades speech for privacy&nbsp;&mdash; <span class="grn">ours doesn&rsquo;t.</span></h1>
+  <p class="sub">Keystroke leakage vs. speech preserved. The safe corner is bottom&#8209;right: attacker at chance <em>and</em> speech intact.</p>
+  <div class="card"><svg id="chart" viewBox="0 0 800 560" role="img"
+       aria-label="Pareto chart of attacker accuracy versus speech quality"></svg></div>
+  <div class="legend">
+    <span><b style="background:var(--accent)"></b>Our shield</span>
+    <span><b style="background:var(--accent);border:2px solid var(--accent);background:transparent"></b>Same shield, different attacker</span>
+    <span><b style="background:var(--danger)"></b>Naive baseline</span>
+    <span><b style="background:var(--dim)"></b>No shield</span>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+<script>
+const DATA = {"meta": {"generated": "2026-09-26T03:52:53", "device": "cpu", "budget_snr_db": -18.0, "chance": 0.0278, "n_classes": 36, "clean_attacker_acc": 0.8722, "transfer_clean_acc": 0.7167, "threat_model": "attacker retrains on defended audio; our shield co-adapts (min-max)", "stoi_metric": "STOI(clean speech, defended mix); PESQ unavailable -> STOI only", "speech_clips": 5, "delta_rms": 0.01059}, "points": [{"name": "No shield", "acc": 0.8722, "stoi": 0.9929, "kind": "reference"}, {"name": "White noise (matched energy)", "acc": 0.3, "stoi": 0.9579, "kind": "baseline"}, {"name": "Notch filter", "acc": 0.7278, "stoi": 0.9218, "kind": "baseline"}, {"name": "DSP Shield", "acc": 0.3889, "stoi": 0.92, "kind": "baseline"}, {"name": "RNNoise-style gate", "acc": 0.4667, "stoi": 0.9877, "kind": "baseline"}, {"name": "Our adversarial shield", "acc": 0.0278, "stoi": 0.9589, "kind": "ours"}, {"name": "Transfer attacker (diff CNN)", "acc": 0.0278, "stoi": 0.9589, "kind": "transfer"}]};
+(function(){
+  const W=800,H=560, m={l:82,r:26,t:30,b:76};
+  const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.getElementById("chart");
+  const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+  // x = STOI (speech preserved), right=better. y = attacker accuracy, down=safer.
+  const xs=DATA.points.map(p=>p.stoi).filter(v=>v===v);
+  let xmin=Math.min(...xs), xmax=Math.max(...xs,1);
+  xmin=Math.max(0,Math.floor((xmin-0.05)*10)/10); xmax=1.0;
+  if(xmax-xmin<0.15)xmin=xmax-0.4;
+  const ymin=0, ymax=1.0;
+  const X=v=>m.l+(v-xmin)/(xmax-xmin)*iw;
+  const Y=v=>m.t+(1-(v-ymin)/(ymax-ymin))*ih;
+  const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const C={accent:css("--accent"),danger:css("--danger"),dim:css("--dim"),
+           ink:css("--ink"),line:css("--line"),warn:css("--warn")};
+
+  // safe-corner glow (bottom-right)
+  svg.appendChild(el("rect",{x:X(xmin+(xmax-xmin)*0.55),y:Y(0.30),
+    width:iw*0.45+m.r-6,height:Y(0)-Y(0.30),fill:C.accent,opacity:.07,rx:10}));
+
+  // grid + axes
+  for(let i=0;i<=5;i++){
+    const yy=Y(i/5);
+    svg.appendChild(el("line",{x1:m.l,y1:yy,x2:m.l+iw,y2:yy,stroke:C.line,"stroke-width":1}));
+    const t=el("text",{x:m.l-12,y:yy+4,fill:C.dim,"font-size":13,"text-anchor":"end","font-family":"monospace"});
+    t.textContent=(i*20)+"%"; svg.appendChild(t);
+  }
+  const xticks=5;
+  for(let i=0;i<=xticks;i++){
+    const xv=xmin+(xmax-xmin)*i/xticks, xx=X(xv);
+    svg.appendChild(el("line",{x1:xx,y1:m.t,x2:xx,y2:m.t+ih,stroke:C.line,"stroke-width":1,opacity:.5}));
+    const t=el("text",{x:xx,y:m.t+ih+22,fill:C.dim,"font-size":13,"text-anchor":"middle","font-family":"monospace"});
+    t.textContent=xv.toFixed(2); svg.appendChild(t);
+  }
+  // chance line
+  const ych=Y(DATA.meta.chance);
+  svg.appendChild(el("line",{x1:m.l,y1:ych,x2:m.l+iw,y2:ych,stroke:C.accent,
+    "stroke-width":1.5,"stroke-dasharray":"6 5",opacity:.7}));
+  const ct=el("text",{x:m.l+iw-4,y:ych-7,fill:C.accent,"font-size":12,"text-anchor":"end"});
+  ct.textContent="random guessing (safe)"; svg.appendChild(ct);
+
+  // axis titles
+  const xt=el("text",{x:m.l+iw/2,y:H-16,fill:C.ink,"font-size":15,"text-anchor":"middle","font-weight":700});
+  xt.textContent="Speech preserved  (STOI → better)"; svg.appendChild(xt);
+  const yt=el("text",{x:20,y:m.t+ih/2,fill:C.ink,"font-size":15,"text-anchor":"middle",
+    "font-weight":700,transform:`rotate(-90 20 ${m.t+ih/2})`});
+  yt.textContent="Keystrokes still readable"; svg.appendChild(yt);
+
+  // corner labels
+  const exp=el("text",{x:m.l+10,y:m.t+20,fill:C.danger,"font-size":18,"font-weight":800});
+  exp.textContent="▲ EXPOSED"; svg.appendChild(exp);
+  const safe=el("text",{x:m.l+iw-8,y:m.t+ih-14,fill:C.accent,"font-size":19,"font-weight":800,"text-anchor":"end"});
+  safe.textContent="SAFE ▼"; svg.appendChild(safe);
+
+  function plot(p){
+    const isOurs=p.kind==="ours", isTrans=p.kind==="transfer",
+          isRef=p.kind==="reference";
+    const col=isOurs||isTrans?C.accent:(isRef?C.dim:C.danger);
+    const cx=X(p.stoi), cy=Y(p.acc);
+    if(isTrans){                                  // hollow ring AROUND our dot
+      svg.appendChild(el("circle",{cx,cy,r:22,fill:"none",stroke:col,
+        "stroke-width":2.5,"stroke-dasharray":"4 3",opacity:.95}));
+    }else if(isOurs){
+      svg.appendChild(el("circle",{cx,cy,r:15,fill:col,stroke:C.ink,"stroke-width":2}));
+    }else{
+      svg.appendChild(el("circle",{cx,cy,r:9,fill:col,opacity:.92}));
+    }
+    // label placement: keep the two overlapping green points legible
+    let anchor="middle", dx=0, dy=-18;
+    if(cx>m.l+iw-120){anchor="end";dx=-16;dy=4;}
+    else if(cx<m.l+120){anchor="start";dx=16;dy=4;}
+    if(isOurs){dy=-30;}                            // ours label above the dot
+    if(isTrans){dy=42;dx=0;anchor="middle";}       // transfer label below the ring
+    const lab=el("text",{x:cx+dx,y:cy+dy,fill:isOurs||isTrans?C.accent:(isRef?C.dim:C.ink),
+      "font-size":isOurs?15:13,"text-anchor":anchor,"font-weight":isOurs?800:600});
+    lab.textContent=p.name+" ("+Math.round(p.acc*100)+"%)";
+    svg.appendChild(lab);
+  }
+  // baselines first, then our dot, then the transfer ring on top
+  DATA.points.filter(p=>p.kind!=="ours"&&p.kind!=="transfer").forEach(plot);
+  DATA.points.filter(p=>p.kind==="ours").forEach(plot);
+  DATA.points.filter(p=>p.kind==="transfer").forEach(plot);
+
+  const M=DATA.meta;
+  document.getElementById("foot").textContent=
+    `clean attacker ${Math.round(M.clean_attacker_acc*100)}% · chance ${(M.chance*100).toFixed(1)}% · `+
+    `budget ${M.budget_snr_db} dB (inaudible) · ${M.speech_clips} speech mixtures · `+
+    `${M.stoi_metric} · device ${M.device}`;
+})();
+</script>
+</body>
+</html>
