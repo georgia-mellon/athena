@@ -16,6 +16,7 @@ shield_mode = "dsp"       # off | dsp | adversarial
 device = "auto"           # auto | cpu | cuda
 
 [devices]                 # substring of the device name; empty = system default (docs/plans/03)
+meet_far_source = "system"   # meet mode, caller audio: system (speaker loopback, any app) | tab (the extension)
 mic = ""
 virtual_out = "CABLE Input"
 loopback = ""

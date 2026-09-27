@@ -61,6 +61,10 @@ class SourceCmd(BaseModel):
     source: Literal["far", "mic"]
 
 
+class FarSourceCmd(BaseModel):
+    source: Literal["system", "tab"]
+
+
 class MeetCmd(BaseModel):
     action: Literal["join", "leave", "extension"]
     url: str | None = None
@@ -160,6 +164,10 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
     @app.post("/api/control/voice/source")
     def control_voice_source(cmd: SourceCmd):
         return _control("set_voice_source", cmd.source)
+
+    @app.post("/api/control/voice/far_source")
+    def control_far_source(cmd: FarSourceCmd):
+        return _control("set_far_source", cmd.source)
 
     @app.post("/api/control/voice/flush")
     def control_voice_flush():

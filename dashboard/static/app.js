@@ -125,6 +125,12 @@ $("gate").oninput = () => { st.gateDragging = true; renderGate(Number($("gate").
 $("gate").onchange = () => { st.gateDragging = false; post("/api/control/voice/threshold", { db: Number($("gate").value) }); };
 function renderSystem(d) {
   st.ready = !!d.ready;
+  if (d.far_source) {
+    for (const b of document.querySelectorAll("[data-far]")) b.classList.toggle("on", b.dataset.far === d.far_source);
+    const e = $("far-err");
+    e.hidden = !(d.far_source === "system" && d.far_error);
+    e.textContent = d.far_error ? "system audio unavailable: " + d.far_error : "";
+  }
   if (d.voice_source) {
     for (const b of document.querySelectorAll("[data-src]")) b.classList.toggle("on", b.dataset.src === d.voice_source);
     $("voice-h").textContent = d.voice_source === "mic" ? "Your mic (test)" : "Caller voice";
@@ -344,6 +350,7 @@ async function post(path, body) {
 }
 for (const b of document.querySelectorAll("[data-mode]")) b.onclick = () => post("/api/control/shield", { mode: b.dataset.mode });
 for (const b of document.querySelectorAll("[data-sec]")) b.onclick = () => post("/api/control/secret", { action: b.dataset.sec });
+for (const b of document.querySelectorAll("[data-far]")) b.onclick = () => post("/api/control/voice/far_source", { source: b.dataset.far });
 for (const b of document.querySelectorAll("[data-src]")) b.onclick = () => post("/api/control/voice/source", { source: b.dataset.src });
 $("voice-flush").onclick = () => post("/api/control/voice/flush", {});
 $("meet-ext").onclick = () => post("/api/control/meet", { action: "extension" });

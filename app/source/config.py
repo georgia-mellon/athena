@@ -90,6 +90,7 @@ class DevicesConfig:
     loopback: str = ""
     key_offset_s: float = 0.0          # KeyClock calibration: + if key sounds land later than their OS timestamps
     meet_key_offset_s: float = 0.0     # the same for meet mode: + the page's capture + socket latency (~0.02-0.08)
+    meet_far_source: str = "system"    # meet mode, the caller's audio: system (speaker loopback: any app) | tab
 
 
 @dataclass

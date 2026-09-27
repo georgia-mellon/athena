@@ -116,9 +116,10 @@ class MicShieldStream:
 class LoopbackStream:
     """Far-end audio: everything the chosen speaker plays (the meeting's inbound voices) -> ring at 16 kHz mono."""
 
-    def __init__(self, speaker: str | None = None, ring_seconds: float = 30.0):
+    def __init__(self, speaker: str | None = None, ring_seconds: float = 30.0, on_block=None):
         self.speaker = speaker
         self.ring = Ring(ring_seconds)
+        self.on_block = on_block            # instead of the ring: meet mode routes system audio through the pipeline
         self.errors = 0
         self.last_error: str | None = None
         self._stop = threading.Event()
@@ -131,7 +132,8 @@ class LoopbackStream:
             mic = sc.get_microphone(name, include_loopback=True)
             with mic.recorder(samplerate=SR, channels=1, blocksize=BLOCK) as rec:
                 while not self._stop.is_set():
-                    self.ring.write(rec.record(numframes=BLOCK)[:, 0])
+                    x = rec.record(numframes=BLOCK)[:, 0].astype("float32")
+                    (self.on_block or self.ring.write)(x)
         except Exception as e:  # noqa: BLE001 - inbound scoring stops, the call does not
             self.errors += 1
             self.last_error = repr(e)

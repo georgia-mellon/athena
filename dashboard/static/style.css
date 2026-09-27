@@ -105,6 +105,8 @@ h1.wordmark { font-size: 20px; font-weight: 800; letter-spacing: -.01em; text-tr
         cursor: ew-resize; border: 0; background: transparent; }
 .meter:focus-within .gate-line { background: var(--accent); width: 3px; }
 .gate-text { margin-bottom: 12px; }
+.far-src { margin: 6px 0 4px; }
+.bad-text { color: var(--crit); }
 button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 
 /* voice */

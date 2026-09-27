@@ -39,6 +39,7 @@ uv run athena run --mode meet               # same engine, dashboard in your nor
 - The **Events** log records what the extension reports: `Meet tab connected`, `joined the call (Meet)`,
   `left the call (Meet)`, `Meet tab closed or disconnected` (bus topic `meet.call`, so hooks can log it too).
   "In a call" = a live WebRTC connection or live caller audio in the tab, re-checked every second.
+- **Caller audio from: System audio | Meet tab** (Caller voice panel). **System audio** (default) records what your computer plays (the speaker's WASAPI loopback, `[devices] meet_far_source`): Meet in any browser, Zoom, the test room: if you can hear the caller, Athena hears them, extension or not. **Meet tab** uses only the extension's tap inside the Meet page. The extension is still what protects your outgoing mic.
 - **Whose voice is judged** (Caller voice panel: Caller | My mic): Caller is the product (the other people in the
   call). My mic judges your own mic instead, to test alone: e.g. play an AI voice from your phone into your laptop's
   mic during a Meet. Switching starts a fresh voice history.

@@ -1,6 +1,7 @@
 """Google Meet connector: the /meet WebSockets over TestClient (mock drivers, no devices), the secret shield in meet
 mode, and (if Chrome/Edge is installed) the real bridge end to end in a headless browser against the test room."""
 import json
+from types import SimpleNamespace
 import os
 import socket
 import threading
@@ -498,3 +499,24 @@ def test_browser_bridge_on_real_meet_page(served, tmp_path):
               f"{s.evaluate('__athenaBridge.stats')}")
     finally:
         s.close()
+
+
+def test_caller_audio_source_system_or_tab():
+    """Meet mode takes the caller from one source at a time: system audio (speaker loopback) or the Meet tab."""
+    pipe, bus, _ = _pipe()                                   # tests: "tab" (conftest)
+    b = _blocks(1)[0]
+    pipe.meet_far(b)
+    assert pipe.far.total == BLOCK
+    pipe._far_in(b, "system")                                # not the selected source: ignored
+    assert pipe.far.total == BLOCK
+    started = []
+    pipe._start_system_audio = lambda: started.append(1) or setattr(pipe, "_loopback", SimpleNamespace(last_error=None))
+    assert pipe.set_far_source("system") == "system" and started == [1]
+    pipe._far_in(b, "system")
+    pipe.meet_far(b)                                         # the tab is ignored now
+    assert pipe.far.total == 2 * BLOCK
+    with pytest.raises(ValueError):
+        pipe.set_far_source("zoom")
+    pipe._loopback = None
+    pipe.stop()
+    bus.close()

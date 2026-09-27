@@ -161,6 +161,8 @@ class Pipeline:
         self.meet_command: Callable[[dict], bool] | None = None        # set by the router: a command to the page
         self.speech_db = SPEECH_DB
         self.voice_source = "far"               # far = the caller (default) | mic = your own mic (solo tests)
+        self.far_source = cfg.devices.meet_far_source   # meet mode: system (speaker loopback) | tab (the extension)
+        self.far_error: str | None = None       # the system-audio capture failed: why (dashboard)
         self._call_phase: str | None = None     # meet.call: none | open | call | local, from the extension's reports
         self.ready = False                      # drivers loaded and the voice model warmed up (system.state)
         self._run_stop: threading.Event | None = None
@@ -464,8 +466,10 @@ class Pipeline:
         self._publish_system()
 
     def _publish_system(self) -> None:
+        loop = getattr(self, "_loopback", None)
         self.bus.emit("system.state", ready=self.ready, voice=self.voice.name, speech_db=self.speech_db,
-                      speech_min=SPEECH_MIN, voice_source=self.voice_source)
+                      speech_min=SPEECH_MIN, voice_source=self.voice_source, far_source=self.far_source,
+                      far_error=loop.last_error if loop is not None else None)
 
     def set_voice_source(self, source: str) -> str:
         """Dashboard control: which stream Hearsay judges. far = the caller (the product); mic = your own mic, to test
@@ -633,6 +637,9 @@ class Pipeline:
         kc.start()
         self._live = [kc]
         self._meet = {"mic": 0.0, "far": 0.0, "rtt_ms": 0.0, "last": None}
+        self._loopback = None
+        if self.far_source == "system":
+            self._start_system_audio()
         self._meet_anchor = ArrivalAnchor()
         self._workers(stop)
         self.engine.start()
@@ -651,10 +658,38 @@ class Pipeline:
         return self.mic.process(block)
 
     def meet_far(self, block: np.ndarray) -> None:
-        """Remote participants' audio (mixed in the page) -> far-end ring (Hearsay, the request listener)."""
-        if self.mode == "meet":
+        """Remote participants' audio as the Meet tab's extension hears it (used when far_source == "tab")."""
+        self._far_in(block, "tab")
+
+    def _far_in(self, block: np.ndarray, source: str) -> None:
+        """The caller's audio -> far-end ring (Hearsay, the request listener). Two sources, one used at a time:
+        "system" = what the speakers play (WASAPI loopback: Meet in any browser, Zoom, the test room), "tab" = the
+        extension's tap inside the Meet page."""
+        if self.mode == "meet" and source == self.far_source:
             self._meet["far"] = time.monotonic()
             self.far.write(np.nan_to_num(np.asarray(block, np.float32).reshape(-1)))
+
+    def _start_system_audio(self) -> None:
+        """Capture the default speaker's output (loopback) for the whole meet-mode run; it only feeds the far ring
+        while far_source == "system". No loopback device (macOS, no speaker): say why, the tab source still works."""
+        from app.source.audio.streams import LoopbackStream
+        loop = LoopbackStream(self.cfg.devices.loopback or None, on_block=lambda x: self._far_in(x, "system"))
+        self._live.append(loop.start())
+        self._loopback = loop
+
+    def set_far_source(self, source: str) -> str:
+        """Dashboard control: where the caller's audio comes from in meet mode (system | tab)."""
+        if source not in ("system", "tab"):
+            raise ValueError("caller audio source must be system | tab")
+        self.far_source = source
+        if source == "system" and self.mode == "meet" and getattr(self, "_loopback", None) is None:
+            self._start_system_audio()
+        if self.voice_source == "far":                  # a different stream: start the voice history over
+            self._next_voice = self.far.total + VOICE_WIN
+            self._last_speech = None
+            self._flush("source")
+        self._publish_system()
+        return source
 
     def meet_link(self, kind: str, delta: int = 0, rtt_ms: float | None = None, owner: str | None = None) -> None:
         """Router bookkeeping, on the server loop: `owner` = the origin of the page that owns /meet/<kind> now (None:
