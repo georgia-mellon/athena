@@ -21,7 +21,7 @@ through CallGuard's desktop app). Start with replay. Switch to live only if the 
 
 ## Replay demo (the default, ~90 s)
 Start: `uv run callguard run --mode replay --scenario ai_caller`. The browser opens the dashboard, and the story
-starts 3 s later with its audio on the speakers (`--mute` to stay silent). **Start** on the dashboard restarts it.
+starts 3 s later with its audio on the speakers (`--mute` to stay silent). Run the command again to restart it.
 
 | time | on screen | say |
 |---|---|---|

@@ -60,7 +60,6 @@ input::placeholder { color: var(--text-2); opacity: .8; }
 .meet { display: flex; align-items: center; gap: 8px; flex: 1 1 520px; flex-wrap: wrap; }
 .meet input { flex: 1 1 220px; min-width: 180px; max-width: 360px; }
 .tools { display: flex; align-items: center; gap: 8px; }
-.scn { display: flex; align-items: center; gap: 6px; }
 
 .alarm { background: color-mix(in srgb, var(--crit) 16%, var(--surface)); color: var(--text); border: 1px solid var(--crit);
          padding: 8px 14px; border-radius: var(--r-sm); margin-bottom: 12px; font-weight: 500; }
