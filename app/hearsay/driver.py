@@ -9,6 +9,8 @@ second XLS-R pass (R6, same architecture) and fuses the three with data/models/e
 p_synthetic = sigmoid((margin - thr) / s): thr is the deployment threshold fixed on Hearsay's val_testlike with
 bench_score.threshold() (a real flagged as fake costs 4x), and s maps the median val_testlike fake to p = 0.95.
 Both are computed once and cached in runs/hearsay_calibration.json, keyed by the checkpoint sha256(s).
+`ai_p` raises the decision threshold: thr moves to where that calibrated p was, so p_synthetic = 0.5 (the contract's
+threshold, which the dashboard and the Secret Shield use) now means "calibrated p = ai_p".
 """
 from __future__ import annotations
 
@@ -70,7 +72,8 @@ class HearsayDriver:
 
     sample_rate = SR
 
-    def __init__(self, mode: str = "e5", threads: int = 4, device: str = "auto", max_windows: int | None = None):
+    def __init__(self, mode: str = "e5", threads: int = 4, device: str = "auto", max_windows: int | None = None,
+                 ai_p: float = 0.5):
         if mode not in SCORE_FILES:
             raise ValueError(f"mode must be one of {list(SCORE_FILES)}, got {mode!r}")
         if not RUN.exists():
@@ -101,6 +104,7 @@ class HearsayDriver:
             if mode == "r5":
                 self.fusion = json.loads(R5_JSON.read_text())
         self.thr, self.s = self._calibration()
+        self.thr += self.s * math.log(ai_p / (1 - ai_p))
 
     def _load_xlsr(self, run: Path, device: str):
         """An XLS-R checkpoint exactly as Hearsay scores it: architecture frozen in config.json, sha256-checked."""

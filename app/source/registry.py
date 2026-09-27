@@ -74,7 +74,7 @@ def make_voice(cfg: Any = None):
         _hf_offline_if_cached()
         mode = _opt(cfg, "hearsay_mode", _opt(cfg, "voice_mode", "e5"))
         return _real("app.hearsay.driver", "HearsayDriver", mode=mode, threads=int(_opt(cfg, "threads", 4)),
-                     device=_opt(cfg, "device", "auto"))
+                     device=_opt(cfg, "device", "auto"), ai_p=float(_opt(cfg, "hearsay_ai_p", 0.7)))
     from app.hearsay.mock import MockVoice
     return MockVoice(latency_ms=float(_opt(cfg, "mock_latency_ms", 0.0)))
 

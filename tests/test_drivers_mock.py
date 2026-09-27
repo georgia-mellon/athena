@@ -132,7 +132,7 @@ def test_factory_real_is_lazy_and_passes_options(monkeypatch):
     cfg = {"drivers": {"voice": "real", "attacker": "real", "shield": "real", "voice_mode": "r5", "threads": 2},
            "attacker_weights": "w.pt"}
     base.make_voice(cfg), base.make_attacker(cfg), base.make_shield(cfg)
-    assert seen == {"HearsayDriver": ("app.hearsay.driver", {"mode": "r5", "threads": 2, "device": "auto"}),
+    assert seen == {"HearsayDriver": ("app.hearsay.driver", {"mode": "r5", "threads": 2, "device": "auto", "ai_p": 0.7}),
                     "KeyguardCTCAttacker": ("app.keystroke_guard.driver", {"weights": "w.pt"}),
                     "KeyguardShield": ("app.keystroke_guard.driver", {"mode": "dsp"})}
     with pytest.raises(ValueError):

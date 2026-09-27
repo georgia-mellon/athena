@@ -48,6 +48,7 @@ class DriversConfig:
     shield: str = "real"
     secret: str = "real"               # spoken-secret spotter (plan 06): real = Vosk (runs/models), mock
     hearsay_mode: str = "e5"           # e5 (final Hearsay model, default) | r5 (R4ft + R1) | r4ft (XLS-R alone)
+    hearsay_ai_p: float = 0.7          # decision threshold: a voice is AI when its calibrated p >= this (0.5 = Hearsay's)
     shield_mode: str = "dsp"           # off | dsp | adversarial
     device: str = "auto"               # torch device: auto | cpu | cuda
 
@@ -167,6 +168,8 @@ def _validate(cfg: Config) -> None:
         raise ValueError(f"drivers.shield_mode must be one of {SHIELD_MODES}")
     if d.hearsay_mode not in HEARSAY_MODES:
         raise ValueError(f"drivers.hearsay_mode must be one of {HEARSAY_MODES}")
+    if not 0.0 < d.hearsay_ai_p < 1.0:
+        raise ValueError("drivers.hearsay_ai_p must be in (0, 1)")
     if cfg.secret.style not in ("mute", "tone", "noise"):
         raise ValueError("secret.style must be mute | tone | noise")
     for h in cfg.hooks:

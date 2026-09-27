@@ -12,6 +12,7 @@ attacker = "real"         # real | mock
 shield = "real"           # real | mock
 secret = "real"           # real (Vosk, run app/secret_shield/get_model.py) | mock
 hearsay_mode = "e5"       # e5 (final Hearsay model: R4ft + R6 + R1) | r5 (R4ft + R1) | r4ft (XLS-R alone, fastest)
+hearsay_ai_p = 0.7        # AI when the calibrated p >= this; 0.5 = Hearsay's own threshold, higher = fewer false alarms
 shield_mode = "dsp"       # off | dsp | adversarial
 device = "auto"           # auto | cpu | cuda
 
