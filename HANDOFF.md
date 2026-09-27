@@ -91,9 +91,15 @@ Branch `restructure-app-layout` (docs on `docs-desktop-meet`); not merged to `ma
 - **Measured:** full-stack meeting-room test (headless Chrome test room → bridge → meet mode, real drivers) blocked
   a spoken 6-digit code with ~1 s leaked at its start. `uv run pytest -q`: 90 passed (84 passed + 7 skipped in a
   checkout without the Vosk model).
-- **Hearsay for the main track:** used via the fork [swail-labs/hearsay](https://github.com/swail-labs/hearsay) and
+- **Hearsay for the main track:** the model repository is [danmano411/hearsay](https://github.com/danmano411/hearsay); CallGuard itself lives in [georgia-mellon/callguard](https://github.com/georgia-mellon/callguard), a fork of it, and
   a dedicated README section, per the NSA organizers' guidance. The NSA challenge submission stays separate and frozen.
 - **Still blocked upstream:** Keyguard's final attacker weights, the adversarial shield stage, the CTC free-typing
   attacker (teammate); the owner's consenting victim recording of a fake code (Secret Shield eval + demo beat).
 - **Code follow-up (not docs):** `app/source/audio/devices.py` still points at `docs/zoom_setup.md`; it should say
   `docs/meeting_setup.md`.
+
+## Update 2026-09-26 late: repository move
+CallGuard now lives at https://github.com/georgia-mellon/callguard, a fork of danmano411/hearsay whose main branch
+carries the CallGuard application (both histories kept). danmano411/callguard is no longer used. No attribution
+trailers in commits or PRs (owner rule, same as Hearsay). The root README and the Hearsay overview are templates to be
+written.

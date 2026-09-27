@@ -30,4 +30,5 @@ and **Secret Shield** (redacts codes you read aloud to an unverified caller), fe
 
 ## Conventions
 - Python 3.12, `uv` (`uv sync`, `uv run pytest -q`). Tests run without models or audio devices (mock drivers).
-- Branch `wp<N>-<slug>` + PR; plans before new phases; commits end with a `Co-Authored-By: Claude ...` line.
+- Branch `wp<N>-<slug>` + PR; plans before new phases. No attribution trailers (no Co-Authored-By or
+  "Generated with" lines) in commits or PRs: owner rule.
