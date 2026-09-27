@@ -67,6 +67,7 @@ def cmd_run(args) -> int:
     def begin():
         while not server.started:
             time.sleep(0.1)
+        pipe.announce()                                 # states published before the server was listening
         print(f"[callguard] dashboard: {url}", flush=True)
         if not args.no_browser:
             webbrowser.open(url)

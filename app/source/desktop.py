@@ -97,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         if not _wait_healthy(url, server, srv):
             print(f"[callguard] server did not come up on {url}", file=sys.stderr, flush=True)
             return 1
+        pipe.announce()                                 # the server wasn't listening when meet mode started
         print(f"[callguard] dashboard: {url}", flush=True)
         if args.meet_url and hasattr(pipe, "meet"):
             try:

@@ -559,6 +559,14 @@ class Pipeline:
         while not stop.wait(0.25):                      # mic/far flip to False a second after frames stop
             self._publish_meet()
 
+    def announce(self) -> None:
+        """Re-publish the current shield / secret / meet state, for a dashboard that started listening after them."""
+        self._publish_shield()
+        self._publish_secret()
+        if getattr(self, "_meet", None) is not None:
+            self._meet["last"] = None                   # force meet.state out even if nothing changed
+            self._publish_meet()
+
     def _publish_meet(self) -> None:
         m, now, sess = getattr(self, "_meet", None), time.monotonic(), self.meet_session
         if m is None or self.mode != "meet":

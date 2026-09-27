@@ -36,6 +36,9 @@ def test_headless_serves_dashboard_and_stops(monkeypatch):
         with urllib.request.urlopen(url, timeout=5) as r:
             page = r.read().decode()
         assert "CallGuard" in page and 'id="meet-bar"' in page
+        with urllib.request.urlopen(url + "api/state", timeout=5) as r:     # startup state reached the dashboard
+            state = json.load(r)
+        assert {"shield.state", "secret.state", "meet.state"} <= set(state)
     finally:
         desktop.STOP.set()
         t.join(timeout=20)
