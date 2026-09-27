@@ -144,3 +144,20 @@ risk has built up when the typing starts.
 - **Threat rule:** the social-engineering boost is 60 + 40*leak once V >= 0.5 (was 60 + 40*V*leak), so a stricter voice
   threshold does not also weaken the alarm (plan 02 updated).
 - **Dashboard:** the voice label and curve are the mean of the last 3 windows (a gap > 6 s starts over).
+
+## Update 2026-09-27: demo verified on the owner's Mac (Chrome 153)
+- Replay with real drivers (`callguard run --mode replay --scenario ai_caller --exit-at-end --mute`): drivers ready in
+  10 s, story plays SAFE → WATCH → WARN → CRITICAL → WARN (shield) → WATCH → SAFE in 80 s. Meet mode and `callguard app`
+  start and serve the dashboard, test room, bridge, and the Keyguard console. The bridge installs on the real
+  meet.google.com pre-join page (`CALLGUARD_MEET_ONLINE=1` test passes: 52 mic blocks in, 52 back, 1.2 ms round trip).
+- **Port 8765 is taken on this Mac** by an unrelated process (`python -m rt.serve 8765`). Stop it or run every
+  CallGuard command with `--port 8766` (the desktop app takes `--port` too).
+- **CallGuard's Chrome profile does not exist yet** (`~/Library/Application Support/CallGuard/meet-profile`): run
+  `uv run callguard app`, Join a meeting, sign in to Google once in that window and turn Meet's noise cancellation off
+  (runbook step 4). Pick the MacBook mic in Meet's settings: the system default is currently the iPhone Continuity mic.
+- Tests fixed (test-only changes): `test_keyguard_config` read the local `callguard.toml` (rounds 1 / steps 30) instead
+  of the defaults; the real replay test spawned a live arms race that outlived it and wrote keyguard memory into the
+  next test's file (`cfg.keyguard.agents = False` there); Chrome 153's `--use-file-for-fake-audio-capture` delivers
+  silence, so the browser tests use the fake device's built-in beeps and poll the room meters (half the ticks are gaps).
+- Still owner-only: the consenting victim recording (`demo/audio/recorded/victim_code.wav`) is absent, so the replay
+  arms the Secret Shield but has nothing to cut; a real two-device Meet call has not been exercised from this Mac.
