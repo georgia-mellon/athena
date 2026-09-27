@@ -31,6 +31,7 @@ PROVISIONAL_AUG = REPO / "runs" / "provisional_keynet_speechaug.pt"  # plan 04's
 KEY_FRAMES = 26
 SPLIT_SEED = 0          # plan 04: per-key seeded 60/40 split of harrison presses
 TRAIN_FRAC = 0.6
+N_KEYS = 36             # harrison = A-Z0-9 = keyguard CLASSES[:36]; every attacker CallGuard trains has this head
 SHIELD_MODES = ("dsp", "adversarial", "dsp+adversarial")   # KeyguardShield.set_mode
 DASHBOARD_ADVERSARIAL = "dsp+adversarial"   # what the pipeline's / dashboard's "adversarial" runs (README: measured)
 
@@ -82,7 +83,7 @@ class KeyguardAttacker:
         from keyguard.attackers.supervised import KeyNet
         from keyguard.config import CLASSES
         # harrison has A-Z0-9 = CLASSES[:36]; Keyguard later appended space (37), so size the head from the weights
-        self.classes = list(CLASSES)[:36]
+        self.classes = list(CLASSES)[:N_KEYS]
         self.net = KeyNet(len(self.classes)).eval()
         path = weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS")
         self.provisional = not path

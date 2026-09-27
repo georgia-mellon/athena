@@ -31,6 +31,8 @@ from pathlib import Path
 
 import numpy as np
 
+from app.keystroke_guard.driver import N_KEYS  # noqa: F401  (harrison A-Z0-9: the one class set)
+
 REPO = Path(__file__).resolve().parents[2]
 RUNS = REPO / "runs"
 DELTAS = RUNS / "adversarial_deltas.pt"
@@ -38,58 +40,154 @@ KEY_WIN = 4800      # keyguard.config.KEY_WIN (0.30 s at 16 kHz); asserted when 
 PRE = 320           # keyguard.config.PRE_S * SR: Keyguard's window starts 20 ms before the onset
 EST = 960           # level window: [onset - PRE, onset - PRE + EST), 60 ms
 JITTER = 640        # EOT onset misalignment, +/-40 ms
-N_KEYS = 36         # harrison: A-Z0-9 (Keyguard's CLASSES later appended space)
+TAPER_IN, TAPER_OUT = 48, 320   # raised-cosine edges of every delta (3 ms in, 20 ms out), applied inside training
+FADE = 80           # 5 ms: a delta cut short (next stroke, mode switch) fades out instead of stopping dead
+DEDUP = 480         # events within 30 ms of an accepted one are the same press
+SHIFT = 160         # hardening "shift": random +/-10 ms per stroke (OS error +/-30 ms + this stays within JITTER)
+GRID = 160          # the cap checks attacker windows cut every 10 ms within +/-JITTER of each stroke's onset
+HARDEN = ("shift",)  # per-stroke hardening the runtime ships (of "sign", "shift", "mix"; chosen by `eval`, README)
 
 log = logging.getLogger(__name__)
 
 
+def taper() -> np.ndarray:
+    w = np.ones(KEY_WIN, np.float32)
+    w[:TAPER_IN] = 0.5 - 0.5 * np.cos(np.pi * np.arange(TAPER_IN) / TAPER_IN)
+    w[KEY_WIN - TAPER_OUT:] = 0.5 + 0.5 * np.cos(np.pi * (np.arange(TAPER_OUT) + 1) / TAPER_OUT)
+    return w
+
+
+def _crop(x: np.ndarray, org: int, lo: int, hi: int) -> np.ndarray:
+    """x (absolute index of x[0] = org) over [lo, hi), zero outside."""
+    out = np.zeros(hi - lo, np.float64)
+    a, b = max(lo, org), min(hi, org + len(x))
+    if a < b:
+        out[a - lo:b - lo] = x[a - org:b - org]
+    return out
+
+
 # --- runtime ----------------------------------------------------------------------------------------------------
 class DeltaStage:
-    """Adds one of K deltas per key event on the absolute sample clock. No torch at runtime: plain numpy adds."""
+    """Adds one delta per key press on the absolute sample clock. No torch at runtime: plain numpy.
 
-    def __init__(self, deltas: np.ndarray, level_gain: float, seed: int = 0, meta: dict | None = None):
+    Per press (event e, nominal start a = e - PRE), when the delta is due to go out: pick one of the K deltas with an
+    OS-entropy rng (seed=None; an explicit seed is for tests), harden it (HARDEN), scale it by the level of
+    [a', a' + EST) of `buf` (the audio the attacker will hear minus the delta: raw input, or the DSP output in
+    dsp+adversarial) and add it on [a', a' + KEY_WIN). The running perturbation is cut (5 ms fade) where the new one
+    starts, and the new one is scaled down, if needed, so every attacker window within +/-JITTER of every recent
+    stroke keeps ||perturbation||^2 <= that stroke's budget (level * 10^(budget/20))^2 * KEY_WIN: overlapping strokes
+    never stack past the per-stroke budget. A late event (its start already went out) shifts the delta later, up to
+    JITTER, instead of dropping its head; later than that, the stroke gets no delta.
+    """
+
+    def __init__(self, deltas: np.ndarray, level_gain: float, seed: int | None = None, meta: dict | None = None,
+                 harden: tuple = HARDEN):
         self.deltas = np.ascontiguousarray(deltas, np.float32)          # (K, KEY_WIN), level-relative units
         assert self.deltas.ndim == 2 and self.deltas.shape[1] == KEY_WIN, self.deltas.shape
-        self.level_gain, self.seed, self.meta = float(level_gain), seed, meta or {}
+        self.level_gain, self.seed, self.meta, self.harden = float(level_gain), seed, meta or {}, tuple(harden)
+        self.level_gain_dsp = float(self.meta.get("level_gain_dsp", level_gain))
+        self.rel = 10 ** (float(self.meta.get("budget_db", -18.0)) / 20)
         self.reset()
 
     @classmethod
-    def load(cls, path: str | Path | None = None, seed: int = 0) -> "DeltaStage":
+    def load(cls, path: str | Path | None = None, seed: int | None = None, **kw) -> "DeltaStage":
         path = Path(path or DELTAS)
         if not path.exists():
             raise FileNotFoundError(f"adversarial deltas not found at {path}; train them with "
                                     f"`python -m app.keystroke_guard.adversarial train`")
         import torch
         d = torch.load(path, map_location="cpu")
-        return cls(d["deltas"].numpy(), d["meta"]["level_gain"], seed, d["meta"])
+        return cls(d["deltas"].numpy(), d["meta"]["level_gain"], seed, d["meta"], **kw)
+
+    @property
+    def shift(self) -> int:
+        return SHIFT if "shift" in self.harden else 0
 
     def reset(self) -> None:
         self.rng = np.random.default_rng(self.seed)
         self._pending: list[int] = []
-        self._active: list[tuple[int, np.ndarray]] = []      # (absolute start, scaled delta)
-        self.history: deque = deque(maxlen=64)                  # (start, k, level) per stroke: tests + debugging
+        self._recent: deque = deque(maxlen=16)                  # accepted events (dedup)
+        self._strokes: deque = deque()                          # (nominal start, energy budget) the cap protects
+        self._p0, self._p = 0, np.zeros(0, np.float32)          # summed perturbation on [p0, p0 + len(p))
+        self.history: deque = deque(maxlen=64)                  # (start, k, level, scale) per stroke
 
     def add(self, events) -> None:
-        self._pending.extend(int(e) for e in events)
+        for e in sorted(int(e) for e in events):
+            if all(abs(e - x) >= DEDUP for x in self._recent):
+                self._recent.append(e)
+                self._pending.append(e)
 
-    def apply(self, out: np.ndarray, start: int, buf: np.ndarray, t: int) -> np.ndarray:
-        """out = the outgoing block [start, start + len(out)); buf = raw input, buf[-1] is sample t - 1."""
-        base = t - len(buf)
-        for e in [e for e in self._pending if e - PRE + EST <= t]:   # its level window has arrived
-            self._pending.remove(e)
-            a = e - PRE
-            seg = buf[max(a - base, 0):max(a + EST - base, 0)]
-            level = self.level_gain * float(np.sqrt(np.mean(np.square(seg, dtype=np.float64)))) if len(seg) else 0.0
-            k = int(self.rng.integers(len(self.deltas)))
-            self._active.append((a, level * self.deltas[k]))
-            self.history.append((a, k, level))
+    def fade_out(self, at: int) -> None:
+        """Mode switched away: drop pending strokes, fade what is still to go out over FADE samples from `at`."""
+        self._pending.clear()
+        self._cut(at)
+
+    def _cut(self, at: int) -> None:
+        i = max(at - self._p0, 0)
+        f = self._p[i:i + FADE]
+        f *= np.linspace(1, 0, FADE, endpoint=False, dtype=np.float32)[:len(f)]
+        self._p[i + FADE:] = 0
+
+    def apply(self, out: np.ndarray, start: int, buf: np.ndarray, t: int, dsp: bool = False) -> np.ndarray:
+        """out = the outgoing block [start, start + len(out)); buf = the level source (raw input, or the DSP output
+        aligned with it), buf[-1] is sample t - 1. Needs t - start - len(out) (the lookahead) >= EST + SHIFT."""
         n = len(out)
-        self._active = [(a, d) for a, d in self._active if a + KEY_WIN > start]
-        for a, d in self._active:
-            lo, hi = max(a, start), min(a + KEY_WIN, start + n)
-            if lo < hi:
-                out[lo - start:hi - start] += d[lo - a:hi - a]
+        for e in [e for e in self._pending if e - PRE - self.shift < start + n]:   # due: may start in this block
+            self._pending.remove(e)
+            self._stroke(e - PRE, start, buf, t - len(buf), self.level_gain_dsp if dsp else self.level_gain)
+        keep = start + n - KEY_WIN - 3 * JITTER                  # older samples: no protected window reaches them
+        if keep > self._p0:
+            self._p, self._p0 = self._p[keep - self._p0:], keep
+        i = start - self._p0
+        seg = self._p[max(i, 0):max(i + n, 0)]
+        if len(seg) and i >= 0:
+            out[:len(seg)] += seg
         return out
+
+    def _stroke(self, a: int, start: int, buf: np.ndarray, base: int, gain: float) -> None:
+        rng, K = self.rng, len(self.deltas)
+        a2 = a + (int(rng.integers(-self.shift, self.shift + 1)) if self.shift else 0)
+        if a2 < start:                                          # late event: its head would already be out
+            if start - a > JITTER:
+                log.debug("key event %d samples late for its delta; stroke skipped", start - a)
+                return
+            a2 = start                                          # shift later instead (within the trained jitter)
+        seg = buf[max(a2 - base, 0):max(a2 + EST - base, 0)]
+        level = gain * float(np.sqrt(np.mean(np.square(seg, dtype=np.float64)))) if len(seg) else 0.0
+        k = int(rng.integers(K))
+        d = self.deltas[k].astype(np.float64)
+        if "mix" in self.harden:                                # convex mix of 2: ||.|| <= the budget still
+            w = rng.random()
+            d = w * d + (1 - w) * self.deltas[(k + 1 + int(rng.integers(K - 1))) % K]
+        if "sign" in self.harden and rng.random() < 0.5:
+            d = -d
+        d *= level
+        need = a2 + KEY_WIN - self._p0                          # grow the buffer to hold the new delta
+        if need > len(self._p):
+            self._p = np.concatenate([self._p, np.zeros(need - len(self._p), np.float32)])
+        self._cut(a2)                                           # the running perturbation fades out where this starts
+        while self._strokes and self._strokes[0][0] + JITTER + KEY_WIN <= a2:
+            self._strokes.popleft()
+        self._strokes.append((a, (level * self.rel) ** 2 * KEY_WIN))
+        s = self._cap(d, a2)
+        i = a2 - self._p0
+        self._p[i:i + KEY_WIN] += (s * d).astype(np.float32)
+        self.history.append((a2, k, level, s))
+
+    def _cap(self, d: np.ndarray, a2: int) -> float:
+        """Largest s in [0, 1] keeping ||p + s d||^2 <= budget on every protected window (a quadratic in s each)."""
+        s = 1.0
+        for a, budget in self._strokes:
+            for w in range(a - JITTER, a + JITTER + 1, GRID):
+                q = _crop(d, a2, w, w + KEY_WIN)
+                qq = q @ q
+                if qq == 0:
+                    continue
+                p = _crop(self._p, self._p0, w, w + KEY_WIN)
+                pq, pp = p @ q, p @ p
+                disc = pq * pq - qq * (pp - budget)
+                s = min(s, max(0.0, (-pq + np.sqrt(disc)) / qq) if disc >= 0 else 0.0)
+        return s
 
 
 # --- training ---------------------------------------------------------------------------------------------------
