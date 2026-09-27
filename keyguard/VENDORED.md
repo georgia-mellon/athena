@@ -18,8 +18,10 @@ checkout (`KEYGUARD_ROOT`, else `upstream/keyguard`, `../../keyboard`, `../keybo
   `BACKBOARD_PROVIDER=google`, `BACKBOARD_MODEL=gemini-2.5-flash` (Gemini reasoning, Backboard memory).
 - `agents/llm.py`: `last_route` records which path answered the last `ask()` (`backboard:google/gemini-2.5-flash`,
   `gemini-direct:<model>`, or `none`).
+- `shield/adversarial.py`: `harrison_windows` defaults to `DATA/harrison/MBPWavs` (was cwd-relative), so
+  `co_train_population` / `co_train` run from CallGuard.
 - `web/index.html`: `/api/...` and `/static/...` made relative so the UI works mounted under a prefix.
 
 Not changed: some of Keyguard's own training/eval CLIs (`agents/pipeline.py`, `finetune_live.py`, `defense_demo.py`,
-`shield/separator.py`, `smart_dict.demo`, `shield/adversarial.harrison_windows`) still default to paths relative to
+`shield/separator.py`, `smart_dict.demo`) still default to paths relative to
 the working directory (`runs/...`, `data/...`) as upstream; pass explicit paths when running them from CallGuard.
