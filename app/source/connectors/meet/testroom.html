@@ -26,6 +26,10 @@
   .stat b { color: var(--text); font-weight: 600; }
   .processed { color: var(--ok); } .raw { color: var(--warn); } .off { color: var(--dim); }
   a { color: var(--accent); }
+  .ai { color: var(--bad); font-weight: 600; } .real { color: var(--ok); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  td, th { text-align: left; padding: 3px 6px; border-bottom: 1px solid #2f3843; }
+  th { color: var(--dim); font-weight: 500; }
   code { background: #0b0e11; padding: 1px 5px; border-radius: 4px; }
 </style>
 </head>
@@ -62,7 +66,16 @@
       <button id="play">Play as caller</button>
       <button id="stopclip" disabled>Stop</button>
     </div>
+    <div class="row">
+      <button id="playall" disabled>Play the 10 test voices</button>
+      <button id="speak">Be the caller: judge my voice</button>
+    </div>
     <div class="row"><span class="label">caller</span><div class="meter"><div id="m-agent"></div></div></div>
+    <div class="row"><span class="label">CallGuard (Hearsay) says</span><span class="stat" id="verdict">-</span></div>
+    <p class="stat">A clip's verdict is the mean over its scored 4 s windows (Hearsay scores the caller's audio every
+      2 s). Judge my voice: talk for 10 s or more; the verdict is the mean of your last 3 windows.</p>
+    <table id="results" hidden><thead><tr><th>clip</th><th>truth</th><th>windows</th><th>mean p(AI)</th>
+      <th>CallGuard</th><th></th></tr></thead><tbody></tbody></table>
     <audio id="agent" autoplay></audio>
   </section>
 
@@ -167,50 +180,141 @@ $('rec').onclick = () => {
   $('rec').textContent = 'Stop recording';
 };
 
-// ---- the caller: a clip -> hooked RTCPeerConnection -> (bridge: /meet/far) + your speakers ----
+// ---- the caller: one WebRTC line that stays open (silence between clips) -> hooked RTCPeerConnection ->
+// (bridge: /meet/far = Hearsay) + your speakers. A clip, a file, the tone or your own mic plays into it.
 fetch('/meet/audio').then((r) => r.json()).then((files) => {
   for (const f of files) $('clip').add(new Option(f, f));
-  const far = files.find((f) => f.endsWith('far_end.wav'));
-  if (far) $('clip').value = far;
+  room.tests = files.filter((f) => /^testclips\//.test(f));
+  if (room.tests.length) $('clip').value = room.tests[0];
+  $('playall').disabled = !room.tests.length;
 }).catch(() => {});
 
-async function play() {
-  stopClip();
+let line = null;
+async function callerLine() {
+  if (line) return line;
   const ctx = new AudioContext();
   const dest = ctx.createMediaStreamDestination();
-  let src;
-  const file = $('file').files[0];
-  if (!file && $('clip').value === 'tone') {
-    src = ctx.createOscillator();
-    src.frequency.value = 440;
-    const g = ctx.createGain();
-    g.gain.value = 0.2;
-    src.connect(g).connect(dest);
-  } else {
-    const data = file ? await file.arrayBuffer() : await (await fetch('/meet/audio/' + $('clip').value)).arrayBuffer();
-    src = ctx.createBufferSource();
-    src.buffer = await ctx.decodeAudioData(data);
-    src.connect(dest);
-    src.onended = stopClip;
-  }
-  src.start();
   const call = await loopback(RTCPeerConnection, dest.stream.getAudioTracks()[0]);   // hooked: goes to /meet/far
   $('agent').srcObject = call.stream;   // also what makes Chrome deliver the remote track to WebAudio
-  room.caller = { ctx, src, call, meter: meter(call.stream, $('m-agent')) };
+  line = { ctx, dest, call, meter: meter(call.stream, $('m-agent')) };
+  return line;
+}
+
+// ---- verdicts: voice.window events from the dashboard socket, credited to the clip playing when they arrive (a
+// window is scored ~1.5 s after its audio; the 5 s of silence between clips keeps one clip's windows off the next)
+const truthOf = (name) => /(^|\/)ai_/.test(name) ? 'AI' : /(^|\/)real_/.test(name) ? 'real' : '?';
+const verdictOf = (p) => p >= 0.5 ? 'AI' : 'real';
+const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+let session = null;
+function startSession(name, row) { session = { name, truth: truthOf(name), ps: [], row }; showVerdict(); }
+function showVerdict() {
+  const s = session;
+  if (!s || !s.ps.length) { $('verdict').textContent = s ? `${s.name}: listening ...` : '-'; return; }
+  const p = mean(s.mic ? s.ps.slice(-3) : s.ps), v = verdictOf(p);
+  $('verdict').innerHTML = `${s.name}: <span class="${v.toLowerCase()}">${v}</span> (p(AI) ${p.toFixed(2)}, ` +
+    `${s.ps.length} window${s.ps.length > 1 ? 's' : ''}; last ${s.ps[s.ps.length - 1].toFixed(2)})`;
+  if (s.row) {
+    const c = s.row.cells;
+    c[2].textContent = s.ps.length; c[3].textContent = p.toFixed(3);
+    c[4].innerHTML = `<span class="${v.toLowerCase()}">${v}</span>`;
+    c[5].textContent = s.truth === '?' ? '' : v === s.truth ? '✓' : '✗';
+  }
+}
+(function events() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.topic === 'voice.window' && m.data.scored && session) { session.ps.push(m.data.p_synthetic); showVerdict(); }
+  };
+  ws.onclose = () => setTimeout(events, 1000);
+})();
+
+async function play(name) {
+  stopClip();
+  const l = await callerLine();
+  $('agent').muted = false;
+  const file = name ? null : $('file').files[0];
+  name = name || (file ? file.name : $('clip').value);
+  let src;
+  if (!file && name === 'tone') {
+    src = l.ctx.createOscillator();
+    src.frequency.value = 440;
+    const g = l.ctx.createGain();
+    g.gain.value = 0.2;
+    src.connect(g).connect(l.dest);
+  } else {
+    const data = file ? await file.arrayBuffer() : await (await fetch('/meet/audio/' + name)).arrayBuffer();
+    src = l.ctx.createBufferSource();
+    src.buffer = await l.ctx.decodeAudioData(data);
+    src.connect(l.dest);
+  }
+  const c = { src, name, ended: new Promise((r) => src.addEventListener('ended', r)) };
+  c.ended.then(() => { if (room.caller === c) stopClip(); });
+  await l.ctx.resume();
+  src.start();
+  room.caller = c;
   $('stopclip').disabled = false;
+  return c;
 }
 function stopClip() {
   const c = room.caller;
   if (!c) return;
   room.caller = null;
-  try { c.src.stop(); } catch (e) { /* already ended */ }
-  c.call.close();
-  c.ctx.close();
-  room.meters = room.meters.filter((m) => m !== c.meter);
+  try { c.src.stop && c.src.stop(); } catch (e) { /* already ended */ }
+  try { c.src.disconnect(); } catch (e) { /* gone */ }
+  if (c.mic) { c.mic.getTracks().forEach((t) => t.stop()); $('speak').textContent = 'Be the caller: judge my voice'; }
   $('stopclip').disabled = true;
 }
-$('play').onclick = play;
-$('stopclip').onclick = stopClip;
+$('play').onclick = async () => { const c = await play(); startSession(c.name.replace('testclips/', '')); };
+$('stopclip').onclick = () => { room.stopAll = true; stopClip(); };
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+$('playall').onclick = async () => {
+  room.stopAll = false;
+  $('playall').disabled = true;
+  const body = $('results').tBodies[0];
+  body.textContent = '';
+  $('results').hidden = false;
+  // alternate real and AI
+  const real = room.tests.filter((f) => truthOf(f) === 'real'), ai = room.tests.filter((f) => truthOf(f) === 'AI');
+  const order = real.flatMap((f, i) => [f, ai[i]]).filter(Boolean).concat(ai.slice(real.length));
+  for (const name of order) {
+    if (room.stopAll) break;
+    const row = body.insertRow();
+    row.innerHTML = `<td>${name.replace('testclips/', '')}</td><td>${truthOf(name)}</td><td>0</td><td>-</td>` +
+      '<td>...</td><td></td>';
+    const c = await play(name);
+    startSession(name.replace('testclips/', ''), row);
+    await c.ended;
+    await sleep(5000);                  // the clip's last window lands, then silence before the next one
+  }
+  const rows = [...body.rows], ok = rows.filter((r) => r.cells[5].textContent === '✓').length;
+  $('verdict').textContent = `${ok} / ${rows.length} judged correctly`;
+  session = null;
+  $('playall').disabled = false;
+};
+
+// ---- be the caller: your mic, raw (no echo cancellation / noise suppression / AGC, not through the CallGuard
+// shield), as the far end. Use headphones.
+$('speak').onclick = async () => {
+  if (room.caller && room.caller.mic) { stopClip(); session = null; showVerdict(); return; }
+  stopClip();
+  const l = await callerLine();
+  const gum = (B && B.nativeGUM) || navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  let mic;
+  try {
+    mic = await gum({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (e) { alert('Could not start the mic: ' + e.message); return; }
+  const src = l.ctx.createMediaStreamSource(mic);
+  src.connect(l.dest);
+  $('agent').muted = true;            // don't play yourself back through the speakers
+  await l.ctx.resume();
+  room.caller = { src, mic };
+  session = { name: 'your voice', truth: '?', ps: [], mic: true };
+  showVerdict();
+  $('speak').textContent = 'Stop judging my voice';
+  $('stopclip').disabled = false;
+};
 
 // ---- secret shield controls (the dashboard's API) ----
 document.querySelectorAll('[data-secret]').forEach((b) => {
@@ -233,7 +337,7 @@ setInterval(() => {
 }, 250);
 
 // ?auto=1: join and play the tone without clicks (headless end-to-end test)
-if (params.get('auto')) { join(); play(); }
+if (params.get('auto')) { join(); play('tone'); }
 </script>
 </body>
 </html>

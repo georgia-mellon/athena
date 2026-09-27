@@ -112,3 +112,16 @@ r4ft selectable. E5 on CPU, 4 threads: ~1.4 s per 4 s window (keeps the 2 s hop,
 replay), 20/20 on held-out clips, threshold 0.97 calibrated on E5's val_testlike cross-fitted scores (cache keyed on
 both checkpoint shas). The ai_caller demo was retimed (agent 12-44 s, typing at 24 s, shield at 31 s) so the voice
 risk has built up when the typing starts.
+
+## Update 2026-09-26 night: test voices, judge-my-voice, stricter threshold, smoother graph
+- **Test room:** "Play the 10 test voices" (5 real + 5 AI held-out Hearsay clips in `demo/audio/testclips/`, picked by
+  scoring 66 held-out clips through an emulation of the room's path: 48 kHz playback, the bridge's resampler, Opus;
+  that path scores within ~0.03 of the files fed directly). Live run, headless Chrome + real E5: 10/10 (real 0.03-0.22,
+  AI 0.94-0.98). "Judge my voice" = your raw mic as the caller (real voice on a fake mic: real, p 0.02; AI clip: AI,
+  p 0.99). Rebuild the gitignored clip set with `python demo/build_testclips.py`.
+- **Threshold:** `drivers.hearsay_ai_p = 0.7` (was Hearsay's 0.5). On the 66 clips: real voices peaked at 0.40, so no
+  real is flagged either way; 6/38 fakes fall under 0.7 (2/38 under 0.5). 0.8 broke the ai_caller demo (agent median
+  p 0.59, V never passed the 0.5 gate); 0.7 keeps it (real replay test passes).
+- **Threat rule:** the social-engineering boost is 60 + 40*leak once V >= 0.5 (was 60 + 40*V*leak), so a stricter voice
+  threshold does not also weaken the alarm (plan 02 updated).
+- **Dashboard:** the voice label and curve are the mean of the last 3 windows (a gap > 6 s starts over).

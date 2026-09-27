@@ -63,12 +63,19 @@ function renderTimeline() {
 }
 
 function voiceClass(p) { return p >= 0.5 ? "synthetic" : p >= 0.25 ? "unverified" : "real"; }
+// The verdict and the curve are the mean of the last SMOOTH windows of one stretch of speech (a gap > GAP_S starts
+// over): one odd 4 s window doesn't flip the verdict or spike the graph.
+const SMOOTH = 3, GAP_S = 6;
 function renderVoice(d, t) {
-  const p = clamp(Number(d.p_synthetic) || 0, 0, 1);
+  const raw = clamp(Number(d.p_synthetic) || 0, 0, 1);
+  const last = (st.recent || []).at(-1);
+  st.recent = [...(last && t - last[0] <= GAP_S ? st.recent : []), [t, raw]].slice(-SMOOTH);
+  const p = st.recent.reduce((a, [, x]) => a + x, 0) / st.recent.length;
   const c = voiceClass(p);
   $("vlight").className = "vlight " + c;
   $("vlabel").textContent = c;
   $("vp").textContent = p.toFixed(2);
+  $("vp").title = `this window ${raw.toFixed(2)}, mean of the last ${st.recent.length}`;
   $("vlat").textContent = d.latency_ms == null ? "–" : Math.round(d.latency_ms) + " ms";
   if (c !== st.vclass) { log(t, `voice → ${c} (p=${p.toFixed(2)})`, c === "synthetic" ? "alert-c" : ""); st.vclass = c; }
   st.voice.push([t, p]);

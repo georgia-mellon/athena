@@ -127,7 +127,7 @@ class ThreatEngine:
             score = 100.0 * (1.0 - (1.0 - c.w_v * V) * (1.0 - c.w_l * leak * typing))
             se = V >= c.se_voice and typing
             if se:
-                score = max(score, c.se_floor + c.se_gain * V * leak)
+                score = max(score, c.se_floor + c.se_gain * leak)   # V gated it: the voice is judged AI
             if S and V >= c.se_voice:           # you started reading a secret to an unverified voice (plan 06 §6)
                 score = max(score, c.critical + 10 if asked else c.warn)
             score = min(100.0, max(0.0, score))
