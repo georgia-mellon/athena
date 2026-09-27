@@ -1,7 +1,7 @@
-# Devpost submission: CallGuard
+# Devpost submission: Athena
 
 ## Elevator pitch
-CallGuard protects what you hear, what you type, and what you say on a video call: it spots AI voices, hides your keystrokes from the microphone, and bleeps the codes you're about to read to a fake caller.
+Athena protects what you hear, what you type, and what you say on a video call: it spots AI voices, hides your keystrokes from the microphone, and bleeps the codes you're about to read to a fake caller.
 
 ## About the project
 
@@ -77,7 +77,7 @@ Move the adversarial shield into the live audio path, transfer the transcriber a
 Python 3.12, PyTorch, Hugging Face Transformers (XLS-R / wav2vec 2.0), LightGBM, librosa, SciPy, NumPy, Vosk, FastAPI, uvicorn, WebSockets, WebRTC, Chrome DevTools Protocol, Google Meet, pywebview, sounddevice, pynput, Gemini 2.5 Flash, Backboard, uv, pytest
 
 ## "Try it out" links
-- https://github.com/georgia-mellon/callguard (CallGuard app and docs)
+- https://github.com/georgia-mellon/athena (Athena app and docs)
 - https://github.com/danmano411/hearsay (Hearsay voice model)
 - https://github.com/LordKarV/keyboard-acoustic-shield (Keyguard attacker and shield)
 
