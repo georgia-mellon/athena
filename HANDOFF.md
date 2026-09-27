@@ -113,6 +113,25 @@ replay), 20/20 on held-out clips, threshold 0.97 calibrated on E5's val_testlike
 both checkpoint shas). The ai_caller demo was retimed (agent 12-44 s, typing at 24 s, shield at 31 s) so the voice
 risk has built up when the typing starts.
 
+## Update 2026-09-27 early: Keyguard's Ares-vs-Athena agents live in CallGuard (branch wp11)
+- **Vendored Keyguard** (`keyguard/`, see `VENDORED.md`); console mounted at `/keyguard/`, its system/engine maps
+  linked from the dashboard's new **Ares ⚔️ vs Athena 🦉** panel (live moves, rounds, per-agent before/after, verdict).
+- **Live match** (`app/keystroke_guard/agents.py`): each typing burst (raw mic, `[keyguard] burst_gap_s` of silence)
+  runs one arms race on a worker thread: Ares' team (CTC reader + population readers + Gemini fusion + smart
+  dictionary) vs Athena (Gemini triage/decoy, adversarial craft, Backboard memory). Route recorded per match
+  (`backboard:google/gemini-2.5-flash` when keys are set; rule-based offline). Never touches the live attacker.
+- **Measured (demo utterance, 80 craft steps, MPS):** Gemini fusion read "MY PASSWORD IS HUNTER2" from the noisy
+  CTC transcript; smart dictionary ranked HUNTER2 #21 of 50 clean; Athena's decoy `PIRATE1`. A full 2-round match
+  with keyguard's 250 steps took >10 min on this Mac, so `[keyguard] steps` defaults to 80 (still ~minutes: use
+  `rounds = 1`, `steps = 30` for a live demo).
+- **Population readers** (`population.py`, trained on harrison: keynet 98 % / resnet 84 % / widecnn 58 % /
+  framegru 49 % top-1 held-out) read the rich-bank demo burst at **chance** (keynet 7.5 %, others 0 %): domain gap.
+  They are in the team for the transfer check only; retrain on `live_bank_rich.npz` to make them bite.
+- **Fixed on the way:** the secret span was shifted by the preceding spaces (spaces are keystrokes with onsets in
+  keyguard); the `population` log field was captured before the lazy load.
+- **Not done:** root `README.md` is still the template; `app/keystroke_guard/README.md` has no agents section;
+  no server smoke test of `/keyguard/static/arms_race_data.js` under a live match; adversarial review skipped.
+
 ## Update 2026-09-26 night: test voices, judge-my-voice, stricter threshold, smoother graph
 - **Test room:** "Play the 10 test voices" (5 real + 5 AI held-out Hearsay clips in `demo/audio/testclips/`, picked by
   scoring 66 held-out clips through an emulation of the room's path: 48 kHz playback, the bridge's resampler, Opus;

@@ -117,12 +117,13 @@ class ArmsRace:
         from keyguard.ctc.data import SYM_OF_KEY
 
         t0 = time.monotonic()
+        # keyguard's convention: space is a keystroke too (its own onset + CTC symbol); the per-key readers have no
+        # space class, so they read the non-space onsets only
         keep = [(c, int(o)) for c, o in zip(burst.keys.upper(), burst.onsets) if c in SYM_OF_KEY]
         text = "".join(c for c, _ in keep)
-        typed = [(c, o) for c, o in keep if c != " "]
-        kstr = "".join(c for c, _ in typed)
-        on = np.array([o for _, o in typed], dtype=int)
-        key_ids = np.array([SYM_OF_KEY[c] for c in kstr], dtype=int)
+        on_all = np.array([o for _, o in keep], dtype=int)
+        key_ids = np.array([SYM_OF_KEY[c] for c in text], dtype=int)
+        on = np.array([o for c, o in keep if c != " "], dtype=int)
         y = np.asarray(burst.audio, np.float32)
         net = copy.deepcopy(self.net).to(self.device).eval()     # never train the live attacker
         moves: list[dict] = []
@@ -167,10 +168,10 @@ class ArmsRace:
         # ---- ATHENA: triage + deception plan ----
         plan = A.defender_plan(text)
         secret, decoy = plan["sensitive"], plan["decoy"]
-        if secret and secret not in kstr:                     # the LLM normalized it: fall back to the rule
+        if secret and secret not in text:                     # the LLM normalized it: fall back to the rule
             r = llm.rule_triage(text)
             secret, decoy = r["sensitive"], llm.rule_decoy(r["sensitive"])
-        if not secret or secret not in kstr:
+        if not secret or secret not in text:
             mv("🦉 ATHENA", "Triage (LLM)", reasoning=plan.get("reason", ""),
                result="Nothing sensitive in this burst; no shield needed.", tag="✅ nothing to protect")
             return finish({"secret": "", "decoy": "", "kind": "none", "rounds": [], "agents": {},
@@ -181,10 +182,10 @@ class ArmsRace:
            action=f"Mark `{secret}` sensitive; fabricate a coherent decoy `{decoy}`.",
            result=f"Plan: steer the attacker to read `{decoy}` instead of `{secret}`.", tag="🎭 lie prepared")
 
-        lo, hi = A.span_bounds(kstr, on, secret)
+        lo, hi = A.span_bounds(text, on_all, secret)
         hi = min(hi, len(y))
-        i0 = kstr.find(secret)
-        sec_on = on[i0:i0 + len(secret)]
+        i0 = text.find(secret)
+        sec_on = on_all[i0:i0 + len(secret)]               # the secret has no spaces: contiguous in on_all
         clean_span = D.span_read(net, y, lo, hi)
         sd0 = SD.summarize(net, y, lo, hi, secret, decoy)
         rk, top5 = sd0["secret_rank"], ", ".join(c["guess"] for c in sd0["top5"])
@@ -210,7 +211,7 @@ class ArmsRace:
                tag="🎭 attacker fooled" if not reads_true else "⚠️ leak")
             if r == self.rounds - 1:
                 break
-            A.adapt_attacker(net, y_def, key_ids, on, steps=self.adapt_steps)
+            A.adapt_attacker(net, y_def, key_ids, on_all, steps=self.adapt_steps)
             broke = D.span_read(net, y_def, lo, hi)
             broke_true = A._match(broke, secret)
             rounds[-1].update(after_retrain_read=broke, after_retrain_reads_true=broke_true)
@@ -326,16 +327,10 @@ class AgentWorker:
 
 # --- CLI ------------------------------------------------------------------------------------------------------
 def demo_burst(line: str) -> Burst:
-    """keyguard's demo utterance as a Burst: synthesized from the rich key bank; spaces get the previous onset."""
+    """keyguard's demo utterance as a Burst: synthesized from the rich key bank (one onset per key, spaces included)."""
     from keyguard.agents import arms_race_demo as A
-    y, _, onsets, _ = A.build_utterance(line)
-    it, ons, prev = iter(onsets), [], 0
-    from keyguard.ctc.data import SYM_OF_KEY
-    keys = "".join(c for c in line.upper() if c in SYM_OF_KEY)
-    for c in keys:
-        prev = prev if c == " " else int(next(it))
-        ons.append(prev)
-    return Burst(y, np.array(ons), keys, 0.0, "off")
+    y, _, onsets, kstr = A.build_utterance(line)
+    return Burst(y, np.asarray(onsets, dtype=int), kstr, 0.0, "off")
 
 
 def load_net(device: str = "cpu"):

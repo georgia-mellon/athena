@@ -63,6 +63,9 @@ def test_arms_race_on_demo_burst(offline):
     assert len(out["rounds"]) == 2 and "after_retrain_read" in out["rounds"][0]
     assert set(out["agents"]) == {"ctc", "fake"} and out["agents"]["fake"] == {"before": "AAAAAAA", "after": "AAAAAAA"}
     assert out["protected"] in (True, False) and out["route"] == "none" and out["backend"] == "rule-based"
+    # the span really is the secret's keys: the smart dictionary shortlists HUNTER2 from the clean audio (with the
+    # span off by the preceding spaces it ranked nothing)
+    assert out["smart_dict_clean"]["secret_rank"] is not None
 
     titles = [(m["agent"], m["title"]) for m in out["moves"]]
     head = [("⚔️ ARES·ctc", "Acoustic read (no defense)"), ("⚔️ ARES·fake", "Acoustic read (no defense)"),
