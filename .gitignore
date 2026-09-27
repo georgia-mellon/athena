@@ -18,3 +18,6 @@ experiments/cache/
 .claude/worktrees/
 .gstack/
 runs/meet-profile/
+
+# local copy of Keyguard (code, data, weights): never committed
+upstream/

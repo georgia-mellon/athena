@@ -1,12 +1,13 @@
 """Keystroke Guard harness: do an attacker and a shield fit CallGuard? (contract, latency, quick quality)
 
     python -m app.keystroke_guard.harness [--attacker mock|real|module.path:ClassName]
-                                          [--shield mock|real|module.path:ClassName] [--presses N]
+                                          [--shield mock|real|module.path:ClassName] [--presses N] [--data bank|harrison]
                                           [--shield-mode dsp|adversarial|dsp+adversarial]
 
-`mock` = the placeholders (app.keystroke_guard.mock), `real` = Keyguard's KeyNet attacker / streaming DSP shield via
+`mock` = the placeholders (app.keystroke_guard.mock), `real` = Keyguard's CTC attacker / streaming DSP shield via
 app.source.registry, anything else = a class path instantiated with no arguments. Drivers are tested raw (no
-Quarantine). Quality uses Keyguard's harrison TEST-split presses (KEYGUARD_ROOT) and is informational. Exit code 1
+Quarantine). Quality is informational: presses from Keyguard's per-key bank (default; the CTC attacker's domain,
+so optimistic) or its harrison TEST-split presses (`--data harrison`, the KeyNet-era rows). Exit code 1
 when a contract or latency check fails.
 """
 from __future__ import annotations
@@ -22,6 +23,7 @@ from app.source.types import BLOCK, SR, KeyGuess, KeystrokeAttackerDriver, Shiel
 
 ATTACK_BUDGET_MS = 50.0     # per keystroke: the readout keeps up with fast typing
 SHIELD_BUDGET_MS = 20.0     # per 20 ms block with a key active: the audio thread must keep real time
+NOISE = 0.002               # bank quality rows: the noise floor Keyguard's synth_line adds under its typing
 
 
 def _click(n: int, at: int) -> np.ndarray:
@@ -33,9 +35,10 @@ def _click(n: int, at: int) -> np.ndarray:
 
 
 def check(attacker: Any = "mock", shield: Any = "mock", presses: int = 0, quality: bool = True,
-          shield_mode: str | None = None) -> Report:
+          shield_mode: str | None = None, data: str = "bank") -> Report:
     """Run every check on the attacker and the shield (either may be None to skip it); returns the Report.
-    presses: harrison test presses for the quality rows (0 = all 360). shield_mode: set_mode() on the shield."""
+    presses: quality presses (0 = 10 per key from the bank / all 360 harrison test presses). data: bank | harrison.
+    shield_mode: set_mode() on the shield."""
     name = lambda s: s if isinstance(s, str) else type(s).__name__  # noqa: E731
     mode = f" ({shield_mode})" if shield_mode else ""
     rep = Report(f"Keystroke Guard harness: attacker={name(attacker)}, shield={name(shield)}{mode}")
@@ -45,8 +48,9 @@ def check(attacker: Any = "mock", shield: Any = "mock", presses: int = 0, qualit
     if shield is not None:
         _shield(rep, shield, box, shield_mode)
     if quality:
-        rep.run("quality", "attacker on harrison test presses", lambda: _q_attack(box, presses), info=True)
-        rep.run("quality", "shield vs that attacker", lambda: _q_shield(box, presses), info=True)
+        load = lambda: _presses(presses, data)  # noqa: E731
+        rep.run("quality", f"attacker on {data} presses", lambda: _q_attack(box, load), info=True)
+        rep.run("quality", "shield vs that attacker", lambda: _q_shield(box, load), info=True)
     return rep
 
 
@@ -180,16 +184,39 @@ def _harrison(presses: int):
     return X, np.array([CLASSES[i] for i in y]), int(PRE_S * SR)
 
 
+def _bank(presses: int):
+    from app.keystroke_guard.driver import BANK, _import_keyguard, keyguard_bank, keyguard_root
+    if not (keyguard_root() / BANK).exists():
+        raise Skip(f"no {BANK} under {keyguard_root()} (set KEYGUARD_ROOT)")
+    _import_keyguard()
+    from keyguard.config import KEY_WIN, PRE_S
+    bank, rng = keyguard_bank(), np.random.default_rng(0)
+    per_key = presses // len(bank) if presses else 10
+    X, keys = [], []
+    for k in sorted(bank):
+        for c in bank[k][rng.permutation(len(bank[k]))[:per_key]]:
+            X.append(np.pad(c, (0, max(0, KEY_WIN - len(c))))[:KEY_WIN])    # same layout as harrison windows
+            keys.append(k)
+    X = np.stack(X) + np.float32(NOISE) * rng.standard_normal((len(X), KEY_WIN), dtype=np.float32)
+    return X, np.array(keys), int(PRE_S * SR)
+
+
+def _presses(presses: int, data: str):
+    if data not in ("bank", "harrison"):
+        raise ValueError(f"data must be bank | harrison, got {data!r}")
+    return _bank(presses) if data == "bank" else _harrison(presses)
+
+
 def _topk(a: Any, audio: np.ndarray, onsets: np.ndarray, truth: np.ndarray) -> tuple[float, float]:
     guesses = a.read(audio, onsets)
     ranks = [[k for k, _ in g.top].index(t) if t in [k for k, _ in g.top] else 99 for g, t in zip(guesses, truth)]
     return 100 * np.mean(np.array(ranks) < 1), 100 * np.mean(np.array(ranks) < 3)
 
 
-def _q_attack(box: dict, presses: int) -> str:
+def _q_attack(box: dict, load) -> str:
     if "a" not in box:
         raise Skip("no attacker")
-    X, keys, pre = _harrison(presses)
+    X, keys, pre = load()
     # the presses laid end to end: each is a KEY_WIN window with its onset PRE_S in, so read() cuts it back exactly
     audio, onsets = X.reshape(-1), np.arange(len(X)) * X.shape[1] + pre
     top1, top3 = _topk(box["a"], audio, onsets, keys)
@@ -199,11 +226,11 @@ def _q_attack(box: dict, presses: int) -> str:
            f"(chance {100 / c:.1f} / {300 / c:.1f} %)"
 
 
-def _q_shield(box: dict, presses: int) -> str:
+def _q_shield(box: dict, load) -> str:
     if "a" not in box or "s" not in box:
         raise Skip("needs both an attacker and a shield")
     a, s = box["a"], box["s"]
-    X, keys, pre = _harrison(presses)
+    X, keys, pre = load()
     lat, gap = int(getattr(s, "latency", 0)), SR // 4
     # presses 250 ms apart, streamed through the shield in 20 ms blocks; each key event arrives one block late
     hop = X.shape[1] + gap
@@ -225,12 +252,15 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app.keystroke_guard.harness", description=__doc__.split("\n")[0])
     ap.add_argument("--attacker", default="mock", help="mock | real | module.path:ClassName | none (default mock)")
     ap.add_argument("--shield", default="mock", help="mock | real | module.path:ClassName | none (default mock)")
-    ap.add_argument("--presses", type=int, default=0, help="harrison test presses for quality (default 0 = all 360)")
+    ap.add_argument("--presses", type=int, default=0, help="quality presses (default 0 = 10 per key / all 360 harrison)")
+    ap.add_argument("--data", default="bank", choices=("bank", "harrison"), help="quality presses: Keyguard's bank "
+                    "(default, the CTC attacker's domain) or harrison test presses")
     ap.add_argument("--shield-mode", help="set_mode() on the shield: dsp | adversarial | dsp+adversarial (real)")
     ap.add_argument("--no-quality", action="store_true", help="contract + latency only")
     a = ap.parse_args(argv)
     none = lambda v: None if v == "none" else v  # noqa: E731
-    rep = check(none(a.attacker), none(a.shield), a.presses, quality=not a.no_quality, shield_mode=a.shield_mode)
+    rep = check(none(a.attacker), none(a.shield), a.presses, quality=not a.no_quality, shield_mode=a.shield_mode,
+                data=a.data)
     rep.print()
     return 0 if rep.ok else 1
 

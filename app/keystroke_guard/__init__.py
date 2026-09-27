@@ -2,11 +2,11 @@
 
 - Placeholders (mock.py): MockAttacker (reads the true key with a set accuracy, chance on shielded onsets) and
   MockShield (adds a pilot tone after each key event), which talk through the audio itself. No models.
-- Real (driver.py): KeyguardAttacker (Keyguard's KeyNet) and KeyguardShield (Keyguard's DSP shield, streamed in 20 ms
-  blocks with an 80 ms lookahead), from the teammate's LordKarV/keyboard-acoustic-shield, loaded read-only from
-  KEYGUARD_ROOT (default ../keyboard-acoustic-shield). Until their weights ship the attacker is a PROVISIONAL KeyNet
-  that CallGuard trains on Keyguard's harrison presses (runs/provisional_keynet*.pt; CALLGUARD_ATTACKER_WEIGHTS
-  overrides).
+- Real (driver.py): KeyguardCTCAttacker (Keyguard's current attacker: MtlCRNN, CNN + BiGRU + CTC with an onset head,
+  weights KEYGUARD_ROOT/runs/ctc_rich_ft.pt; CALLGUARD_ATTACKER_WEIGHTS overrides) and KeyguardShield (Keyguard's DSP
+  shield, streamed in 20 ms blocks with an 80 ms lookahead), from the teammate's LordKarV/keyboard-acoustic-shield,
+  loaded read-only from KEYGUARD_ROOT (default ../keyboard-acoustic-shield). KeyguardAttacker (the older PROVISIONAL
+  KeyNet CallGuard trained on harrison presses) stays for the adversarial-delta training in adversarial.py.
 - Harness (harness.py): `python -m app.keystroke_guard.harness --attacker ... --shield ...`. See README.md.
 
 Imports stay lazy: importing this package never loads torch.

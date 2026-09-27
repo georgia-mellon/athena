@@ -98,7 +98,7 @@ class HookConfig:
 class Config:
     hearsay_root: Path = REPO.parent / "Hearsay"
     keyguard_root: Path = REPO.parent / "keyboard-acoustic-shield"
-    attacker_weights: str = ""         # empty = provisional KeyNet (plan 04)
+    attacker_weights: str = ""         # empty = Keyguard's CTC attacker, KEYGUARD_ROOT/runs/ctc_rich_ft.pt
     drivers: DriversConfig = field(default_factory=DriversConfig)
     devices: DevicesConfig = field(default_factory=DevicesConfig)
     server: ServerConfig = field(default_factory=ServerConfig)

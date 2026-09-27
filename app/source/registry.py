@@ -4,7 +4,7 @@ Drivers are picked by config, never by code edits. Config is a plain dict or an 
 are read from a ``drivers`` section first, then from the top level:
 
     voice     = "real" | "mock"   -> real: app.hearsay.driver.HearsayDriver(mode=voice_mode, threads=threads)
-    attacker  = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardAttacker(weights=attacker_weights)
+    attacker  = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardCTCAttacker(weights=attacker_weights)
     shield    = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardShield, set_mode'd for shield_mode
     hearsay_mode (alias voice_mode) = "e5" | "r5" | "r4ft" (default "e5"), threads = 4, device = "auto",
     attacker_weights = None, shield_mode = "off" | "dsp" | "adversarial" (default "dsp"; "off" is a runtime switch
@@ -81,7 +81,7 @@ def make_voice(cfg: Any = None):
 
 def make_attacker(cfg: Any = None):
     if _kind(cfg, "attacker") == "real":
-        return _real("app.keystroke_guard.driver", "KeyguardAttacker", weights=_opt(cfg, "attacker_weights") or None)
+        return _real("app.keystroke_guard.driver", "KeyguardCTCAttacker", weights=_opt(cfg, "attacker_weights") or None)
     from app.keystroke_guard.mock import MockAttacker
     return MockAttacker()
 

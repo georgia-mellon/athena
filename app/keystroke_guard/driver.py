@@ -37,7 +37,24 @@ DASHBOARD_ADVERSARIAL = "dsp+adversarial"   # what the pipeline's / dashboard's 
 
 
 def keyguard_root() -> Path:
-    return Path(os.environ.get("KEYGUARD_ROOT") or REPO.parent / "keyboard-acoustic-shield")
+    """KEYGUARD_ROOT, else the local copy upstream/keyguard (gitignored: code, data, weights), else
+    ../keyboard-acoustic-shield, else ../../keyboard (the checkout layouts in use)."""
+    if os.environ.get("KEYGUARD_ROOT"):
+        return Path(os.environ["KEYGUARD_ROOT"])
+    for p in (REPO / "upstream" / "keyguard", REPO.parent / "keyboard-acoustic-shield", REPO.parents[1] / "keyboard"):
+        if (p / "keyguard").is_dir():
+            return p
+    return REPO.parent / "keyboard-acoustic-shield"
+
+
+BANK = Path("data") / "live_bank_rich.npz"   # Keyguard's per-key press bank (the teammate's MacBook), relative to root
+
+
+def keyguard_bank(root: Path | None = None) -> dict[str, np.ndarray]:
+    """{key: (n, clip) presses} from Keyguard's bank, each clip starting PRE_S before its onset. It is the CTC
+    attacker's training domain (Keyguard's own demos synthesize typing from it), so reads on it are optimistic."""
+    d = np.load(Path(root or keyguard_root()) / BANK)
+    return {k: d[k].astype(np.float32) for k in d.files}
 
 
 def _import_keyguard(root: Path | None = None) -> None:
@@ -132,6 +149,53 @@ class KeyguardAttacker:
         from keyguard.segment import windows  # cuts at onset - PRE_S*SR, KEY_WIN long, zero-padded
         onsets = np.asarray(onsets, dtype=int)
         p = self.probs(windows(np.asarray(audio, np.float32), onsets))
+        top = np.argsort(-p, axis=1)[:, :k]
+        return [KeyGuess(int(o), [(self.classes[j], float(p[i, j])) for j in top[i]]) for i, o in enumerate(onsets)]
+
+
+CTC_WEIGHTS = Path("runs") / "ctc_rich_ft.pt"   # Keyguard's current attacker (Ares), relative to KEYGUARD_ROOT
+CTC_CTX = SR // 2       # samples of context each side of an onset (the pipeline hands 0.5 s before / after)
+CTC_WIN = 1             # +/- frames averaged at the onset frame (Keyguard's onset_gated_decode / frame_key_target)
+
+
+class KeyguardCTCAttacker:
+    """KeystrokeAttackerDriver around Keyguard's current attacker: MtlCRNN (CNN -> BiGRU -> CTC + per-frame onset head,
+    `keyguard.ctc.train_overlap`), weights `runs/ctc_rich_ft.pt` in KEYGUARD_ROOT (or `weights` /
+    CALLGUARD_ATTACKER_WEIGHTS). Features are Keyguard's own `keyguard.ctc.model.logmel`.
+
+    Keyguard's decoder finds keystrokes with the onset head; here the onsets are given, so each one is read the way
+    `onset_gated_decode` reads a peak: non-blank logits averaged over +/-1 frame at frame onset // HOP (the frames the
+    model was trained to label with the key), softmaxed over the 37 keys (A-Z, 0-9, space). Each onset is read in its
+    own 1 s window (0.5 s each side), the same audio the live pipeline hands over.
+    """
+
+    def __init__(self, weights: str | Path | None = None, root: Path | None = None):
+        import torch
+        _import_keyguard(root)
+        from keyguard.ctc.data import VOCAB
+        from keyguard.ctc.train_overlap import MtlCRNN
+        path = Path(weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS") or Path(root or keyguard_root()) / CTC_WEIGHTS)
+        if not path.exists():
+            raise FileNotFoundError(f"CTC attacker weights not found: {path}")
+        state = torch.load(path, map_location="cpu")
+        self.net = MtlCRNN(n_sym=len(VOCAB)).eval()
+        self.net.load_state_dict(state.get("state_dict", state))
+        self.classes = list(VOCAB[1:])
+        self.name = f"keyguard-ctc ({path.stem})"
+
+    def read(self, audio: np.ndarray, onsets: np.ndarray, k: int = 3) -> list[KeyGuess]:
+        import torch
+        from keyguard.ctc.model import HOP, logmel
+        onsets = np.asarray(onsets, dtype=int)
+        if len(onsets) == 0:
+            return []
+        padded = np.pad(np.asarray(audio, np.float32), CTC_CTX)
+        mels = np.stack([logmel(padded[o:o + 2 * CTC_CTX]) for o in onsets])   # onset at CTC_CTX in each window
+        with torch.no_grad():
+            logits, _ = self.net(torch.from_numpy(mels))
+        f = CTC_CTX // HOP
+        z = logits[:, f - CTC_WIN:f + CTC_WIN + 1, 1:].mean(1)                  # drop blank (index 0)
+        p = torch.softmax(z, dim=1).numpy()
         top = np.argsort(-p, axis=1)[:, :k]
         return [KeyGuess(int(o), [(self.classes[j], float(p[i, j])) for j in top[i]]) for i, o in enumerate(onsets)]
 

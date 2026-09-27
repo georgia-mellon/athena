@@ -4,7 +4,7 @@
 
 # hearsay_root = "../Hearsay"                    # default: sibling of this repo
 # keyguard_root = "../keyboard-acoustic-shield"
-# attacker_weights = ""                          # empty = provisional KeyNet (docs/plans/04)
+# attacker_weights = ""                          # empty = Keyguard's CTC attacker (runs/ctc_rich_ft.pt)
 
 [drivers]
 voice = "real"            # real | mock
