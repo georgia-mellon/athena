@@ -51,6 +51,15 @@ log = logging.getLogger(__name__)
 VOICE_WIN = 4 * SR          # scored window (plan 01 F1)
 VOICE_HOP = 2 * SR          # one verdict per 2 s of far-end audio
 SPEECH_MIN = 0.5            # VAD speech fraction needed to score a window
+SPEECH_DB = -45.0           # default VAD gate: a 20 ms frame counts as speech above this level (dashboard slider)
+PAGE_STALE_S = 3.0          # a /meet/status page that hasn't reported for this long is gone
+LEVEL_HZ = 5                # audio.level (the dashboard's meters)
+
+
+def dbfs(x: np.ndarray) -> float:
+    if len(x) == 0:
+        return -90.0
+    return round(max(-90.0, 10 * float(np.log10(np.mean(np.square(x, dtype=np.float64)) + 1e-12))), 1)
 ATTACK_CTX = SR // 2        # samples before an onset handed to the attacker
 ATTACK_POST = int(0.3 * SR) # ... and after it: covers Keyguard's KEY_WIN (0.3 s from onset - 20 ms)
 LATE = 4 * BLOCK            # OS key events up to 80 ms late still reach the shield
@@ -145,6 +154,10 @@ class Pipeline:
         self.meet_session = None                # launcher.MeetSession while a Meet window is open
         self.meet_port: int | None = None       # the server the bridge talks to (None: cfg.server.port)
         self.meet_owners: dict[str, str | None] = {"mic": None, "far": None}   # origin of each /meet stream's page
+        self.meet_pages: dict[int, tuple[float, str | None, dict]] = {}   # /meet/status: id -> (time, origin, status)
+        self.meet_command: Callable[[dict], bool] | None = None        # set by the router: a command to the page
+        self.speech_db = SPEECH_DB
+        self.ready = False                      # drivers loaded and the voice model warmed up (system.state)
         self._run_stop: threading.Event | None = None
         self._run_thread: threading.Thread | None = None
         self._live: list = []
@@ -229,7 +242,7 @@ class Pipeline:
         x = self.far.read_range(stop - VOICE_WIN, stop)
         if x is None:
             return True
-        speech = speech_fraction(x)
+        speech = speech_fraction(x, energy_db=self.speech_db)
         info = {"t_audio": round(stop / SR, 2), "speech": round(speech, 2)}
         if speech < SPEECH_MIN:
             self.bus.emit("voice.window", scored=False, **info)
@@ -388,6 +401,28 @@ class Pipeline:
                       allowed=self.clock() < self._bypass_until, allow_s=c.allow_s, delay_ms=c.delay_ms if on else 0,
                       error=self.secret_error, driver=self.spotter.name if self.spotter is not None else None)
 
+    def warm_up(self) -> None:
+        """Run the voice model once so the first real window isn't slow (first inference loads kernels), then
+        mark the system ready (system.state)."""
+        t0 = time.perf_counter()
+        self.voice.score((np.random.default_rng(0).standard_normal(VOICE_WIN) * 0.01).astype(np.float32))
+        log.info("voice model warmed up in %.1f s", time.perf_counter() - t0)
+        self.ready = True
+        self._publish_system()
+
+    def _publish_system(self) -> None:
+        self.bus.emit("system.state", ready=self.ready, voice=self.voice.name, speech_db=self.speech_db,
+                      speech_min=SPEECH_MIN)
+
+    def set_speech_db(self, db: float) -> float:
+        """Dashboard control: the VAD gate. A far-end window is scored when >= SPEECH_MIN of its frames are louder."""
+        db = float(db)
+        if not -80.0 <= db <= -10.0:
+            raise ValueError("speech threshold must be between -80 and -10 dBFS")
+        self.speech_db = round(db, 1)
+        self._publish_system()
+        return self.speech_db
+
     def flush_voice(self) -> str:
         """Dashboard control: a new speaker starts now. V back to 0, and no window mixes audio from before."""
         self._next_voice = self.far.total + VOICE_WIN
@@ -423,8 +458,17 @@ class Pipeline:
                     busy = False
                 if not busy:
                     stop.wait(0.02)
+        def levels():                                   # audio.level for the dashboard's meters (None = no audio)
+            seen = {"mic": 0, "far": 0}                 # a stream counts once samples arrive
+            while not stop.wait(1 / LEVEL_HZ):
+                out = {}
+                for k, total, ring in (("mic", self.mic.position, self.mic.raw), ("far", self.far.total, self.far)):
+                    out[f"{k}_db"] = dbfs(ring.read_last(SR // LEVEL_HZ)) if total != seen[k] else None
+                    seen[k] = total
+                self.bus.emit("audio.level", **out)
         ts = [threading.Thread(target=loop, args=(f,), name=f"callguard-{f.__name__}", daemon=True)
               for f in (self.voice_step, self.attack_step, self.secret_step, self.request_step)]
+        ts.append(threading.Thread(target=levels, name="callguard-levels", daemon=True))
         for t in ts:
             t.start()
         return ts
@@ -579,16 +623,34 @@ class Pipeline:
         """Re-publish the current shield / secret / meet state, for a dashboard that started listening after them."""
         self._publish_shield()
         self._publish_secret()
+        self._publish_system()
         if getattr(self, "_meet", None) is not None:
             self._meet["last"] = None                   # force meet.state out even if nothing changed
             self._publish_meet()
+
+    def meet_page(self, pid: int, origin: str | None, status: dict | None) -> None:
+        """Router: a page with the bridge reported its state ({"site", "in_call", ...}; None = it closed)."""
+        if status is None:
+            self.meet_pages.pop(pid, None)
+        else:
+            self.meet_pages[pid] = (time.monotonic(), origin, status)
+        self._publish_meet()
+
+    def _page(self) -> dict | None:
+        """The page the dashboard shows: a live Meet page if there is one, else the newest live page."""
+        now = time.monotonic()
+        live = [(o == "https://meet.google.com", pid, st) for pid, (t, o, st) in self.meet_pages.items()
+                if now - t < PAGE_STALE_S]
+        return max(live, key=lambda x: x[:2])[2] if live else None
 
     def _publish_meet(self) -> None:
         m, now, sess = getattr(self, "_meet", None), time.monotonic(), self.meet_session
         if m is None or self.mode != "meet":
             return
-        owners = self.meet_owners
-        state = dict(connected=any(owners.values()) or bool(sess and sess.alive),
+        owners, page = self.meet_owners, self._page()
+        state = dict(page=page and page.get("site"),     # "meet" | "local" (test room) | None: what the extension sees
+                     in_call=bool(page and page.get("in_call")),
+                     connected=any(owners.values()) or bool(sess and sess.alive),
                      owner=owners["mic"] or owners["far"],  # the page being protected
                      url=sess.url if sess and sess.alive else None,
                      mic=now - m["mic"] < 1.0, far=now - m["far"] < 1.0,
@@ -605,14 +667,22 @@ class Pipeline:
         from app.source.connectors.meet import launcher
         if self.mode != "meet":
             raise ValueError("Google Meet needs meet mode (callguard app, or callguard run --mode meet)")
-        if action == "leave":
+        page = self._page()
+        if action == "leave":                           # leave the call itself: the page clicks Meet's Leave button
             if self.meet_session is not None:
                 self.meet_session.close()
                 self.meet_session = None
-            result = "left"
+                result = "left"
+            elif page and page.get("site") == "meet" and self.meet_command and self.meet_command({"cmd": "leave"}):
+                result = "leaving the call"
+            else:
+                raise ValueError("no Google Meet tab is connected (is the CallGuard extension installed?)")
         elif action == "join":
             url = launcher.meet_url(url)                # ValueError on anything but a Meet / local URL
-            result = f"opened {url} in {launcher.open_tab(url)}"
+            if page and page.get("site") == "meet" and self.meet_command and self.meet_command({"cmd": "open", "url": url}):
+                result = f"opened {url} in your Meet tab"
+            else:
+                result = f"opened {url} in {launcher.open_tab(url)}"
         elif action == "extension":
             result = launcher.show_extension()
         else:

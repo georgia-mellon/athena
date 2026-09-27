@@ -18,7 +18,7 @@
     <span id="meet-pill" class="pill off" aria-live="polite">not in a meeting</span>
     <input id="meet-url" type="url" placeholder="meet.google.com/abc-defg-hij" aria-label="Google Meet link" spellcheck="false">
     <button id="meet-join" class="primary">Join</button>
-    <button id="meet-leave">Leave</button>
+    <button id="meet-leave" disabled title="leaves the call in your Meet tab">Leave</button>
     <button id="meet-ext" title="Open the CallGuard extension folder: chrome://extensions → Developer mode → Load unpacked">Install extension</button>
     <a href="/meet/testroom" target="_blank" rel="noopener" class="link">Test room ↗</a>
   </section>
@@ -68,6 +68,19 @@
   <section class="card" aria-label="Who is speaking">
     <div class="card-head"><h2>Caller voice</h2>
       <button id="voice-flush" class="small" title="A new person is speaking: forget the previous voice">Flush</button></div>
+    <div class="levels" aria-label="audio in">
+      <span class="lab">Mic</span>
+      <div class="meter"><div id="lv-mic" class="lv"></div></div>
+      <b id="lv-mic-n" class="num">–</b>
+      <span class="lab">Caller</span>
+      <div class="meter" title="drag the line: a 4 s window is judged only when at least half of it is louder than this">
+        <div id="lv-far" class="lv"></div>
+        <div id="gate-line" class="gate-line"></div>
+        <input id="gate" type="range" min="-80" max="-10" step="1" value="-45" aria-label="speech threshold, dBFS">
+      </div>
+      <b id="lv-far-n" class="num">–</b>
+    </div>
+    <div class="muted small gate-text">Speech gate <b id="gate-n" class="num">-45 dB</b> · <span id="vwin">no caller audio yet</span></div>
     <div class="voice">
       <div id="vlight" class="vlight none" aria-hidden="true"></div>
       <div>

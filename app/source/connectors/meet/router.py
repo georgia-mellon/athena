@@ -13,6 +13,8 @@ pipeline (meet_link), which shows it in meet.state and flushes its delay line fo
 """
 from __future__ import annotations
 
+import asyncio
+import itertools
 import json
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -56,6 +58,18 @@ def make_router(pipeline, port: int | None = None) -> APIRouter:
     origins: dict[str, str | None] = {"mic": None, "far": None}
     stats = {"mic_in": 0, "mic_out": 0, "far_in": 0, "rejected": 0}
     r.meet_stats = stats                                 # for tests and the e2e check
+    pages: dict[int, tuple[WebSocket, str | None, asyncio.AbstractEventLoop]] = {}   # /meet/status sockets
+    ids = itertools.count(1)
+
+    def command(msg: dict) -> bool:
+        """Send a command (leave, open) to the newest Meet page, else the newest page. Any thread."""
+        if not pages:
+            return False
+        meet = [k for k, (_, o, _) in pages.items() if o == MEET_ORIGIN]
+        sock, _, loop = pages[max(meet or pages)]
+        asyncio.run_coroutine_threadsafe(sock.send_text(json.dumps(msg)), loop)
+        return True
+    pipeline.meet_command = command                      # the dashboard's Join / Leave reach the page through this
 
     def own_port() -> int | None:
         cfg = getattr(pipeline, "cfg", None)
@@ -138,6 +152,34 @@ def make_router(pipeline, port: int | None = None) -> APIRouter:
             pass
         finally:
             release(sock, "far")
+
+    @r.websocket("/meet/status")
+    async def status(sock: WebSocket) -> None:
+        """Every page with the bridge: {"site", "in_call", ...} each second (the dashboard's meeting indicator)."""
+        origin = sock.headers.get("origin")
+        if not origin_ok(origin, own_port()):
+            stats["rejected"] += 1
+            await sock.close(code=1008)
+            return
+        await sock.accept()
+        pid = next(ids)
+        pages[pid] = (sock, origin, asyncio.get_running_loop())
+        page = getattr(pipeline, "meet_page", None)
+        try:
+            while True:
+                text = await sock.receive_text()
+                try:
+                    msg = json.loads(text)
+                except ValueError:
+                    continue
+                if page is not None and isinstance(msg, dict):
+                    page(pid, origin, msg)
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            pages.pop(pid, None)
+            if page is not None:
+                page(pid, origin, None)
 
     @r.get("/meet/testroom")
     def testroom() -> FileResponse:

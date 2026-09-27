@@ -94,6 +94,20 @@ input::placeholder { color: var(--text-2); opacity: .8; }
 
 .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
 
+/* audio levels (-80..-10 dBFS) with the speech gate on the caller meter */
+.levels { display: grid; grid-template-columns: auto 1fr 52px; gap: 6px 8px; align-items: center; margin-bottom: 4px; }
+.levels .num { font-size: 12px; text-align: right; }
+.meter { position: relative; height: 10px; background: var(--surface-2); border-radius: 5px; }
+.lv { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 5px; background: var(--accent);
+      transition: width .12s linear; }
+.lv.hot { background: var(--safe); }
+.gate-line { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); left: 50%; pointer-events: none; }
+#gate { position: absolute; inset: -6px 0; width: 100%; height: 22px; margin: 0; padding: 0; min-height: 0; opacity: 0;
+        cursor: ew-resize; border: 0; background: transparent; }
+.meter:focus-within .gate-line { background: var(--accent); width: 3px; }
+.gate-text { margin-bottom: 12px; }
+button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
+
 /* voice */
 .voice { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
 .vlight { width: 40px; height: 40px; border-radius: 50%; flex: none; background: var(--surface-2); border: 1px solid var(--border);

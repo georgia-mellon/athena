@@ -4,8 +4,11 @@
 // Mic:  getUserMedia -> AudioWorklet (downsample to 16 kHz, 320-sample float32 blocks) -> ws /meet/mic -> CallGuard
 //       (Keyguard shield + spoken-secret delay line) -> processed blocks back -> jitter buffer (60 ms, grows after
 //       underflows) -> upsample -> the audio track Meet sends. Video tracks are untouched.
-// Far:  every remote audio track an RTCPeerConnection receives -> mixed in WebAudio -> 16 kHz blocks -> ws /meet/far
+// Far:  every remote audio track an RTCPeerConnection receives (on Meet also any call audio its media elements play,
+//       for connections made before the bridge loaded) -> mixed in WebAudio -> 16 kHz blocks -> ws /meet/far
 //       (Hearsay + the "read me the code" listener).
+// Status: ws /meet/status from page load: which site, whether a call is live (1 s heartbeat), for the dashboard's
+//       meeting indicator; the dashboard's Leave comes back on it and clicks Meet's own "Leave call" button.
 // FAIL OPEN: whenever CallGuard isn't answering (socket down, > 15 % of the last 500 ms missing, audio context
 // blocked or suspended) the raw mic goes out unchanged, crossfaded over 10 ms; the socket reconnects with backoff.
 // Only console.debug, never audio or text contents.
@@ -124,12 +127,12 @@ registerProcessor('callguard-tap', CallGuardTap);
     channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions: { mode, targetMs: TARGET_MS } });
 
   // ---- a WebSocket that keeps reconnecting (0.5 s doubling to 10 s) while wanted --------------------------------
-  function socket(kind, onBlock) {
+  function socket(kind, onBlock, onText) {
     const s = { ws: null, open: false, wanted: true, delay: 500, onopen: null, onclose: null };
     const retry = () => {
       if (!s.wanted) return;
       setTimeout(connect, s.delay);
-      s.delay = Math.min(s.delay * 2, 10000);
+      s.delay = Math.min(s.delay * 2, 2000);     // local and cheap: reconnect within ~2 s of CallGuard starting
     };
     function connect() {
       if (!s.wanted) return;
@@ -137,7 +140,10 @@ registerProcessor('callguard-tap', CallGuardTap);
       try { ws = new WebSocket(BASE + kind); } catch (e) { retry(); return; }
       ws.binaryType = 'arraybuffer';
       ws.onopen = () => { s.open = true; log(kind, 'connected'); if (s.onopen) s.onopen(); };
-      ws.onmessage = (e) => { if (onBlock && e.data instanceof ArrayBuffer) onBlock(new Float32Array(e.data)); };
+      ws.onmessage = (e) => {
+        if (typeof e.data === 'string') { if (onText) onText(e.data); }
+        else if (onBlock && e.data instanceof ArrayBuffer) onBlock(new Float32Array(e.data));
+      };
       ws.onclose = (e) => {
         if (s.open) log(kind, 'disconnected', e.code);
         // a session that ran and ended: back in 0.5 s. 1013 (another tab owns the stream) keeps backing off.
@@ -305,8 +311,11 @@ registerProcessor('callguard-tap', CallGuardTap);
     });
     return f;
   }
+  const farSeen = new Set();
   async function farAdd(track) {
-    if (!track || track.kind !== 'audio') return;
+    if (!track || track.kind !== 'audio' || track.readyState === 'ended' || farSeen.has(track.id)) return;
+    if (chains.some((c) => c.raw === track || c.track === track)) return;     // our own mic is not the far end
+    farSeen.add(track.id);
     try {
       far = far || farInit();
       await far.ready;
@@ -333,5 +342,45 @@ registerProcessor('callguard-tap', CallGuardTap);
     window.RTCPeerConnection = Hooked;
     if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = Hooked;
   }
+  // ---- Meet: call audio from connections made before the bridge loaded (media elements), autoplay resume ----------
+  const ON_MEET = location.hostname === 'meet.google.com';
+  if (ON_MEET) {
+    setInterval(() => {
+      for (const el of document.querySelectorAll('audio, video')) {
+        const so = el.srcObject;
+        if (so && typeof so.getAudioTracks === 'function') so.getAudioTracks().forEach(farAdd);
+      }
+    }, 1000);
+  }
+  // A context created before any click in the page starts suspended (autoplay policy): resume on the first gesture.
+  const resumeFar = () => { if (far && far.ctx.state === 'suspended') far.ctx.resume().catch(() => {}); };
+  for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, resumeFar, true);
+
+  // ---- status channel: the dashboard's meeting indicator, and its Leave ------------------------------------------
+  const inCall = () => {
+    for (const pc of pcs) if (pc.connectionState === 'connected') return true;
+    return stats.farTracks > 0;
+  };
+  function leaveCall() {
+    const b = document.querySelector('button[aria-label*="leave call" i], [role="button"][aria-label*="leave call" i]');
+    if (b) b.click();
+    return !!b;
+  }
+  const status = socket('status', null, (text) => {
+    let m;
+    try { m = JSON.parse(text); } catch (e) { return; }
+    if (m.cmd === 'leave') status.ws.send(JSON.stringify({ left: ON_MEET && leaveCall() }));
+    else if (m.cmd === 'open' && ON_MEET && /^https:\/\/meet\.google\.com\/[\w-]*$/.test(m.url || '')) location.href = m.url;
+  });
+  const sendStatus = () => {
+    resumeFar();
+    if (status.open) {
+      status.ws.send(JSON.stringify({ site: ON_MEET ? 'meet' : 'local', in_call: inCall(), far_tracks: stats.farTracks,
+                                      mic: stats.mic, audio: far ? far.ctx.state : 'none' }));
+    }
+  };
+  status.onopen = sendStatus;
+  setInterval(sendStatus, 1000);
+
   log('bridge installed', window.__callguardBridge.source, BASE);
 })();

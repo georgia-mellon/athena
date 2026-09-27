@@ -1,5 +1,6 @@
 """Google Meet connector: the /meet WebSockets over TestClient (mock drivers, no devices), the secret shield in meet
 mode, and (if Chrome/Edge is installed) the real bridge end to end in a headless browser against the test room."""
+import json
 import os
 import socket
 import threading
@@ -75,7 +76,7 @@ def test_mic_round_trip_same_size_in_order():
     bus.flush()
     assert any(s["connected"] and s["mic"] and s["latency_ms"] >= 500 + 42 and s["owner"] == MEET["origin"]
                for s in states)
-    assert set(states[-1]) == {"connected", "owner", "url", "mic", "far", "browser", "latency_ms"}
+    assert set(states[-1]) == {"page", "in_call", "connected", "owner", "url", "mic", "far", "browser", "latency_ms"}
     assert not states[-1]["connected"] and states[-1]["owner"] is None
     bus.close()
 
@@ -263,6 +264,53 @@ def test_armed_secret_is_redacted_in_the_meet_stream():
     bus.close()
 
 
+def test_status_channel_drives_the_meeting_state_and_leave():
+    """/meet/status: the extension's page reports whether a call is live (the dashboard's pill), and the dashboard's
+    Leave / Join reach that page as commands."""
+    pipe, bus, states = _pipe()
+    client, _ = _client(pipe)
+    with client.websocket_connect("/meet/status", headers=MEET) as ws:
+        ws.send_text(json.dumps({"site": "meet", "in_call": False}))
+        time.sleep(0.2)
+        bus.flush()
+        assert states[-1]["page"] == "meet" and states[-1]["in_call"] is False
+        ws.send_text(json.dumps({"site": "meet", "in_call": True}))
+        time.sleep(0.2)
+        bus.flush()
+        assert states[-1]["in_call"] is True
+        assert pipe.meet("leave") == "leaving the call"
+        assert json.loads(ws.receive_text()) == {"cmd": "leave"}
+        assert pipe.meet("join", "abc-defg-hij") == "opened https://meet.google.com/abc-defg-hij in your Meet tab"
+        assert json.loads(ws.receive_text()) == {"cmd": "open", "url": "https://meet.google.com/abc-defg-hij"}
+    time.sleep(0.2)
+    bus.flush()
+    assert states[-1]["page"] is None and states[-1]["in_call"] is False                # the tab closed
+    with pytest.raises(WebSocketDisconnect):                                         # another site: rejected
+        with client.websocket_connect("/meet/status", headers={"origin": "https://evil.example"}) as ws:
+            ws.receive_text()
+    pipe.stop()
+    bus.close()
+
+
+def test_speech_gate_and_levels():
+    pipe, bus, _ = _pipe()
+    seen = {"level": [], "system": []}
+    bus.subscribe("audio.level", lambda e: seen["level"].append(e.data))
+    bus.subscribe("system.state", lambda e: seen["system"].append(e.data))
+    with pytest.raises(ValueError):
+        pipe.set_speech_db(-5)
+    assert pipe.set_speech_db(-60) == -60.0
+    for b in _blocks(50):
+        pipe.meet_far(b)
+    time.sleep(0.5)
+    pipe.warm_up()
+    bus.flush()
+    assert seen["system"][-1]["speech_db"] == -60.0 and seen["system"][-1]["ready"] is True
+    assert any(x["far_db"] is not None and -20 < x["far_db"] < 0 for x in seen["level"])   # uniform +-0.5: ~-10 dBFS
+    pipe.stop()
+    bus.close()
+
+
 def test_meet_controls_and_pass_through_outside_meet_mode():
     cfg = config.load(env={})
     bus = EventBus()
@@ -278,7 +326,8 @@ def test_meet_controls_and_pass_through_outside_meet_mode():
     for bad in (("dance", None), ("join", "https://evil.example/abc"), ("join", "http://meet.google.com/x")):
         with pytest.raises(ValueError):
             pipe.meet(*bad)
-    assert pipe.meet("leave") == "left"
+    with pytest.raises(ValueError, match="no Google Meet tab"):             # nothing to leave: say so
+        pipe.meet("leave")
     opened = []
     launcher.open_tab, real = (lambda url: opened.append(url) or "chrome"), launcher.open_tab
     try:

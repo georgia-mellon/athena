@@ -15,6 +15,9 @@ your Chrome tab on meet.google.com (the CallGuard extension puts bridge.js in th
    the folder for you: `POST /api/control/meet {"action": "extension"}`).
 3. The first time a Meet page connects, Chrome may ask to let **meet.google.com access devices on your local network**:
    allow it (that is CallGuard on 127.0.0.1).
+4. Extension **Details → Site access: "On specific sites" (meet.google.com)**, not "On click": with "On click" the
+   bridge only starts after you click the extension icon, too late to see the call. Reload the Meet tab after
+   installing or changing this.
 
 The extension only runs on `https://meet.google.com/*`; it removes Meet's Content-Security-Policy header there (so the
 bridge may open its local socket and audio worklet), the same thing the old automated window did.
@@ -26,9 +29,16 @@ uv run callguard app --meet-url abc-defg-hij   # or open this meeting at start
 uv run callguard run --mode meet               # same engine, dashboard in your normal browser
 ```
 - CallGuard must run on port **8765** (the default): that is where the extension connects.
-- Join / Leave and the link box are on the dashboard's **Meeting** bar. Its pill reads `in meeting: mic ✓ far ✓`
-  and turns green once both bridge streams are connected. Leave = close the Meet tab.
-- Without the extension, Meet runs unprotected and the pill stays grey.
+- The window opens at once and shows what it is loading; the dashboard appears when the models are warm (the header
+  pill then reads **ready**). A Meet tab opened earlier connects within ~2 s of that.
+- The **meeting pill** is what the extension reports from the Meet tab (`/meet/status`), not what the buttons did:
+  `no Meet tab` → `Meet open · not in a call` → `in call · mic ✓ caller ✓` (green once both streams flow).
+- **Join** opens the link (or sends your open Meet tab there). **Leave** leaves the call: the extension clicks Meet's
+  own "Leave call" button. It is disabled while no Meet tab is connected.
+- Without the extension, Meet runs unprotected and the pill reads `no Meet tab`.
+- **Audio in** (Caller voice panel): live mic and caller levels (dBFS). The line on the caller meter is the **speech
+  gate**: a 4 s window is judged only when at least half of it is louder (default -45 dBFS). Drag it down if a quiet
+  caller never gets judged; the line under the meter says what happened to the last window.
 
 ## 3. Meet settings
 ⋮ → Settings → Audio:
