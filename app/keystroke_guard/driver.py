@@ -31,6 +31,9 @@ PROVISIONAL_AUG = REPO / "runs" / "provisional_keynet_speechaug.pt"  # plan 04's
 KEY_FRAMES = 26
 SPLIT_SEED = 0          # plan 04: per-key seeded 60/40 split of harrison presses
 TRAIN_FRAC = 0.6
+N_KEYS = 36             # harrison = A-Z0-9 = keyguard CLASSES[:36]; every attacker CallGuard trains has this head
+SHIELD_MODES = ("dsp", "adversarial", "dsp+adversarial")   # KeyguardShield.set_mode
+DASHBOARD_ADVERSARIAL = "dsp+adversarial"   # what the pipeline's / dashboard's "adversarial" runs (README: measured)
 
 
 def keyguard_root() -> Path:
@@ -79,7 +82,8 @@ class KeyguardAttacker:
         _import_keyguard(root)
         from keyguard.attackers.supervised import KeyNet
         from keyguard.config import CLASSES
-        self.classes = list(CLASSES)
+        # harrison has A-Z0-9 = CLASSES[:36]; Keyguard later appended space (37), so size the head from the weights
+        self.classes = list(CLASSES)[:N_KEYS]
         self.net = KeyNet(len(self.classes)).eval()
         path = weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS")
         self.provisional = not path
@@ -89,7 +93,11 @@ class KeyguardAttacker:
                 raise FileNotFoundError(f"attacker weights not found: {path}")
             self._train_provisional(path, root, epochs)
         state = torch.load(path, map_location="cpu")
-        self.net.load_state_dict(state.get("state_dict", state))  # cache dict or a bare Keyguard state_dict
+        state = state.get("state_dict", state)                    # cache dict or a bare Keyguard state_dict
+        if state["head.weight"].shape[0] != len(self.classes):
+            self.classes = list(CLASSES)[:state["head.weight"].shape[0]]
+            self.net = KeyNet(len(self.classes)).eval()
+        self.net.load_state_dict(state)
         kind = ", speech-aug" if path == PROVISIONAL_AUG else ""
         self.name = f"keyguard-keynet{f' (provisional{kind})' if self.provisional else ''}"
         if self.provisional:
@@ -141,20 +149,21 @@ class KeyguardShield:
     (256 samples) before the onset. With 80 ms, OS key events may arrive up to ~50 ms after the sound and still be
     shielded in full. Key events are absolute sample indices on the same clock as the blocks (sum of block lengths
     since reset).
+
+    Modes (set_mode switches at runtime; the lookahead, so the output delay, is the same in all of them):
+    "dsp" = the above; "adversarial" = no inpainting, one of K trained deltas added per key event
+    (app/keystroke_guard/adversarial.py DeltaStage, loaded from `deltas` on first use); "dsp+adversarial" = DSP
+    inpainting, then the delta. The level of the delta comes from the raw input, before the DSP stage.
     """
 
     def __init__(self, mode: str = "dsp", root: Path | None = None, lookahead: int = 4 * BLOCK,
-                 history: int = 24 * BLOCK, seed: int = 0, **shield_cfg):
-        if mode == "adversarial":
-            raise NotImplementedError("shield mode 'adversarial' waits for the teammate's streaming adversarial "
-                                      "shield D (plan 05 blockers); use mode='dsp'")
-        if mode != "dsp":
-            raise ValueError(f"unknown shield mode {mode!r} (dsp | adversarial)")
+                 history: int = 24 * BLOCK, seed: int = 0, deltas: str | Path | None = None, **shield_cfg):
         _import_keyguard(root)
         from keyguard.config import HOP, N_FFT
         from keyguard.shield.shield import Shield, ShieldConfig
-        self.name = "keyguard-dsp"
-        self.mode = mode
+        self.name = "keyguard-shield"
+        self.mode = "dsp"
+        self.adv, self._deltas, self._seed = None, deltas, seed
         self.shield = Shield(ShieldConfig(**{"key_frames": KEY_FRAMES, **shield_cfg}), seed=seed)
         self.lookahead, self.history = int(lookahead), int(history)
         cfg = self.shield.cfg
@@ -165,27 +174,48 @@ class KeyguardShield:
         self.latency_ms = self.lookahead / SR * 1000
         self.shield.apply(np.zeros(4 * N_FFT, np.float32), np.array([N_FFT]))  # warm librosa (~3 s cold) off the audio thread
         self.reset()
+        self.set_mode(mode)
+
+    def set_mode(self, mode: str) -> str:
+        """Switch dsp | adversarial | dsp+adversarial. Raises FileNotFoundError (deltas not trained) and keeps the
+        current mode when the adversarial stage can't load."""
+        if mode not in SHIELD_MODES:
+            raise ValueError(f"unknown shield mode {mode!r} ({' | '.join(SHIELD_MODES)})")
+        if "adversarial" in mode and self.adv is None:
+            from app.keystroke_guard.adversarial import DeltaStage
+            self.adv = DeltaStage.load(self._deltas, seed=self._seed)
+        if "adversarial" in mode and "adversarial" not in self.mode:
+            self.adv.reset()                             # no stale strokes from before the switch
+        self.mode = mode
+        return mode
 
     def reset(self) -> None:
         self._buf = np.zeros(self.history + self.lookahead, np.float32)
         self._t = 0                      # absolute index one past the newest sample
         self._events: list[int] = []
+        if self.adv is not None:
+            self.adv.reset()
 
     def process(self, block: np.ndarray, key_events: list[int]) -> np.ndarray:
         block = np.asarray(block, np.float32).ravel()
         n = len(block)
+        mode = self.mode                                # one read: set_mode may run on another thread
         self._buf = np.concatenate([self._buf, block])[-(self.history + self.lookahead + n):]
         self._t += n
-        self._events.extend(int(e) for e in key_events)
         start = self._t - self.lookahead - n            # outgoing block = [start, start + n)
+        if mode != "adversarial":
+            self._events.extend(int(e) for e in key_events)
         self._events = [e for e in self._events if e + self._after > start - self.history]
-        out = self._buf[-self.lookahead - n:len(self._buf) - self.lookahead]
-        if not any(e - self._before < start + n and e + self._after > start for e in self._events):
-            return out.copy()
-        base = self._t - len(self._buf)                 # absolute index of self._buf[0]
-        onsets = np.array([e - base for e in self._events], dtype=int)
-        # ponytail: re-runs Shield.apply on the ~0.4 s buffer for each key-touched block (~11 blocks per stroke, ~10-15 ms
-        # each on this laptop, 0 ms otherwise); upgrade = run once per stroke and cache. Also, the per-stroke random
-        # residue gain differs between consecutive blocks, which only matters inside the already-destroyed key region.
-        shielded = self.shield.apply(self._buf.copy(), onsets)
-        return shielded[-self.lookahead - n:len(shielded) - self.lookahead]
+        out = self._buf[-self.lookahead - n:len(self._buf) - self.lookahead].copy()
+        if any(e - self._before < start + n and e + self._after > start for e in self._events):
+            base = self._t - len(self._buf)             # absolute index of self._buf[0]
+            onsets = np.array([e - base for e in self._events], dtype=int)
+            # ponytail: re-runs Shield.apply on the ~0.4 s buffer for each key-touched block (~11 blocks per stroke,
+            # ~3-15 ms each, 0 ms otherwise); upgrade = run once per stroke and cache. Also, the per-stroke random
+            # residue gain differs between consecutive blocks, which only matters inside the already-destroyed key region.
+            shielded = self.shield.apply(self._buf.copy(), onsets)
+            out = shielded[-self.lookahead - n:len(shielded) - self.lookahead]
+        if "adversarial" in mode:
+            self.adv.add(key_events)
+            out = self.adv.apply(out, start, self._buf, self._t)
+        return out

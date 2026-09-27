@@ -135,7 +135,13 @@ class Pipeline:
                 self.secret_error = f"{type(e).__name__}: {e}"
                 log.warning("secret shield disabled: %s", self.secret_error)
         self.shield_mode = cfg.drivers.shield_mode
-        self.mode = "idle"                      # idle | live | replay | meet
+        try:
+            self._driver_mode(self.shield_mode)
+        except ValueError as e:                         # e.g. deltas not trained: start on dsp, say why
+            log.warning("%s; starting with shield mode dsp", e)
+            self.bus.emit("driver.error", driver=self.shield.name, kind="shield", error=str(e))
+            self.shield_mode = "dsp"
+        self.mode = "idle"                     # idle | live | replay | meet
         self.meet_session = None                # launcher.MeetSession while a Meet window is open
         self.meet_port: int | None = None       # the server the bridge talks to (None: cfg.server.port)
         self.meet_owners: dict[str, str | None] = {"mic": None, "far": None}   # origin of each /meet stream's page
@@ -619,14 +625,29 @@ class Pipeline:
     def set_shield(self, mode: str) -> str:
         if mode not in SHIELD_MODES:
             raise ValueError(f"shield mode must be one of {SHIELD_MODES}")
-        if mode == "adversarial":
-            raise ValueError("adversarial shield not available yet (waits for Keyguard's streaming D); use dsp")
+        self._driver_mode(mode)                         # raises (mode unchanged) when adversarial can't load
         if mode != self.shield_mode:
             self._clear_shielded = True               # the worker restarts the shielded readout (no cross-thread edit)
         self.shield_mode = mode
         self.bus.publish(Event("control.shield", {"mode": mode}))
         self._publish_shield()
         return mode
+
+    def _driver_mode(self, mode: str) -> None:
+        """Pipeline mode -> the shield driver's mode. "off" leaves the driver as is (it just gets no key events), so
+        every switch keeps the same driver and the same output delay. ValueError when "adversarial" can't run."""
+        if mode == "off":
+            return
+        set_mode = getattr(self.shield, "set_mode", None)   # Quarantine forwards it; mocks don't have one
+        if set_mode is None:
+            if mode == "adversarial":
+                raise ValueError(f"shield driver {self.shield.name!r} has no adversarial mode")
+            return
+        from app.keystroke_guard.driver import DASHBOARD_ADVERSARIAL
+        try:
+            set_mode(DASHBOARD_ADVERSARIAL if mode == "adversarial" else mode)
+        except (OSError, KeyError, RuntimeError) as e:  # missing / unreadable runs/adversarial_deltas.pt
+            raise ValueError(f"adversarial shield unavailable: {e}") from e
 
     def scenario(self, action: str, name: str = "ai_caller", on_end: Callable[[], None] | None = None,
                  play: bool = True) -> str:

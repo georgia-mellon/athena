@@ -49,9 +49,11 @@ def test_shield_attenuates_key_and_keeps_speech_far_away():
     assert np.allclose(s.process(np.ones(BLOCK, np.float32), []), 0)       # reset clears the delay line
 
 
-def test_adversarial_mode_waits_for_teammate():
-    with pytest.raises(NotImplementedError):
-        kr.KeyguardShield(mode="adversarial")
+def test_adversarial_mode_needs_trained_deltas(tmp_path):
+    with pytest.raises(FileNotFoundError):         # modes themselves: tests/test_adversarial_shield.py
+        kr.KeyguardShield(mode="adversarial", deltas=tmp_path / "missing.pt")
+    with pytest.raises(ValueError):
+        kr.KeyguardShield(mode="bogus")
 
 
 def test_attacker_reads_held_out_presses_well_above_chance():

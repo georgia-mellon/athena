@@ -36,6 +36,7 @@ KEYGUARD_ROOT = Path(os.environ.get("KEYGUARD_ROOT", r"C:\Users\danma\Documents\
 HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT", r"C:\Users\danma\Documents\Dan\Projects\Hearsay"))
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(KEYGUARD_ROOT))
+sys.path.insert(0, str(REPO))  # app.keystroke_guard.driver.harrison_split when run as a script
 sys.dont_write_bytecode = True  # never leave __pycache__ inside the read-only Keyguard checkout
 try:
     import keyguard.memory  # noqa: F401  (pulled in by adversarial; may need pymongo/dotenv)
@@ -43,9 +44,11 @@ except Exception:
     sys.modules["keyguard.memory"] = types.ModuleType("keyguard.memory")
 from keyguard import segment  # noqa: E402
 from keyguard.attackers.supervised import KeyNet  # noqa: E402
-from keyguard.config import CLASSES, PRE_S, SR  # noqa: E402
+from keyguard.config import PRE_S, SR  # noqa: E402
 from keyguard.shield.adversarial import torch_logmel, train_attacker  # noqa: E402
 from keyguard.shield.shield import Shield, ShieldConfig  # noqa: E402
+
+from app.keystroke_guard.driver import N_KEYS, harrison_split  # noqa: E402
 
 SEED = 0
 EXCERPT = int(1.5 * SR)
@@ -62,7 +65,7 @@ N_HEARSAY = 100          # real clips for criterion 3
 KEYS_PER_CLIP = 5
 HEARSAY_LEVEL = 10       # dB speech-to-key
 torch.set_num_threads(8)  # leave cores for other work on this machine
-CHANCE = 1 / len(CLASSES)
+CHANCE = 1 / N_KEYS           # harrison: A-Z0-9 = CLASSES[:36] (Keyguard later appended space)
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -81,15 +84,14 @@ def power(x: np.ndarray) -> float:
 
 
 def load_keys(rng):
-    d = np.load(KEYGUARD_ROOT / "data" / "pool" / "harrison.npz")
-    wins, labels = d["wins"].astype(np.float32), d["labels"]
-    y = np.array([CLASSES.index(str(c)) for c in labels])
-    tr, te = [], []
-    for k in np.unique(y):
-        idx = rng.permutation(np.flatnonzero(y == k))
-        cut = int(round(0.6 * len(idx)))
-        tr += list(idx[:cut]); te += list(idx[cut:])
-    return wins[tr], y[tr], wins[te], y[te]
+    """driver.harrison_split: the ONE key split CallGuard uses everywhere (this used to re-split in another per-key
+    order, so the speech-aug attacker saw 206 harrison_split test presses; fixed 2026-09-26). `rng` is still advanced
+    by one permutation per key, as the old loop did (every key has 25 presses), so the speaker split drawn next from
+    the same rng, and every speech pool derived from it, is unchanged."""
+    Xtr, ytr, Xte, yte = harrison_split(KEYGUARD_ROOT)
+    for k in np.unique(np.concatenate([ytr, yte])):
+        rng.permutation(int((ytr == k).sum() + (yte == k).sum()))
+    return Xtr, ytr, Xte, yte
 
 
 def real_clips() -> pd.DataFrame:
@@ -147,7 +149,7 @@ def speech_aug_set(X, y, pool, rng, copies=4):
 
 def train(X, y) -> KeyNet:
     torch.manual_seed(SEED)
-    net = KeyNet()
+    net = KeyNet(N_KEYS)
     train_attacker(net, torch.tensor(X), torch.tensor(y), epochs=EPOCHS)
     return net.eval()
 
@@ -192,7 +194,7 @@ def main():
     nets = {"clean": train(Xtr, ytr), "speech-aug": train(Xa, ya)}
     (REPO / "runs").mkdir(exist_ok=True)  # the adaptive attacker the live pipeline loads (gitignored)
     torch.save({"state_dict": nets["speech-aug"].state_dict(), "provisional": True, "speech_aug": True,
-                "split_seed": SEED, "data": "harrison.npz + Hearsay test_internal train-speaker speech"},
+                "split": "driver.harrison_split", "split_seed": SEED, "n_classes": N_KEYS, "data": "harrison.npz + Hearsay test_internal train-speaker speech"},
                REPO / "runs" / "provisional_keynet_speechaug.pt")
     print(f"attackers trained ({time.time() - t0:.0f}s)", flush=True)
 

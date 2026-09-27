@@ -2,6 +2,7 @@
 
     python -m app.keystroke_guard.harness [--attacker mock|real|module.path:ClassName]
                                           [--shield mock|real|module.path:ClassName] [--presses N]
+                                          [--shield-mode dsp|adversarial|dsp+adversarial]
 
 `mock` = the placeholders (app.keystroke_guard.mock), `real` = Keyguard's KeyNet attacker / streaming DSP shield via
 app.source.registry, anything else = a class path instantiated with no arguments. Drivers are tested raw (no
@@ -31,16 +32,18 @@ def _click(n: int, at: int) -> np.ndarray:
     return x
 
 
-def check(attacker: Any = "mock", shield: Any = "mock", presses: int = 0, quality: bool = True) -> Report:
+def check(attacker: Any = "mock", shield: Any = "mock", presses: int = 0, quality: bool = True,
+          shield_mode: str | None = None) -> Report:
     """Run every check on the attacker and the shield (either may be None to skip it); returns the Report.
-    presses: harrison test presses for the quality rows (0 = all 360)."""
+    presses: harrison test presses for the quality rows (0 = all 360). shield_mode: set_mode() on the shield."""
     name = lambda s: s if isinstance(s, str) else type(s).__name__  # noqa: E731
-    rep = Report(f"Keystroke Guard harness: attacker={name(attacker)}, shield={name(shield)}")
+    mode = f" ({shield_mode})" if shield_mode else ""
+    rep = Report(f"Keystroke Guard harness: attacker={name(attacker)}, shield={name(shield)}{mode}")
     box: dict[str, Any] = {}
     if attacker is not None:
         _attacker(rep, attacker, box)
     if shield is not None:
-        _shield(rep, shield, box)
+        _shield(rep, shield, box, shield_mode)
     if quality:
         rep.run("quality", "attacker on harrison test presses", lambda: _q_attack(box, presses), info=True)
         rep.run("quality", "shield vs that attacker", lambda: _q_shield(box, presses), info=True)
@@ -100,10 +103,12 @@ def _attacker(rep: Report, spec: Any, box: dict) -> None:
     rep.run("latency", "attacker read 1 keystroke", latency)
 
 
-def _shield(rep: Report, spec: Any, box: dict) -> None:
+def _shield(rep: Report, spec: Any, box: dict, mode: str | None = None) -> None:
     def load() -> str:
         t0 = time.perf_counter()
         box["s"] = load_driver(spec, "make_shield", "shield")
+        if mode:
+            box["s"].set_mode(mode)
         return f"shield {type(box['s']).__name__} in {time.perf_counter() - t0:.1f} s"
     if not rep.run("load", "build shield", load):
         return
@@ -221,10 +226,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--attacker", default="mock", help="mock | real | module.path:ClassName | none (default mock)")
     ap.add_argument("--shield", default="mock", help="mock | real | module.path:ClassName | none (default mock)")
     ap.add_argument("--presses", type=int, default=0, help="harrison test presses for quality (default 0 = all 360)")
+    ap.add_argument("--shield-mode", help="set_mode() on the shield: dsp | adversarial | dsp+adversarial (real)")
     ap.add_argument("--no-quality", action="store_true", help="contract + latency only")
     a = ap.parse_args(argv)
     none = lambda v: None if v == "none" else v  # noqa: E731
-    rep = check(none(a.attacker), none(a.shield), a.presses, quality=not a.no_quality)
+    rep = check(none(a.attacker), none(a.shield), a.presses, quality=not a.no_quality, shield_mode=a.shield_mode)
     rep.print()
     return 0 if rep.ok else 1
 
