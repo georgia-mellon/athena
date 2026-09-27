@@ -4,13 +4,13 @@ import time
 import numpy as np
 import soundfile as sf
 
-from callguard.audio.devices import find_device, pick_mic, routing_status
-from callguard.audio.keys import KeyClock, ScriptedKeyClock
-from callguard.audio.replay import FileSource, load_key_track, load_wav, mix
-from callguard.audio.ring import Ring
-from callguard.audio.streams import MicShieldStream
-from callguard.audio.vad import Vad, speech_fraction
-from callguard.types import BLOCK, SR
+from app.source.audio.devices import find_device, pick_mic, routing_status
+from app.source.audio.keys import KeyClock, ScriptedKeyClock
+from app.source.audio.replay import FileSource, load_key_track, load_wav, mix
+from app.source.audio.ring import Ring
+from app.source.audio.streams import MicShieldStream
+from app.source.audio.vad import Vad, speech_fraction
+from app.source.types import BLOCK, SR
 
 rng = np.random.default_rng(0)
 t = np.arange(SR) / SR

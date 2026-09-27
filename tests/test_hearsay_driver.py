@@ -6,7 +6,7 @@ import time
 import numpy as np
 import pytest
 
-from callguard.drivers import hearsay_real as hr
+from app.hearsay import driver as hr
 
 
 def test_p_mapping():
@@ -40,7 +40,7 @@ def driver(request):
 @needs_hearsay
 def test_real_driver_separates(driver):
     import soundfile as sf
-    from callguard.types import VoiceAuthenticityDriver
+    from app.source.types import VoiceAuthenticityDriver
     assert isinstance(driver, VoiceAuthenticityDriver)
     for path, label in _clips():
         y, sr = sf.read(str(hr.HEARSAY_ROOT / path), dtype="float32")

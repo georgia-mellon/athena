@@ -25,13 +25,14 @@ dependencies = [
     "pesq>=0.0.4",
     "praat-parselmouth>=0.4.7",
     "vosk>=0.3.45",
+    "pywebview>=5",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
 [project.scripts]
-callguard = "callguard.cli:main"
+callguard = "app.source.cli:main"
 
 [tool.uv]
 dev-dependencies = ["pytest>=8"]
@@ -43,6 +44,9 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "dashboard"]
 
 [build-system]
 requires = ["hatchling"]

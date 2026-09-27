@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CallGuard test room</title>
+<style>
+  :root { --bg: #0f1216; --panel: #181d23; --text: #e6e9ee; --dim: #8b95a3; --accent: #4fa3ff; --ok: #3ecf8e;
+          --warn: #ffb547; --bad: #ff5d5d; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { color: var(--dim); margin: 0 0 18px; }
+  section { background: var(--panel); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  button, select, input[type=file] { font: inherit; color: var(--text); background: #232a33; border: 1px solid #2f3843;
+          border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  select { max-width: 320px; }
+  .meter { flex: 1 1 200px; height: 10px; background: #0b0e11; border-radius: 5px; overflow: hidden; min-width: 120px; }
+  .meter > div { height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+  .label { width: 190px; color: var(--dim); }
+  .stat { font-variant-numeric: tabular-nums; color: var(--dim); }
+  .stat b { color: var(--text); font-weight: 600; }
+  .processed { color: var(--ok); } .raw { color: var(--warn); } .off { color: var(--dim); }
+  a { color: var(--accent); }
+  code { background: #0b0e11; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CallGuard test room</h1>
+  <p class="lead">A local meeting with one fake participant. Your mic goes through CallGuard exactly as in Google Meet
+    (the same bridge), then over a real WebRTC connection to "the other side", which you can listen to and record.
+    Read a fake code aloud while the shield is armed and hear what the room hears. Use headphones.</p>
+
+  <section>
+    <h2>Bridge</h2>
+    <div class="stat" id="bridge">loading ...</div>
+  </section>
+
+  <section>
+    <h2>You</h2>
+    <div class="row">
+      <button id="join">Join with mic</button>
+      <button id="leave" disabled>Leave</button>
+      <label><input type="checkbox" id="listen"> listen to what the room hears</label>
+      <button id="rec" disabled>Record</button>
+      <a id="saved" hidden download="callguard-room.webm">download recording</a>
+    </div>
+    <div class="row"><span class="label">the room hears you</span><div class="meter"><div id="m-sent"></div></div></div>
+    <audio id="monitor" autoplay muted></audio>
+  </section>
+
+  <section>
+    <h2>Remote participant (the caller)</h2>
+    <div class="row">
+      <select id="clip"><option value="tone">test tone</option></select>
+      <input type="file" id="file" accept="audio/*">
+      <button id="play">Play as caller</button>
+      <button id="stopclip" disabled>Stop</button>
+    </div>
+    <div class="row"><span class="label">caller</span><div class="meter"><div id="m-agent"></div></div></div>
+    <audio id="agent" autoplay></audio>
+  </section>
+
+  <section>
+    <h2>Secret shield</h2>
+    <div class="row">
+      <button data-secret="arm">Arm</button>
+      <button data-secret="disarm">Disarm</button>
+      <button data-secret="auto">Auto</button>
+      <button data-secret="allow">Allow 30 s</button>
+      <span class="stat" id="secret-msg"></span>
+    </div>
+    <p class="stat">Status, threat score and blocked codes: <a href="/" target="_blank">dashboard</a>.
+      Auto arms on a synthetic voice or a "read me the code" request from the caller.</p>
+  </section>
+</main>
+
+<script>window.__callguardPort = Number(location.port) || 80;</script>
+<script src="/meet/static/bridge.js"></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const B = window.__callguardBridge;
+const params = new URLSearchParams(location.search);
+const room = window.__room = { you: null, caller: null, meters: [] };
+
+// ---- level meters (RMS of a stream, every 100 ms) ----
+const meterCtx = new AudioContext();
+function meter(stream, el) {
+  const an = meterCtx.createAnalyser();
+  an.fftSize = 1024;
+  meterCtx.createMediaStreamSource(stream).connect(an);
+  const buf = new Float32Array(an.fftSize);
+  const m = { an, el, rms: 0 };
+  room.meters.push(m);
+  m.tick = () => {
+    an.getFloatTimeDomainData(buf);
+    let s = 0;
+    for (const v of buf) s += v * v;
+    m.rms = Math.sqrt(s / buf.length);
+    el.style.width = Math.min(100, 300 * m.rms) + '%';
+  };
+  return m;
+}
+setInterval(() => { meterCtx.resume(); room.meters.forEach((m) => m.tick()); }, 100);
+
+// ---- a two-peer WebRTC call inside this page ----
+async function loopback(PC, track) {
+  const a = new PC(), b = new PC();
+  a.onicecandidate = (e) => e.candidate && b.addIceCandidate(e.candidate);
+  b.onicecandidate = (e) => e.candidate && a.addIceCandidate(e.candidate);
+  const got = new Promise((r) => { b.ontrack = (e) => r(e.streams[0] || new MediaStream([e.track])); });
+  a.addTrack(track, new MediaStream([track]));
+  await a.setLocalDescription();
+  await b.setRemoteDescription(a.localDescription);
+  await b.setLocalDescription();
+  await a.setRemoteDescription(b.localDescription);
+  return { a, b, stream: await got, close() { a.close(); b.close(); } };
+}
+
+// ---- you: mic -> (bridge: CallGuard) -> WebRTC -> "the room" ----
+async function join() {
+  $('join').disabled = true;
+  try {
+    const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // the unhooked RTCPeerConnection: your own voice must not count as the far end
+    const call = await loopback(B ? B.NativePC : RTCPeerConnection, mic.getAudioTracks()[0]);
+    $('monitor').srcObject = call.stream;
+    room.you = { mic, call, meter: meter(call.stream, $('m-sent')) };
+    $('leave').disabled = $('rec').disabled = false;
+  } catch (e) {
+    $('join').disabled = false;
+    alert('Could not start the mic: ' + e.message);
+  }
+}
+function leave() {
+  if (!room.you) return;
+  room.you.mic.getTracks().forEach((t) => t.stop());
+  room.you.call.close();
+  room.meters = room.meters.filter((m) => m !== room.you.meter);
+  room.you = null;
+  $('join').disabled = false;
+  $('leave').disabled = $('rec').disabled = true;
+}
+$('join').onclick = join;
+$('leave').onclick = leave;
+$('listen').onchange = (e) => { $('monitor').muted = !e.target.checked; };
+
+let rec = null;
+$('rec').onclick = () => {
+  if (rec) { rec.stop(); return; }
+  const chunks = [];
+  rec = new MediaRecorder(room.you.call.stream);
+  rec.ondataavailable = (e) => chunks.push(e.data);
+  rec.onstop = () => {
+    $('saved').href = URL.createObjectURL(new Blob(chunks, { type: rec.mimeType }));
+    $('saved').hidden = false;
+    $('rec').textContent = 'Record';
+    rec = null;
+  };
+  rec.start();
+  $('rec').textContent = 'Stop recording';
+};
+
+// ---- the caller: a clip -> hooked RTCPeerConnection -> (bridge: /meet/far) + your speakers ----
+fetch('/meet/audio').then((r) => r.json()).then((files) => {
+  for (const f of files) $('clip').add(new Option(f, f));
+  const far = files.find((f) => f.endsWith('far_end.wav'));
+  if (far) $('clip').value = far;
+}).catch(() => {});
+
+async function play() {
+  stopClip();
+  const ctx = new AudioContext();
+  const dest = ctx.createMediaStreamDestination();
+  let src;
+  const file = $('file').files[0];
+  if (!file && $('clip').value === 'tone') {
+    src = ctx.createOscillator();
+    src.frequency.value = 440;
+    const g = ctx.createGain();
+    g.gain.value = 0.2;
+    src.connect(g).connect(dest);
+  } else {
+    const data = file ? await file.arrayBuffer() : await (await fetch('/meet/audio/' + $('clip').value)).arrayBuffer();
+    src = ctx.createBufferSource();
+    src.buffer = await ctx.decodeAudioData(data);
+    src.connect(dest);
+    src.onended = stopClip;
+  }
+  src.start();
+  const call = await loopback(RTCPeerConnection, dest.stream.getAudioTracks()[0]);   // hooked: goes to /meet/far
+  $('agent').srcObject = call.stream;   // also what makes Chrome deliver the remote track to WebAudio
+  room.caller = { ctx, src, call, meter: meter(call.stream, $('m-agent')) };
+  $('stopclip').disabled = false;
+}
+function stopClip() {
+  const c = room.caller;
+  if (!c) return;
+  room.caller = null;
+  try { c.src.stop(); } catch (e) { /* already ended */ }
+  c.call.close();
+  c.ctx.close();
+  room.meters = room.meters.filter((m) => m !== c.meter);
+  $('stopclip').disabled = true;
+}
+$('play').onclick = play;
+$('stopclip').onclick = stopClip;
+
+// ---- secret shield controls (the dashboard's API) ----
+document.querySelectorAll('[data-secret]').forEach((b) => {
+  b.onclick = async () => {
+    const r = await fetch('/api/control/secret', { method: 'POST', headers: { 'content-type': 'application/json' },
+                                                    body: JSON.stringify({ action: b.dataset.secret }) });
+    const j = await r.json().catch(() => ({}));
+    $('secret-msg').textContent = r.ok ? 'secret shield: ' + j.result : (j.detail || 'failed');
+  };
+});
+
+// ---- bridge status ----
+setInterval(() => {
+  if (!B) { $('bridge').textContent = 'bridge not loaded (is CallGuard running on this port?)'; return; }
+  const s = B.stats;
+  $('bridge').innerHTML = `source <b>${B.source}</b> &middot; mic <b class="${s.mic}">${s.mic}</b> &middot; ` +
+    `sent <b>${s.micSent}</b> / back <b>${s.micBack}</b> blocks &middot; round trip <b>` +
+    `${s.rttMs === null ? '-' : s.rttMs.toFixed(0) + ' ms'}</b> &middot; caller tracks <b>${s.farTracks}</b>, ` +
+    `sent <b>${s.farSent}</b> blocks`;
+}, 250);
+
+// ?auto=1: join and play the tone without clicks (headless end-to-end test)
+if (params.get('auto')) { join(); play(); }
+</script>
+</body>
+</html>

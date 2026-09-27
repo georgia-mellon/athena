@@ -17,3 +17,4 @@ demo/audio/
 experiments/cache/
 .claude/worktrees/
 .gstack/
+runs/meet-profile/

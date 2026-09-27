@@ -1,7 +1,7 @@
-from callguard.bus import EventBus
-from callguard.config import ThreatConfig
-from callguard.threat import ThreatEngine
-from callguard.types import Event
+from app.source.bus import EventBus
+from app.source.config import ThreatConfig
+from app.source.threat import ThreatEngine
+from app.source.types import Event
 
 
 class Clock:

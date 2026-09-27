@@ -3,9 +3,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from callguard.drivers import base
-from callguard.drivers.mock import CLASSES, MockAttacker, MockShield, MockVoice
-from callguard.types import BLOCK, SR, KeystrokeAttackerDriver, ShieldDriver, VoiceAuthenticityDriver
+from app.source import registry as base
+from app.keystroke_guard.mock import CLASSES, MockAttacker, MockShield
+from app.hearsay.mock import MockVoice
+from app.source.types import BLOCK, SR, KeystrokeAttackerDriver, ShieldDriver, VoiceAuthenticityDriver
 
 
 def _noise(n, seed=0):
@@ -131,8 +132,8 @@ def test_factory_real_is_lazy_and_passes_options(monkeypatch):
     cfg = {"drivers": {"voice": "real", "attacker": "real", "shield": "real", "voice_mode": "r5", "threads": 2},
            "attacker_weights": "w.pt"}
     base.make_voice(cfg), base.make_attacker(cfg), base.make_shield(cfg)
-    assert seen == {"HearsayDriver": ("hearsay_real", {"mode": "r5", "threads": 2, "device": "auto"}),
-                    "KeyguardAttacker": ("keyguard_real", {"weights": "w.pt"}),
-                    "KeyguardShield": ("keyguard_real", {"mode": "dsp"})}
+    assert seen == {"HearsayDriver": ("app.hearsay.driver", {"mode": "r5", "threads": 2, "device": "auto"}),
+                    "KeyguardAttacker": ("app.keystroke_guard.driver", {"weights": "w.pt"}),
+                    "KeyguardShield": ("app.keystroke_guard.driver", {"mode": "dsp"})}
     with pytest.raises(ValueError):
         base.make_voice({"voice": "bogus"})

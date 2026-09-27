@@ -1,8 +1,8 @@
 import asyncio
 import threading
 
-from callguard.bus import EventBus
-from callguard.types import Event
+from app.source.bus import EventBus
+from app.source.types import Event
 
 
 def test_order_and_glob():
