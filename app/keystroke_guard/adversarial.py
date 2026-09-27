@@ -222,6 +222,24 @@ def speech_bank(which: str, n: int, seed: int, length: int = KEY_WIN) -> np.ndar
     return out
 
 
+def keyguard_speech(n: int, seed: int, length: int = KEY_WIN) -> np.ndarray:
+    """(n, length) excerpts of Keyguard's own speech clips (data/speech/*.wav, a few LibriSpeech speakers): the
+    stand-in when Hearsay's pools aren't on the machine. Far fewer speakers than speech_bank."""
+    from app.keystroke_guard.driver import keyguard_root
+    from app.source.audio.replay import load_wav
+    pool = [load_wav(p) for p in sorted((keyguard_root() / "data" / "speech").glob("*.wav"))]
+    pool = [x for x in pool if len(x) > length]
+    if not pool:
+        raise FileNotFoundError(f"no speech clips in {keyguard_root() / 'data' / 'speech'}")
+    r = np.random.default_rng(seed)
+    out = np.empty((n, length), np.float32)
+    for i in range(n):
+        x = pool[r.integers(len(pool))]
+        a = r.integers(0, len(x) - length + 1)
+        out[i] = x[a:a + length]
+    return out
+
+
 def _rms(x):
     return x.pow(2).mean(1, keepdim=True).clamp_min(1e-12).sqrt()
 
@@ -358,7 +376,8 @@ def train_ctc(args) -> dict:
             ys.append(CLS_IDX[key])
     Xtr = np.stack(Xs).astype(np.float32)
     X, y = torch.from_numpy(Xtr), torch.tensor(ys).long()
-    S = torch.from_numpy(speech_bank("train", 4000, args.seed))
+    S = torch.from_numpy(speech_bank("train", 4000, args.seed) if args.speech == "hearsay"
+                         else keyguard_speech(4000, args.seed))
     xr = np.sqrt(np.mean(Xtr.astype(np.float64) ** 2, 1))
     gain = float(np.median(xr / np.sqrt(np.mean(Xtr[:, :EST].astype(np.float64) ** 2, 1))))
     radius = 10 ** (args.budget_db / 20) * np.sqrt(KEY_WIN)
@@ -374,7 +393,8 @@ def train_ctc(args) -> dict:
     meta = {"budget_db": args.budget_db, "K": args.k, "level_gain": gain, "level_window": EST, "pre": PRE,
             "key_win": KEY_WIN, "sr": 16000, "seed": args.seed, "steps": 2 * args.steps, "lr": args.lr,
             "lam": args.lam, "kappa": args.kappa, "jitter": JITTER, "gain_db": [-6, 6],
-            "speech": "attack_under_speech train-speaker pool, +0..+20 dB, p=0.7",
+            "speech": ("attack_under_speech train-speaker pool" if args.speech == "hearsay"
+                       else "Keyguard data/speech clips") + ", +0..+20 dB, p=0.7",
             "split": "Keyguard bank (live_bank_rich), all but 10 presses per key", "attackers": list(nets),
             "pairwise_cos_mean_abs": float(cos.abs().mean()), "pairwise_cos_max": float(cos.max()),
             "train_seconds": round(time.perf_counter() - t0), "threads": args.threads}
@@ -554,6 +574,8 @@ def main(argv=None) -> int:
     ap.add_argument("--attacker", default="keynet", choices=["keynet", "ctc"],
                     help="train: optimize vs the provisional KeyNets on harrison (default) or vs Keyguard's CTC attacker "
                          "on Keyguard's bank (CallGuard's default attacker)")
+    ap.add_argument("--speech", default="hearsay", choices=["hearsay", "keyguard"],
+                    help="--attacker ctc: speech for EOT, Hearsay's pools (HEARSAY_ROOT) or Keyguard's data/speech clips")
     a = ap.parse_args(argv)
     if a.cmd == "train":
         (train_ctc if a.attacker == "ctc" else train)(a)
