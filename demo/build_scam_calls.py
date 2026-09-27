@@ -1,4 +1,8 @@
-"""Two scripted scam calls in an AI voice -> demo/audio/testclips/scam_{1_bank,2_it_desk}.wav (+ .mp3 for a phone).
+"""Scripted scam calls in an AI voice -> demo/audio/testclips/scam_{1_bank,2_it_desk,3_login}.wav (+ .mp3 for a phone).
+
+scam_3_login covers both: the caller walks you through logging in (username, then password, twice) while staying on
+the line, the keystroke case, where an acoustic keylogger on the call could read what you type and the keystroke
+shield stops it; then asks you to read out the verification code and your PIN, the Secret Shield case.
 
 Each asks the victim to TYPE a code (keystroke leak) and to READ one out loud ("read out your PIN", "read me the
 code", "what is your card number"): those are the Secret Shield's request triggers, so the shield arms and the digits
@@ -39,6 +43,22 @@ SCRIPTS = {
         ("Okay. And to confirm your identity, what is your employee PIN number?", 8.0),
         ("Last step. Can you read out the code from the new text message?", 8.0),
         ("Great, your account is secure now. Have a good day.", 1.0),
+    ],
+    # Both use cases in one call. Keystrokes: the victim logs in (username + password) while the caller stays on the
+    # line, where an acoustic keylogger on the call could read the keys (the keystroke shield). Speech: then the caller
+    # asks for the 2-step code and the PIN out loud (request triggers: the Secret Shield arms and cuts the digits).
+    "scam_3_login": [
+        ("Hello, this is Daniel from the account security team.", 0.8),
+        ("Your account was flagged for unusual activity overnight, so we have locked it as a precaution.", 0.8),
+        ("I can unlock it for you right now while we are on the call.", 0.8),
+        ("Please open the sign in page on your computer and click log in.", 4.0),
+        ("Now type your username or email address into the first box.", 10.0),
+        ("Good. Next, type your password into the password field, and press enter.", 14.0),
+        ("Hmm, it says the sign in failed. Please type your password one more time, slowly.", 14.0),
+        ("That went through. The system just sent a verification code to your phone.", 0.8),
+        ("Can you read me the code, please?", 8.0),
+        ("Thank you. And to finish unlocking the account, what is your PIN number?", 8.0),
+        ("Perfect. Your account is unlocked. Please stay logged in for the next few minutes.", 1.0),
     ],
 }
 
