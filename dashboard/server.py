@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +19,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 STATIC = Path(__file__).parent / "static"
+ROOT = Path(__file__).resolve().parent.parent
+# arena.html's match data when no CallGuard match has run yet: a saved Keyguard match, else the vendored sample
+ARMS_RACE_FALLBACKS = (ROOT / "runs" / "keyguard" / "arms_race_data.js", ROOT / "keyguard" / "web" / "arms_race_data.js")
+log = logging.getLogger(__name__)
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -185,4 +190,32 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
                 if t.done() and not t.cancelled():
                     t.exception()  # disconnects end up here; retrieve so asyncio doesn't log them
 
+    @app.get("/keyguard/static/arms_race_data.js")  # before the mount, so it shadows Keyguard's static file
+    def arms_race_data() -> Response:
+        match = latest.get("keyguard.arms_race")  # the bus subscription in lifespan keeps this current
+        if match:
+            body = "window.ARMS_RACE = " + json.dumps(match["data"], default=_jsonable) + ";\n"
+        else:
+            src = next((p for p in ARMS_RACE_FALLBACKS if p.exists()), None)
+            body = src.read_text() if src else "window.ARMS_RACE = null;\n"
+        return Response(body, media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
+    _mount_keyguard(app)
     return app
+
+
+def _mount_keyguard(app: FastAPI) -> None:
+    """The vendored Keyguard console (population arena, runs, pipelines, arms-race replay) at /keyguard/. Its pages
+    use relative api/ and static/ paths, so link it with the trailing slash. If it can't load, /keyguard says why."""
+    try:
+        from keyguard.server import app as keyguard_app
+    except Exception as e:  # missing deps or a broken vendored copy must not take the dashboard down
+        log.warning("Keyguard console not mounted: %s", e)
+        reason = f"Keyguard console unavailable: {type(e).__name__}: {e}"
+
+        @app.get("/keyguard", include_in_schema=False)
+        @app.get("/keyguard/{rest:path}", include_in_schema=False)
+        def keyguard_unavailable(rest: str = "") -> PlainTextResponse:
+            return PlainTextResponse(reason, status_code=503)
+        return
+    app.mount("/keyguard", keyguard_app, name="keyguard")
