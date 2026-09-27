@@ -62,7 +62,8 @@ class ShieldDriver(Protocol):
   booster `data/models/r1_lgbm_all_full.txt`, and fusion weights `data/scores/R5_r4ft_r1.json`. Every clip goes
   through `hearsay.preprocess.prep()`, as in Hearsay. `p_synthetic` = logistic of the fused margin, centred on the
   deployment threshold fixed on Hearsay's `val_testlike` (brief reading), so p = 0.5 is the decision boundary. Mode
-  `r4ft` (fast) or `r5` (submitted fusion; adds classic features, ≈ +0.1 s).
+  `r5` (default: the submitted fusion; adds classic features, ≈ +0.1 s) or `r4ft` (XLS-R alone, faster). See
+  `docs/reports/hearsay_r5_in_callguard.md`.
 - `keyguard_real`: `sys.path` += `KEYGUARD_ROOT`. Attacker = `KeyNet` weights from `CALLGUARD_ATTACKER_WEIGHTS`, or a
   provisional CallGuard-trained KeyNet (plan 04) until the teammate ships theirs. Shield `dsp` =
   `keyguard.shield.shield.Shield` fed with OS key timestamps; `adversarial` = the teammate's D when available.

@@ -1,4 +1,4 @@
-"""Hearsay voice-authenticity driver: the frozen R4ft (XLS-R) model, optionally fused with R1 (R5), read-only.
+"""Hearsay voice-authenticity driver: the frozen R5 fusion (R4ft XLS-R + R1 LightGBM, default) or R4ft alone, read-only.
 
 Same inference path as Hearsay's bench_score.py so the numbers we show are the numbers Hearsay reported:
 prep() the whole clip -> up to max_windows 4 s windows (1 centre window for a <= 4 s clip) -> mean logit.
@@ -66,7 +66,7 @@ class HearsayDriver:
 
     sample_rate = SR
 
-    def __init__(self, mode: str = "r4ft", threads: int = 4, device: str = "auto", max_windows: int | None = None):
+    def __init__(self, mode: str = "r5", threads: int = 4, device: str = "auto", max_windows: int | None = None):
         if mode not in SCORE_FILES:
             raise ValueError(f"mode must be one of {list(SCORE_FILES)}, got {mode!r}")
         if not RUN.exists():

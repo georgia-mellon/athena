@@ -19,10 +19,10 @@ CallGuard scores the far-end voice of a call (4 s windows, every 2 s, on a worke
 | | class | what it does |
 |---|---|---|
 | placeholder | `app.hearsay.mock:MockVoice` | deterministic: `1 - spectral flatness`, or a scripted schedule. No weights. |
-| real | `app.hearsay.driver:HearsayDriver` | Hearsay's frozen R4ft model (`mode="r4ft"`), or the R5 fusion (`mode="r5"`), read-only from `HEARSAY_ROOT` |
+| real | `app.hearsay.driver:HearsayDriver` | Hearsay's submitted R5 fusion (`mode="r5"`, default: frozen R4ft XLS-R + R1 LightGBM), or R4ft alone (`mode="r4ft"`), read-only from `HEARSAY_ROOT` |
 
 Pick one in `callguard.toml` ([`callguard.example.toml`](../../callguard.example.toml)): `[drivers] voice = "real"|"mock"`,
-`hearsay_mode = "r4ft"|"r5"`, `device`, `threads`; `HEARSAY_ROOT` defaults to `../Hearsay`. The real driver checks
+`hearsay_mode = "r5"|"r4ft"` (default `r5`), `device`, `threads`; `HEARSAY_ROOT` defaults to `../Hearsay`. The real driver checks
 `best.pth` against the sha256 frozen in its `config.json` and caches the threshold calibration in
 `runs/hearsay_calibration.json`.
 
@@ -61,13 +61,18 @@ human speech.)
 
 ## Measured in CallGuard
 
-- Latency: ~0.55-0.65 s per 4 s window on CPU (harness above; `callguard bench`).
+- Latency: ~0.4-0.65 s (r4ft) and ~0.5-0.55 s (r5, ~+90 ms) per 4 s window on CPU (harness above; `callguard bench`).
+- R5 vs R4ft in the pipeline (40 real + 40 fake simulated callers from Hearsay's held-out set): both arm the Secret
+  Shield on 37/40 fakes (R5 median 13.2 s after the caller starts, R4ft 12.0 s) and on the same 10/40 reals; no
+  window skipped even at 100 % CPU. See [`docs/reports/hearsay_r5_in_callguard.md`](../../docs/reports/hearsay_r5_in_callguard.md).
 - Keystrokes under the voice, with the Keyguard shield on: Hearsay flags 2 / 100 real voices (0 / 100 without the
   shield; median p_synthetic 0.14 -> 0.18). See [`docs/reports/attack_under_speech.md`](../../docs/reports/attack_under_speech.md).
 
 ## Known limits
 
-- R4ft alone runs by default (fast); the submitted R5 fusion adds the R1 LightGBM on the centre 4 s.
+- R5 (the submitted fusion) runs by default; it adds the R1 LightGBM on the centre 4 s. `hearsay_mode = "r4ft"` runs
+  the XLS-R alone. A new mode (e.g. R6) = an entry in `driver.SCORE_FILES` and `config.HEARSAY_MODES` plus its scoring branch in
+  `HearsayDriver`.
 - Trained and calibrated on clean 16 kHz clips; a meeting codec, echo cancellation and noise suppression were not in
   Hearsay's evaluation. Short windows (< 1 s) are rejected; 3-4 s is what it was built for.
 - Models trained on Hearsay's data are for non-commercial use (DiffSSD, SONAR, MLAAD-tiny are CC BY-NC; Hearsay
