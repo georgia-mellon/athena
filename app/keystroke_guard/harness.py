@@ -1,4 +1,4 @@
-"""Keystroke Guard harness: do an attacker and a shield fit CallGuard? (contract, latency, quick quality)
+"""Keystroke Guard harness: do an attacker and a shield fit Athena? (contract, latency, quick quality)
 
     python -m app.keystroke_guard.harness [--attacker mock|real|module.path:ClassName]
                                           [--shield mock|real|module.path:ClassName] [--presses N] [--data bank|harrison]

@@ -1,6 +1,6 @@
 # 06: Third pillar: the spoken-secret shield
 
-Owner-approved 2026-09-26 ("I love this"). It joins Hearsay and Keyguard as CallGuard's third core function.
+Owner-approved 2026-09-26 ("I love this"). It joins Hearsay and Keyguard as Athena's third core function.
 
 ## 1. Why this pillar
 | pillar | question | protects |
@@ -14,7 +14,7 @@ prevention for your voice, and it is **threat-aware**. The same sentence passes 
 and gets redacted when the caller is unverified or synthetic. It bridges privacy (your data never leaves your mouth
 to the wrong party) and security (the scam fails).
 
-Pitch line: **CallGuard protects what you hear, what you type, and what you say.**
+Pitch line: **Athena protects what you hear, what you type, and what you say.**
 
 ## 2. Behaviour
 1. **Arm** when any of these holds (config toggles):

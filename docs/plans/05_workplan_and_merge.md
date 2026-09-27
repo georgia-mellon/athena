@@ -12,7 +12,7 @@
 ## 2. Packages
 | WP | scope | owns |
 |---|---|---|
-| WP1 core | EventBus, ThreatEngine (plan 02 §4), hooks/sinks, config | `app/source/bus.py`, `threat.py`, `hooks.py`, `config.py`, `tests/test_bus.py`, `tests/test_threat.py`, `tests/test_hooks.py`, `callguard.example.toml` |
+| WP1 core | EventBus, ThreatEngine (plan 02 §4), hooks/sinks, config | `app/source/bus.py`, `threat.py`, `hooks.py`, `config.py`, `tests/test_bus.py`, `tests/test_threat.py`, `tests/test_hooks.py`, `athena.example.toml` |
 | WP2 audio I/O | device listing/selection, mic in → virtual mic out (duplex), WASAPI loopback capture, ring buffers, energy VAD, pynput KeyClock, replay file sources/sinks | `app/source/audio/*`, `tests/test_audio.py`, `docs/zoom_setup.md` |
 | WP3 Hearsay driver | `hearsay_real` (r4ft + r5 modes, sha check, prep, deployment threshold), latency bench | `app/hearsay/driver.py`, `tests/test_hearsay_driver.py` (skips if HEARSAY_ROOT is missing) |
 | WP4 Keyguard drivers | attacker (KeyNet, weights path or provisional), DSP shield streaming adapter (block-wise with key events), `adversarial` placeholder | `app/keystroke_guard/driver.py`, `tests/test_keyguard_driver.py` |
@@ -28,9 +28,9 @@ Order: WP1-WP7 in parallel (WP7 is independent), then WP8 (needs all of them), t
 ## 3. Done for this phase
 - `uv run pytest -q` passes (mock drivers). The real-driver tests pass on this laptop (HEARSAY_ROOT and KEYGUARD_ROOT
   set).
-- `callguard run --mode replay --scenario ai_caller` works end to end with the **real** drivers and shows the
+- `athena run --mode replay --scenario ai_caller` works end to end with the **real** drivers and shows the
   story on the dashboard.
-- `callguard devices` finds VB-CABLE when installed, and prints the setup steps when it's missing.
+- `athena devices` finds VB-CABLE when installed, and prints the setup steps when it's missing.
 - The attack-proof report exists, with numbers.
 - WP9: the secret shield is in the `ai_caller` demo, and `docs/reports/secret_shield.md` has leak and false-redaction numbers.
 
@@ -49,5 +49,5 @@ Order: WP1-WP7 in parallel (WP7 is independent), then WP8 (needs all of them), t
 2. Pick the packaging: **git submodules** under `third_party/` (default: keeps authorship and history) or
    vendored wheels. Keep the `HEARSAY_ROOT`/`KEYGUARD_ROOT` override for development.
 3. Replace provisional pieces (attacker weights, shield) and re-run plan 04 + the e2e replay with the final models.
-4. Merge the dashboards: bring Keyguard's arena view into CallGuard as a tab (or link it); no duplicate servers.
+4. Merge the dashboards: bring Keyguard's arena view into Athena as a tab (or link it); no duplicate servers.
 5. Joint README/Devpost: one story, credits for both repos, and a licences section.

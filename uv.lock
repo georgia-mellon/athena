@@ -40,29 +40,7 @@ wheels = [
 ]
 
 [[package]]
-name = "backboard-sdk"
-version = "1.5.19"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/31/b9/d6cb91ada289af004a1af6f4c5e30ddc8fddc2e1ac2e09181b1aa9732e7d/backboard_sdk-1.5.19.tar.gz", hash = "sha256:ee6a79dad1e861db37be540c683c536d8e57630a3051eb2df64f37fcccc6855c", size = 45818, upload-time = "2026-09-17T22:43:54.708Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/e8/191b039b7110517194c603bd1cb29419069ceb805ac95a8741e1699a04aa/backboard_sdk-1.5.19-py3-none-any.whl", hash = "sha256:a5ef6f824dc35fd3f77f2dc9ea19fbbdb518b180779fd79590fafab8d6e39578", size = 28262, upload-time = "2026-09-17T22:43:53.706Z" },
-]
-
-[[package]]
-name = "bottle"
-version = "0.13.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7a/71/cca6167c06d00c81375fd668719df245864076d284f7cb46a694cbeb5454/bottle-0.13.4.tar.gz", hash = "sha256:787e78327e12b227938de02248333d788cfe45987edca735f8f88e03472c3f47", size = 98717, upload-time = "2025-06-15T10:08:59.439Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/f6/b55ec74cfe68c6584163faa311503c20b0da4c09883a41e8e00d6726c954/bottle-0.13.4-py2.py3-none-any.whl", hash = "sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e", size = 103807, upload-time = "2025-06-15T10:08:57.691Z" },
-]
-
-[[package]]
-name = "callguard"
+name = "athena"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -139,6 +117,28 @@ provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8" }]
+
+[[package]]
+name = "backboard-sdk"
+version = "1.5.19"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/31/b9/d6cb91ada289af004a1af6f4c5e30ddc8fddc2e1ac2e09181b1aa9732e7d/backboard_sdk-1.5.19.tar.gz", hash = "sha256:ee6a79dad1e861db37be540c683c536d8e57630a3051eb2df64f37fcccc6855c", size = 45818, upload-time = "2026-09-17T22:43:54.708Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ea/e8/191b039b7110517194c603bd1cb29419069ceb805ac95a8741e1699a04aa/backboard_sdk-1.5.19-py3-none-any.whl", hash = "sha256:a5ef6f824dc35fd3f77f2dc9ea19fbbdb518b180779fd79590fafab8d6e39578", size = 28262, upload-time = "2026-09-17T22:43:53.706Z" },
+]
+
+[[package]]
+name = "bottle"
+version = "0.13.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/71/cca6167c06d00c81375fd668719df245864076d284f7cb46a694cbeb5454/bottle-0.13.4.tar.gz", hash = "sha256:787e78327e12b227938de02248333d788cfe45987edca735f8f88e03472c3f47", size = 98717, upload-time = "2025-06-15T10:08:59.439Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/f6/b55ec74cfe68c6584163faa311503c20b0da4c09883a41e8e00d6726c954/bottle-0.13.4-py2.py3-none-any.whl", hash = "sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e", size = 103807, upload-time = "2025-06-15T10:08:57.691Z" },
+]
 
 [[package]]
 name = "certifi"

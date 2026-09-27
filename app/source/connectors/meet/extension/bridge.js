@@ -1,7 +1,7 @@
-// CallGuard <-> Google Meet audio bridge. Injected by the launcher (CDP, before Meet's own scripts) or loaded by the
+// Athena <-> Google Meet audio bridge. Injected by the launcher (CDP, before Meet's own scripts) or loaded by the
 // local test room. Self-contained, no dependencies.
 //
-// Mic:  getUserMedia -> AudioWorklet (downsample to 16 kHz, 320-sample float32 blocks) -> ws /meet/mic -> CallGuard
+// Mic:  getUserMedia -> AudioWorklet (downsample to 16 kHz, 320-sample float32 blocks) -> ws /meet/mic -> Athena
 //       (Keyguard shield + spoken-secret delay line) -> processed blocks back -> jitter buffer (60 ms, grows after
 //       underflows) -> upsample -> the audio track Meet sends. Video tracks are untouched.
 // Far:  every remote audio track an RTCPeerConnection receives (on Meet also any call audio its media elements play,
@@ -9,23 +9,23 @@
 //       (Hearsay + the "read me the code" listener).
 // Status: ws /meet/status from page load: which site, whether a call is live (1 s heartbeat), for the dashboard's
 //       meeting indicator; the dashboard's Leave comes back on it and clicks Meet's own "Leave call" button.
-// FAIL OPEN: whenever CallGuard isn't answering (socket down, > 15 % of the last 500 ms missing, audio context
+// FAIL OPEN: whenever Athena isn't answering (socket down, > 15 % of the last 500 ms missing, audio context
 // blocked or suspended) the raw mic goes out unchanged, crossfaded over 10 ms; the socket reconnects with backoff.
 // Only console.debug, never audio or text contents.
 (() => {
   'use strict';
   const HOSTS = ['meet.google.com', '127.0.0.1', 'localhost', '[::1]'];
-  if (window.__callguardBridge || !HOSTS.includes(location.hostname) || !window.AudioWorkletNode) return;
-  const PORT = Number(window.__callguardPort) || 8765;
+  if (window.__athenaBridge || !HOSTS.includes(location.hostname) || !window.AudioWorkletNode) return;
+  const PORT = Number(window.__athenaPort) || 8765;
   const BASE = `ws://127.0.0.1:${PORT}/meet/`;
   const TARGET_MS = 60;                       // jitter buffer target
-  const log = (...a) => console.debug('[callguard]', ...a);
+  const log = (...a) => console.debug('[athena]', ...a);
   const stats = { mic: 'off', micSent: 0, micBack: 0, farSent: 0, farTracks: 0, rttMs: null, ctxSuspended: 0,
                   rawSwaps: 0 };
   const NativePC = window.RTCPeerConnection;
   const md = navigator.mediaDevices;
   const nativeGUM = md && md.getUserMedia ? md.getUserMedia.bind(md) : null;
-  window.__callguardBridge = { version: 1, port: PORT, source: window.__callguardBridgeSource || 'script',
+  window.__athenaBridge = { version: 1, port: PORT, source: window.__athenaBridgeSource || 'script',
                                stats, NativePC, nativeGUM };
 
   // ---- the worklet: 16 kHz tap (both paths) + jitter buffer / fail-open switch (mic path) ------------------------
@@ -41,7 +41,7 @@ class Fifo {
   shift() { if (!this.n) return null; const v = this.b[this.r]; this.r = (this.r + 1) % this.b.length; this.n--; return v; }
   drop(k) { k = Math.min(k, this.n); this.r = (this.r + k) % this.b.length; this.n -= k; }
 }
-class CallGuardTap extends AudioWorkletProcessor {
+class AthenaTap extends AudioWorkletProcessor {
   constructor(opts) {
     super();
     const o = opts.processorOptions;
@@ -115,14 +115,14 @@ class CallGuardTap extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor('callguard-tap', CallGuardTap);
+registerProcessor('athena-tap', AthenaTap);
 `;
   let workletUrl = null;
   const addWorklet = (ctx) => {
     workletUrl = workletUrl || URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
     return ctx.audioWorklet.addModule(workletUrl);
   };
-  const tapNode = (ctx, mode) => new AudioWorkletNode(ctx, 'callguard-tap', {
+  const tapNode = (ctx, mode) => new AudioWorkletNode(ctx, 'athena-tap', {
     numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1,
     channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions: { mode, targetMs: TARGET_MS } });
 
@@ -132,7 +132,7 @@ registerProcessor('callguard-tap', CallGuardTap);
     const retry = () => {
       if (!s.wanted) return;
       setTimeout(connect, s.delay);
-      s.delay = Math.min(s.delay * 2, 2000);     // local and cheap: reconnect within ~2 s of CallGuard starting
+      s.delay = Math.min(s.delay * 2, 2000);     // local and cheap: reconnect within ~2 s of Athena starting
     };
     function connect() {
       if (!s.wanted) return;
@@ -231,7 +231,7 @@ registerProcessor('callguard-tap', CallGuardTap);
       } else if (d && 'live' in d) {
         chain.live = d.live;
         setMicState();
-        log('mic', d.live ? 'processed by CallGuard' : 'raw (CallGuard not answering)');
+        log('mic', d.live ? 'processed by Athena' : 'raw (Athena not answering)');
       }
     };
     let ended = false;
@@ -312,6 +312,13 @@ registerProcessor('callguard-tap', CallGuardTap);
     return f;
   }
   const farSeen = new Set();
+  // Tapped caller tracks and their sources. Counted by readyState, not by 'ended' events: closing a peer connection
+  // (leaving a Meet call) ends its remote tracks WITHOUT firing 'ended', so an event count would stay "in call".
+  const farLive = new Map();
+  const pruneFar = () => {
+    for (const [t, src] of farLive) if (t.readyState === 'ended') { try { src.disconnect(); } catch (e) { /* gone */ } farLive.delete(t); }
+    stats.farTracks = farLive.size;
+  };
   async function farAdd(track) {
     if (!track || track.kind !== 'audio' || track.readyState === 'ended' || farSeen.has(track.id)) return;
     if (chains.some((c) => c.raw === track || c.track === track)) return;     // our own mic is not the far end
@@ -322,8 +329,9 @@ registerProcessor('callguard-tap', CallGuardTap);
       if (far.ctx.state !== 'running') far.ctx.resume();
       const src = far.ctx.createMediaStreamSource(new MediaStream([track]));
       src.connect(far.node);
-      stats.farTracks++;
-      track.addEventListener('ended', () => { src.disconnect(); stats.farTracks--; });
+      farLive.set(track, src);
+      stats.farTracks = farLive.size;
+      track.addEventListener('ended', pruneFar);
     } catch (e) {
       log('far tap failed', e && e.name);
     }
@@ -358,8 +366,9 @@ registerProcessor('callguard-tap', CallGuardTap);
 
   // ---- status channel: the dashboard's meeting indicator, and its Leave ------------------------------------------
   const inCall = () => {
+    pruneFar();
     for (const pc of pcs) if (pc.connectionState === 'connected') return true;
-    return stats.farTracks > 0;
+    return farLive.size > 0;
   };
   function leaveCall() {
     const b = document.querySelector('button[aria-label*="leave call" i], [role="button"][aria-label*="leave call" i]');
@@ -382,5 +391,5 @@ registerProcessor('callguard-tap', CallGuardTap);
   status.onopen = sendStatus;
   setInterval(sendStatus, 1000);
 
-  log('bridge installed', window.__callguardBridge.source, BASE);
+  log('bridge installed', window.__athenaBridge.source, BASE);
 })();

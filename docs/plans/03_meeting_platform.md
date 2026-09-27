@@ -18,15 +18,15 @@ The device layer is also the only place the **shield** can act: it must modify *
 meeting app encodes it. A server-side bot can listen, but it can't clean your mic.
 
 ## Routing on Windows (this laptop)
-- **Outbound:** physical mic → CallGuard (shield) → **VB-CABLE "CABLE Input"** (playback device). In Zoom:
+- **Outbound:** physical mic → Athena (shield) → **VB-CABLE "CABLE Input"** (playback device). In Zoom:
   Microphone = **"CABLE Output (VB-Audio Virtual Cable)"**, and turn **off** Zoom's "Suppress background noise"
   (set it to Low) so Zoom's own processing doesn't mask the effect.
-- **Inbound:** Zoom Speaker = the normal headphones/speakers. CallGuard captures that device through **WASAPI
+- **Inbound:** Zoom Speaker = the normal headphones/speakers. Athena captures that device through **WASAPI
   loopback** (the `soundcard` library, `include_loopback=True`). Fallback: set the Zoom speaker to a second virtual
-  cable, and CallGuard captures it and plays it through to the headphones.
+  cable, and Athena captures it and plays it through to the headphones.
 - macOS: BlackHole 2ch replaces VB-CABLE (Keyguard's `realtime.py` already targets it); loopback = a Multi-Output
   Device.
-- `callguard devices` lists the devices and checks the routing; `docs/zoom_setup.md` has screenshots and steps.
+- `athena devices` lists the devices and checks the routing; `docs/zoom_setup.md` has screenshots and steps.
 
 ## The "AI agent" caller in the demo
 A second device (phone or laptop) joins the Zoom call as "IT Support". `demo/agent_caller.py` plays pre-rendered

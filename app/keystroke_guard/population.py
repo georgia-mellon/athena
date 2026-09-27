@@ -1,8 +1,8 @@
-"""Keyguard's attacker POPULATION as CallGuard readers (Ares' per-key sub-agents).
+"""Keyguard's attacker POPULATION as Athena readers (Ares' per-key sub-agents).
 
 keyguard.attackers.population fields four attackers with different inductive biases (keynet SE-CNN, widecnn, resnet,
 framegru Bi-GRU), all on the same differentiable log-mel (keyguard.shield.adversarial.torch_logmel) of KEY_WIN windows
-cut at onsets (keyguard.segment.windows). CallGuard trains them on the harrison press bank (36 keys A-Z0-9, the
+cut at onsets (keyguard.segment.windows). Athena trains them on the harrison press bank (36 keys A-Z0-9, the
 driver's seeded per-key split) and loads them as PopulationReader agents.
 
 Run:
@@ -141,7 +141,7 @@ def arena(rounds: int = 2, epochs: int = 5, warm_epochs: int = 10, pert_steps: i
 
 
 def burst(line: str = "hey meet me at noon my password is hunter2 thanks", root: Path = POP_DIR) -> dict:
-    """Each reader's accuracy on the arms-race demo burst (live_bank_rich synth, known onsets): CallGuard-style audio
+    """Each reader's accuracy on the arms-race demo burst (live_bank_rich synth, known onsets): Athena-style audio
     on the teammate's MacBook keys, a different keyboard than the harrison training presses."""
     from keyguard.agents.arms_race_demo import build_utterance
     y, _, onsets, kstr = build_utterance(line)

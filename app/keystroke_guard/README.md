@@ -23,29 +23,29 @@ In [`app/source/types.py`](../source/types.py):
 |---|---|---|
 | placeholder attacker | `app.keystroke_guard.mock:MockAttacker` | reads the true key with a set accuracy when the pipeline hands it the truth, chance otherwise and on shielded onsets |
 | placeholder shield | `app.keystroke_guard.mock:MockShield` | adds a quiet 7.6 kHz pilot tone for 100 ms after each key event (the mock attacker listens for it) |
-| real attacker | `app.keystroke_guard.driver:KeyguardCTCAttacker` | Keyguard's current attacker ("Ares"): `MtlCRNN` (CNN + BiGRU + CTC + per-frame onset head) on Keyguard's `ctc.model.logmel`, 37 keys (A-Z, 0-9, space). Weights: `CALLGUARD_ATTACKER_WEIGHTS` / `attacker_weights`, else `runs/keyguard/ctc_rich_ft.pt`. Each onset is read like Keyguard's `onset_gated_decode` reads a peak (non-blank logits, +/-1 frame at the onset frame, 1 s window) |
-| older attacker | `app.keystroke_guard.driver:KeyguardAttacker` | the **provisional** KeyNet CallGuard trained on harrison presses; no longer the default, kept because `adversarial.py`'s deltas are trained against it |
+| real attacker | `app.keystroke_guard.driver:KeyguardCTCAttacker` | Keyguard's current attacker ("Ares"): `MtlCRNN` (CNN + BiGRU + CTC + per-frame onset head) on Keyguard's `ctc.model.logmel`, 37 keys (A-Z, 0-9, space). Weights: `ATHENA_ATTACKER_WEIGHTS` / `attacker_weights`, else `runs/keyguard/ctc_rich_ft.pt`. Each onset is read like Keyguard's `onset_gated_decode` reads a peak (non-blank logits, +/-1 frame at the onset frame, 1 s window) |
+| older attacker | `app.keystroke_guard.driver:KeyguardAttacker` | the **provisional** KeyNet Athena trained on harrison presses; no longer the default, kept because `adversarial.py`'s deltas are trained against it |
 | real shield | `app.keystroke_guard.driver:KeyguardShield` | Keyguard's DSP `Shield`, streamed with an 80 ms lookahead; `key_frames=26` (press + release) |
 
 Real code is the teammate's Keyguard
 ([LordKarV/keyboard-acoustic-shield](https://github.com/LordKarV/keyboard-acoustic-shield), commit `55bb112`),
 **vendored** as the top-level `keyguard/` package (`import keyguard...`; local edits listed in
-[`keyguard/VENDORED.md`](../../keyguard/VENDORED.md)). CallGuard never imports from the teammate's checkout.
+[`keyguard/VENDORED.md`](../../keyguard/VENDORED.md)). Athena never imports from the teammate's checkout.
 
 **Weights and data** (gitignored): `uv run python -m app.keystroke_guard.get_assets` copies them once from a Keyguard
 checkout (`KEYGUARD_ROOT`, else `upstream/keyguard`, `../../keyboard`, `../keyboard-acoustic-shield`; `--root PATH`)
 into `runs/keyguard/` (`ctc_rich_ft.pt`, `demo_attacker.pt`, `supervised_mbp.pt`, `arena/`, `arena_memory.jsonl`, ...)
 and `data/keyguard/` (`live_bank_rich.npz`, `pool/harrison.npz`, `speech/`, `harrison/MBPWavs/`, ~300 MB), which is
-where `keyguard.config.RUNS` / `DATA` point. `.env` (`GEMINI_API_KEY`, `BACKBOARD_API_KEY`) is callguard's own, loaded by
+where `keyguard.config.RUNS` / `DATA` point. `.env` (`GEMINI_API_KEY`, `BACKBOARD_API_KEY`) is athena's own, loaded by
 `keyguard.config`. Keyguard's tools run from here, e.g. `uv run python -m keyguard.agents.arms_race_demo` (Ares vs Athena;
 writes `runs/keyguard/arms_race_data.js`), `uv run uvicorn keyguard.server:app --port 8000`, `uv run python -m keyguard.agents.live
-record --defend`. Config ([`callguard.example.toml`](../../callguard.example.toml)):
+record --defend`. Config ([`athena.example.toml`](../../athena.example.toml)):
 `[drivers] attacker`, `shield` = `"real"|"mock"`, `shield_mode = "off"|"dsp"|"adversarial"` (see below),
 top-level `attacker_weights`.
 
 ## Plug in a new model
 
-- **New attacker weights for KeyNet** (the teammate's): no code. Set `CALLGUARD_ATTACKER_WEIGHTS=path/to.pt` (a
+- **New attacker weights for KeyNet** (the teammate's): no code. Set `ATHENA_ATTACKER_WEIGHTS=path/to.pt` (a
   bare `state_dict` or `{"state_dict": ...}`) and run the harness with `--attacker real`.
 - **A new attacker or shield class**: implement the Protocol, then
   `python -m app.keystroke_guard.harness --attacker mypkg.mod:MyAttacker --shield mypkg.mod:MyShield`
@@ -185,7 +185,7 @@ Harness (`--shield-mode`, same attacker as above): shielded top-1 11.4 % (dsp), 
   on typing contexts rather than isolated presses.
 
 - The default attacker is now the teammate's (above). The KeyNet rows and the adversarial table describe the older
-  **provisional** KeyNet (CallGuard-trained, one MacBook keyboard, isolated presses, in-domain).
+  **provisional** KeyNet (Athena-trained, one MacBook keyboard, isolated presses, in-domain).
 - The shield misses plan 04's bar against the adaptive attacker at +10 dB (5.8 % vs <= 5.6 %) and its STOI is just
   under 0.9. `key_frames=26` was chosen on the same test presses (mild selection effect).
 - Synthetic mixing, no codec or meeting noise suppression; the real-world attack is capped by onset detection

@@ -1,4 +1,4 @@
-"""Hearsay harness: does a voice-authenticity driver fit CallGuard? (contract, latency, quick quality)
+"""Hearsay harness: does a voice-authenticity driver fit Athena? (contract, latency, quick quality)
 
     python -m app.hearsay.harness [--driver mock|real|module.path:ClassName] [--clips N]
 

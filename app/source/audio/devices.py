@@ -1,18 +1,18 @@
 """Device discovery and routing check (plan 03).
 
-Outbound: physical mic -> CallGuard -> "CABLE Input" (VB-CABLE playback side); Zoom's mic = "CABLE Output".
+Outbound: physical mic -> Athena -> "CABLE Input" (VB-CABLE playback side); Zoom's mic = "CABLE Output".
 Inbound: WASAPI loopback of the speaker Zoom plays to (soundcard, include_loopback=True).
 """
 from __future__ import annotations
 
-CABLE_IN = "cable input"    # playback device CallGuard writes the shielded mic into
+CABLE_IN = "cable input"    # playback device Athena writes the shielded mic into
 CABLE_OUT = "cable output"  # recording device the meeting app selects as its microphone
 PREFERRED_HOSTAPIS = ("Windows WASAPI", "MME", "Windows DirectSound")  # duplex needs both ends on one host API
 
 INSTALL_STEPS = """VB-CABLE (virtual microphone) not found.
   1. Download VBCABLE_Driver_Pack from https://vb-audio.com/Cable/ and unzip it.
   2. Right-click VBCABLE_Setup_x64.exe -> Run as administrator -> Install Driver.
-  3. Reboot, then run `callguard devices` again.
+  3. Reboot, then run `athena devices` again.
   4. In Zoom: Settings > Audio > Microphone = "CABLE Output (VB-Audio Virtual Cable)"; Suppress background noise = Low.
   (macOS: install BlackHole 2ch instead, `brew install blackhole-2ch`.) Full guide: docs/meeting_setup.md"""
 
@@ -65,7 +65,7 @@ def default_speaker() -> str | None:
 
 
 def routing_status(devices: list[dict] | None = None, speakers: list[str] | None = None) -> tuple[bool, str]:
-    """(ok, human-readable report) for `callguard devices`. ok = VB-CABLE present and a loopback speaker exists."""
+    """(ok, human-readable report) for `athena devices`. ok = VB-CABLE present and a loopback speaker exists."""
     devices = list_devices() if devices is None else devices
     speakers = loopback_speakers() if speakers is None else speakers
     cable_in = find_device(CABLE_IN, "output", devices=devices)

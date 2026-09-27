@@ -1,4 +1,4 @@
-"""Secret Shield harness: does a spoken-secret spotter fit CallGuard? (contract, latency, quick quality)
+"""Secret Shield harness: does a spoken-secret spotter fit Athena? (contract, latency, quick quality)
 
     python -m app.secret_shield.harness [--spotter mock|real|module.path:ClassName] [--mode outbound|inbound]
 

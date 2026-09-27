@@ -18,7 +18,7 @@ def _free_port() -> int:
 
 def test_headless_serves_dashboard_and_stops(monkeypatch):
     for slot in ("VOICE", "ATTACKER", "SHIELD", "SECRET"):
-        monkeypatch.setenv(f"CALLGUARD_DRIVERS_{slot}", "mock")
+        monkeypatch.setenv(f"ATHENA_DRIVERS_{slot}", "mock")
     port = _free_port()
     url = f"http://127.0.0.1:{port}/"
     out = {}
@@ -37,7 +37,7 @@ def test_headless_serves_dashboard_and_stops(monkeypatch):
         assert health and health["ok"] is True
         with urllib.request.urlopen(url, timeout=5) as r:
             page = r.read().decode()
-        assert "CallGuard" in page and 'id="meet-bar"' in page
+        assert "Athena" in page and 'id="meet-bar"' in page
         want, state, end = {"shield.state", "secret.state", "meet.state"}, {}, time.monotonic() + 5
         while not want <= set(state) and time.monotonic() < end:           # startup state reaches the dashboard
             with urllib.request.urlopen(url + "api/state", timeout=5) as r:  # (announced just after health is up)
@@ -51,11 +51,11 @@ def test_headless_serves_dashboard_and_stops(monkeypatch):
 
 
 def test_meet_url_opens_a_normal_tab(monkeypatch):
-    """`callguard app --meet-url ...` opens the meeting as a normal tab in the user's browser (the extension connects
+    """`athena app --meet-url ...` opens the meeting as a normal tab in the user's browser (the extension connects
     it), never an automated window."""
     from app.source.connectors.meet import launcher
     for slot in ("VOICE", "ATTACKER", "SHIELD", "SECRET"):
-        monkeypatch.setenv(f"CALLGUARD_DRIVERS_{slot}", "mock")
+        monkeypatch.setenv(f"ATHENA_DRIVERS_{slot}", "mock")
     seen = []
     monkeypatch.setattr(launcher, "open_tab", lambda url: seen.append(url) or "chrome")
     monkeypatch.setattr(launcher, "launch", lambda *a, **k: pytest.fail("automated browser launched"))

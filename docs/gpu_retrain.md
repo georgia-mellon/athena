@@ -1,13 +1,13 @@
 # GPU retrain handoff (2026-09-27)
 
-CallGuard's keystroke attacker is now Keyguard's CTC model (`MtlCRNN`, `runs/ctc_rich_ft.pt`). Job 1 (shield deltas) runs on the Mac; job 2
+Athena's keystroke attacker is now Keyguard's CTC model (`MtlCRNN`, `runs/ctc_rich_ft.pt`). Job 1 (shield deltas) runs on the Mac; job 2
 (a stronger Ares) runs on the GPU, then its output is copied back to the Mac. Neither job changes any contract
 or config.
 
 ## 0. Setup on the GPU machine
 
 ```bash
-# CallGuard, this branch
+# Athena, this branch
 git fetch && git checkout wp11-keyguard-ctc-attacker && uv sync
 # Keyguard (the teammate's repo), latest main: has the Backboard-agent changes
 cd ../keyboard-acoustic-shield && git pull && uv sync        # or wherever KEYGUARD_ROOT points
@@ -22,10 +22,10 @@ Data both jobs need, all in Keyguard's checkout (`KEYGUARD_ROOT`):
 
 Job 1 also needs Hearsay's speech pools (`HEARSAY_ROOT`, as for the earlier adversarial training).
 
-## 1. CallGuard's adversarial deltas vs the CTC attacker (the dashboard's Adversarial button)
+## 1. Athena's adversarial deltas vs the CTC attacker (the dashboard's Adversarial button)
 
 ```bash
-cd callguard
+cd athena
 KEYGUARD_ROOT=../keyboard-acoustic-shield HEARSAY_ROOT=../Hearsay \
   uv run python -m app.keystroke_guard.adversarial train --attacker ctc --threads 8
 ```
@@ -33,7 +33,7 @@ KEYGUARD_ROOT=../keyboard-acoustic-shield HEARSAY_ROOT=../Hearsay \
 - Optimizes the K = 8 universal deltas through the CTC attacker's differentiable log-mel on the Keyguard bank (10
   presses per key held out), same -18 dB budget, EOT and runtime format as before. ~2 s/step on 8 CPU threads,
   1000 steps (~30 min); CPU is fine.
-- Output: `runs/adversarial_deltas.pt`. Copy it to the Mac's `callguard/runs/`.
+- Output: `runs/adversarial_deltas.pt`. Copy it to the Mac's `athena/runs/`.
 - Check: `uv run python -m app.keystroke_guard.harness --attacker real --shield real --shield-mode dsp+adversarial`.
   The shielded top-1 should drop below the dsp-only row (bank presses: raw 54.1 %, dsp 14.6 %).
 
@@ -61,5 +61,5 @@ KEYGUARD_CKPT=runs/ctc_mix_ft.pt \
 - Compare against the current best on novel text, same eval as DEMO.md's ~80 %:
   `uv run python scratch/eval_live.py runs/ctc_mix_ft.pt` vs `uv run python scratch/eval_live.py runs/ctc_rich_ft.pt`
   (look at `greedy_acc`; ctc_rich_ft: 0.804).
-- **Only if it wins:** copy `runs/ctc_mix_ft.pt` to the Mac as `callguard/upstream/keyguard/runs/ctc_rich_ft.pt` (keep
+- **Only if it wins:** copy `runs/ctc_mix_ft.pt` to the Mac as `athena/upstream/keyguard/runs/ctc_rich_ft.pt` (keep
   the old file as a backup), then rerun job 1 against it. If it loses, keep `ctc_rich_ft.pt`.

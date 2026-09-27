@@ -1,9 +1,9 @@
 """Shared constants. ponytail: one place for the knobs everything tunes against."""
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent   # CallGuard: the callguard repo (vendored copy, keyguard/VENDORED.md)
-DATA = ROOT / "data" / "keyguard"                # CallGuard: gitignored, filled by app.keystroke_guard.get_assets
-RUNS = ROOT / "runs" / "keyguard"                # CallGuard: gitignored weights + agent memory
+ROOT = Path(__file__).resolve().parent.parent   # Athena: the athena repo (vendored copy, keyguard/VENDORED.md)
+DATA = ROOT / "data" / "keyguard"                # Athena: gitignored, filled by app.keystroke_guard.get_assets
+RUNS = ROOT / "runs" / "keyguard"                # Athena: gitignored weights + agent memory
 
 # Load .env so GEMINI_API_KEY / BACKBOARD_API_KEY reach os.environ everywhere.
 try:

@@ -1,10 +1,10 @@
-# Hearsay R5 vs R4ft inside CallGuard
+# Hearsay R5 vs R4ft inside Athena
 
-`app/hearsay/eval/r5_in_callguard.py`, 2026-09-26, dev laptop CPU (16 logical cores), Hearsay driver on 4 torch threads, 26 min. CPU load from other processes when the run started: 20 %.
+`app/hearsay/eval/r5_in_athena.py`, 2026-09-26, dev laptop CPU (16 logical cores), Hearsay driver on 4 torch threads, 26 min. CPU load from other processes when the run started: 20 %.
 
 ## Question
 
-CallGuard switches its voice pillar from R4ft (the XLS-R fine-tune alone) to R5 (Hearsay's submitted fusion: R4ft + the R1 LightGBM on classic features, frozen weights). The Secret Shield arms when the smoothed voice risk V >= `secret.arm_voice` (0.5; stays armed while V >= `keep_voice` 0.3; V = EMA of p_synthetic, half-life 6 s). So the model decides when your spoken codes get bleeped. Does R5 arm sooner on fake callers, arm less on real ones, and keep up with the 2 s hop?
+Athena switches its voice pillar from R4ft (the XLS-R fine-tune alone) to R5 (Hearsay's submitted fusion: R4ft + the R1 LightGBM on classic features, frozen weights). The Secret Shield arms when the smoothed voice risk V >= `secret.arm_voice` (0.5; stays armed while V >= `keep_voice` 0.3; V = EMA of p_synthetic, half-life 6 s). So the model decides when your spoken codes get bleeped. Does R5 arm sooner on fake callers, arm less on real ones, and keep up with the 2 s hop?
 
 ## Method
 
@@ -108,7 +108,7 @@ Arm time and V are per call; latency is the median of the per-call medians and t
 | r5 | fake14 | fake | mlaad_tiny | mlaad_Nari_Dia_1.6B |  | 0.612 | 0.833 | 0.416 |
 | r5 | fake31 | fake | cvoicefake_en | cvoicefake_en_griffin_lim_generated |  | 0.602 | 0.714 | 0.405 |
 
-## Latency per 4 s window (back to back, no other CallGuard pillar)
+## Latency per 4 s window (back to back, no other Athena pillar)
 
 | mode | when | load_before | load_after | median | p95 | max |
 | --- | --- | --- | --- | --- | --- | --- |

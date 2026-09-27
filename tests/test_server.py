@@ -57,7 +57,7 @@ def test_index_and_static():
     _, _, app = make()
     with TestClient(app, base_url=LOCAL) as c:
         r = c.get("/")
-        assert r.status_code == 200 and "CallGuard" in r.text and "/static/app.js" in r.text
+        assert r.status_code == 200 and "Athena" in r.text and "/static/app.js" in r.text
         assert c.get("/static/app.js").status_code == 200
         assert c.get("/static/style.css").status_code == 200
 

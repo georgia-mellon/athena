@@ -27,7 +27,7 @@ class EventBus:
         self._busy = False
         self._closed = False
         self.dropped = 0
-        self._worker = threading.Thread(target=self._run, name="callguard-bus", daemon=True)
+        self._worker = threading.Thread(target=self._run, name="athena-bus", daemon=True)
         self._worker.start()
 
     def publish(self, event: Event) -> None:

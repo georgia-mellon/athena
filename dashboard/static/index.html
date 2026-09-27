@@ -3,14 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CallGuard</title>
+<title>Athena</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="top">
   <div class="brand">
-    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5" class="tick"/></svg>
-    <h1>CallGuard</h1>
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+      <clipPath id="mark"><path d="M1 4h22v9.5L12 22 1 13.5Z"/></clipPath>
+      <g clip-path="url(#mark)"><rect x="1" y="4" width="3" height="18"/><rect x="5.75" y="4" width="3" height="18"/>
+        <rect x="10.5" y="4" width="3" height="18"/><rect x="15.25" y="4" width="3" height="18"/><rect x="20" y="4" width="3" height="18"/></g>
+    </svg>
+    <h1 class="wordmark">athena</h1>
     <span id="conn" class="pill off">connecting…</span>
   </div>
 
@@ -19,7 +23,7 @@
     <input id="meet-url" type="url" placeholder="meet.google.com/abc-defg-hij" aria-label="Google Meet link" spellcheck="false">
     <button id="meet-join" class="primary">Join</button>
     <button id="meet-leave" disabled title="leaves the call in your Meet tab">Leave</button>
-    <button id="meet-ext" title="Open the CallGuard extension folder: chrome://extensions → Developer mode → Load unpacked">Install extension</button>
+    <button id="meet-ext" title="Open the Athena extension folder: chrome://extensions → Developer mode → Load unpacked">Install extension</button>
     <a href="/meet/testroom" target="_blank" rel="noopener" class="link">Test room ↗</a>
   </section>
 
@@ -63,7 +67,10 @@
 
 <main class="panels">
   <section class="card" aria-label="Who is speaking">
-    <div class="card-head"><h2>Caller voice</h2>
+    <div class="card-head"><h2 id="voice-h">Caller voice</h2>
+      <span class="seg" role="group" aria-label="whose voice is judged">
+        <button data-src="far" class="small on" title="the other people in the call">Caller</button><button data-src="mic" class="small" title="your own mic: test alone, e.g. a phone playing an AI voice into your laptop">My mic</button>
+      </span>
       <button id="voice-flush" class="small" title="A new person is speaking: forget the previous voice">Flush</button></div>
     <div class="levels" aria-label="audio in">
       <span class="lab">Mic</span>

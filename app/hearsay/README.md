@@ -1,6 +1,6 @@
 # Hearsay pillar: is the voice real?
 
-CallGuard scores the far-end voice of a call (4 s windows, every 2 s, on a worker thread) and publishes
+Athena scores the far-end voice of a call (4 s windows, every 2 s, on a worker thread) and publishes
 `voice.verdict`. A high `p_synthetic` raises the threat score and arms the Secret Shield.
 
 ## Contract
@@ -21,7 +21,7 @@ CallGuard scores the far-end voice of a call (4 s windows, every 2 s, on a worke
 | placeholder | `app.hearsay.mock:MockVoice` | deterministic: `1 - spectral flatness`, or a scripted schedule. No weights. |
 | real | `app.hearsay.driver:HearsayDriver` | Hearsay's final E5 fusion (`mode="e5"`, default: R4ft + R6 XLS-R + R1 LightGBM), the R5 fusion (`mode="r5"`: R4ft + R1), or R4ft alone (`mode="r4ft"`), read-only from `HEARSAY_ROOT` |
 
-Pick one in `callguard.toml` ([`callguard.example.toml`](../../callguard.example.toml)): `[drivers] voice = "real"|"mock"`,
+Pick one in `athena.toml` ([`athena.example.toml`](../../athena.example.toml)): `[drivers] voice = "real"|"mock"`,
 `hearsay_mode = "e5"|"r5"|"r4ft"` (default `e5`), `hearsay_ai_p` (decision threshold, default 0.7: a window is AI when its
 calibrated p >= 0.7 instead of Hearsay's 0.5; p_synthetic is re-centred so 0.5 still means "at the threshold"), `device`, `threads`; `HEARSAY_ROOT` defaults to `../Hearsay`. The real driver checks
 `best.pth` against the sha256 frozen in its `config.json` and caches the threshold calibration in
@@ -60,13 +60,13 @@ Hearsay harness: real
 (The probe signals are a noise burst and a synthetic harmonic tone, so p near 0.8 on them is expected: neither is
 human speech.)
 
-## Measured in CallGuard
+## Measured in Athena
 
 - Latency per 4 s window on CPU (4 threads): ~0.4-0.65 s (r4ft), ~0.5-0.55 s (r5), ~1.4 s (e5: two XLS-R passes + R1).
   The pipeline scores every 2 s, so all three keep up (e5 with ~0.6 s to spare).
 - R5 vs R4ft in the pipeline (40 real + 40 fake simulated callers from Hearsay's held-out set): both arm the Secret
   Shield on 37/40 fakes (R5 median 13.2 s after the caller starts, R4ft 12.0 s) and on the same 10/40 reals; no
-  window skipped even at 100 % CPU. See [`docs/reports/hearsay_r5_in_callguard.md`](../../docs/reports/hearsay_r5_in_callguard.md).
+  window skipped even at 100 % CPU. See [`docs/reports/hearsay_r5_in_athena.md`](../../docs/reports/hearsay_r5_in_athena.md).
 - Keystrokes under the voice, with the Keyguard shield on: Hearsay flags 2 / 100 real voices (0 / 100 without the
   shield; median p_synthetic 0.14 -> 0.18). See [`docs/reports/attack_under_speech.md`](../../docs/reports/attack_under_speech.md).
 
@@ -83,4 +83,4 @@ human speech.)
 ---
 
 ## The Hearsay model
-<!-- TEMPLATE: a short overview of the Hearsay model as used inside CallGuard (what it is, the checkpoint CallGuard loads, the deployment threshold, one or two headline numbers) and a link to the Hearsay model repository, https://github.com/danmano411/hearsay, which holds the full model documentation. -->
+<!-- TEMPLATE: a short overview of the Hearsay model as used inside Athena (what it is, the checkpoint Athena loads, the deployment threshold, one or two headline numbers) and a link to the Hearsay model repository, https://github.com/danmano411/hearsay, which holds the full model documentation. -->

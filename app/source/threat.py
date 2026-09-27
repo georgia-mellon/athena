@@ -181,7 +181,7 @@ class ThreatEngine:
         def loop():
             while not self._stop.wait(1.0 / self.cfg.tick_hz):
                 self.tick()
-        self._thread = threading.Thread(target=loop, name="callguard-threat", daemon=True)
+        self._thread = threading.Thread(target=loop, name="athena-threat", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:

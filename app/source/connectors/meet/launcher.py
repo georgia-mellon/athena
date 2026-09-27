@@ -1,7 +1,7 @@
-"""Open Google Meet in CallGuard's own Chrome (or Edge) window with the audio bridge injected.
+"""Open Google Meet in Athena's own Chrome (or Edge) window with the audio bridge injected.
 
-The browser runs a dedicated profile (PROFILE: %LOCALAPPDATA%\\CallGuard\\meet-profile, ~/Library/Application
-Support/CallGuard/meet-profile or ~/.local/share/CallGuard/meet-profile: outside the repo, so a zip of it never
+The browser runs a dedicated profile (PROFILE: %LOCALAPPDATA%\\Athena\\meet-profile, ~/Library/Application
+Support/Athena/meet-profile or ~/.local/share/Athena/meet-profile: outside the repo, so a zip of it never
 carries a signed-in Google session. Sign in there once, or join as a guest) with --remote-debugging-port=0; the port
 it picked is read from <profile>/DevToolsActivePort. Chrome 136+ only allows remote debugging with a non-default
 --user-data-dir, which we always pass.
@@ -55,7 +55,7 @@ def _data_dir() -> Path:
     return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
 
 
-PROFILE = _data_dir() / "CallGuard" / "meet-profile"
+PROFILE = _data_dir() / "Athena" / "meet-profile"
 MEET_ORIGIN = "https://meet.google.com"
 MEET_HOME = MEET_ORIGIN + "/"
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
@@ -99,8 +99,8 @@ def where(url: str) -> str | None:
 
 
 def find_browser() -> Path | None:
-    """CALLGUARD_BROWSER, then Chrome, then Edge (Windows install paths, macOS, PATH)."""
-    env = os.environ.get("CALLGUARD_BROWSER")
+    """ATHENA_BROWSER, then Chrome, then Edge (Windows install paths, macOS, PATH)."""
+    env = os.environ.get("ATHENA_BROWSER")
     if env and Path(env).is_file():
         return Path(env)
     roots = [os.environ.get(k) for k in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")]
@@ -121,7 +121,7 @@ def find_browser() -> Path | None:
 
 
 def open_tab(url: str) -> str:
-    """Open `url` as a normal tab in the user's own Chrome / Edge (their profile, no automation). The CallGuard
+    """Open `url` as a normal tab in the user's own Chrome / Edge (their profile, no automation). The Athena
     extension (extension/, loaded unpacked once) puts the bridge in the page. Returns what opened it."""
     b = find_browser()
     if b is None:
@@ -150,7 +150,7 @@ def _merge_features(args: list[str]) -> list[str]:
 
 
 def bridge_source(port: int) -> str:
-    return (f"window.__callguardPort={int(port)};window.__callguardBridgeSource='cdp';\n"
+    return (f"window.__athenaPort={int(port)};window.__athenaBridgeSource='cdp';\n"
             + (HERE / "extension" / "bridge.js").read_text(encoding="utf-8"))
 
 
@@ -166,7 +166,7 @@ class MeetSession:
         self._pending: dict[int, asyncio.Future] = {}
         self._n = 0
         self._loop = asyncio.new_event_loop()
-        threading.Thread(target=self._loop.run_forever, name="callguard-cdp", daemon=True).start()
+        threading.Thread(target=self._loop.run_forever, name="athena-cdp", daemon=True).start()
         self._call(self._connect(ws_url))
 
     # --- plumbing ---------------------------------------------------------------------------------------------
@@ -337,7 +337,7 @@ def launch(url: str | None, port: int, profile_dir: Path | None = None,
     url = meet_url(url)
     exe = find_browser()
     if exe is None:
-        raise FileNotFoundError("Chrome or Edge not found (set CALLGUARD_BROWSER to the browser's .exe)")
+        raise FileNotFoundError("Chrome or Edge not found (set ATHENA_BROWSER to the browser's .exe)")
     profile = Path(profile_dir or PROFILE)
     profile.mkdir(parents=True, exist_ok=True)
     extra = list(extra_args or [])
@@ -368,7 +368,7 @@ def _start(exe: Path, profile: Path, port: int, extra_args: list[str]) -> MeetSe
     while not active.exists() or len(active.read_text().split()) < 2:
         if proc.poll() is not None or time.monotonic() > deadline:
             proc.kill()
-            raise RuntimeError(f"{exe.name} didn't open a DevTools port (is a CallGuard Meet window already open "
+            raise RuntimeError(f"{exe.name} didn't open a DevTools port (is an Athena Meet window already open "
                                f"on {profile}? close it first)")
         time.sleep(0.1)
     dev_port, path = active.read_text().split()[:2]

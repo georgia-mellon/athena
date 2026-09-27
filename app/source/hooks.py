@@ -38,7 +38,7 @@ def to_json(ev: Event) -> str:
 
 
 def console_sink(ev: Event) -> None:
-    print(f"[callguard] {to_json(ev)}", flush=True)
+    print(f"[athena] {to_json(ev)}", flush=True)
 
 
 def jsonl_sink(path: str | Path) -> Callable[[Event], None]:
@@ -63,7 +63,7 @@ class WebhookSink:
         self._post = post or httpx.post
         self._q: queue.Queue = queue.Queue(maxsize=maxsize)
         self.dropped = self.failed = self.sent = 0
-        threading.Thread(target=self._run, name="callguard-webhook", daemon=True).start()
+        threading.Thread(target=self._run, name="athena-webhook", daemon=True).start()
 
     def __call__(self, ev: Event) -> None:
         try:

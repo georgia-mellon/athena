@@ -17,9 +17,9 @@ import os
 import re
 from typing import Optional
 
-from .. import config  # noqa: F401  CallGuard: loads .env before the env reads below
+from .. import config  # noqa: F401  Athena: loads .env before the env reads below
 
-# CallGuard: Ares and Athena reason on Gemini through Backboard (Backboard = memory layer), overridable by env
+# Athena: Ares and Athena reason on Gemini through Backboard (Backboard = memory layer), overridable by env
 PROVIDER = os.environ.get("BACKBOARD_PROVIDER") or "google"
 MODEL = os.environ.get("BACKBOARD_MODEL") or "gemini-2.5-flash"
 

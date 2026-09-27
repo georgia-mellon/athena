@@ -59,7 +59,7 @@ def _agent_ask(agent: str, system: str, prompt: str) -> str:
         return ""
 
 
-last_route = ""   # CallGuard: which path answered the last ask(), e.g. "backboard:google/gemini-2.5-flash"
+last_route = ""   # Athena: which path answered the last ask(), e.g. "backboard:google/gemini-2.5-flash"
 
 
 def _bb_route() -> str:

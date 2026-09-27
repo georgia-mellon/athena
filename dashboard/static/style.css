@@ -1,19 +1,20 @@
-/* CallGuard dashboard. System fonts only (the venue may have no network). One neutral palette + one accent for
-   anything clickable; colour that carries meaning is reserved for status (safe / watch / warn / critical), and every
-   status also has a text label. Type scale: 12 / 13 / 14 / 16 / 20 px, plus the threat number. */
+/* Athena dashboard, in the brand's colours: black, white and Athena yellow (#FDAE17, from img/athena_image.png).
+   Yellow marks anything clickable and the live data; status runs neutral -> pale yellow -> yellow -> red (red only for
+   critical), and every status also has a text label. System fonts only (the venue may have no network).
+   Type scale: 12 / 13 / 14 / 16 / 20 px, plus the threat number. */
 :root {
-  --bg: #0d1117; --surface: #161b22; --surface-2: #1d2430; --border: #2b3340;
-  --text: #e6edf3; --text-2: #9aa6b4; --accent: #4c8dff; --on-accent: #ffffff;
-  --safe: #3fb950; --watch: #d4a72c; --warn: #e3833b; --crit: #f0544f;
+  --bg: #000000; --surface: #0b0b0b; --surface-2: #161616; --border: #272727;
+  --text: #fafafa; --text-2: #a3a3a3; --accent: #fdae17; --accent-text: #fdae17; --on-accent: #000000;
+  --safe: #d4d4d4; --watch: #ffd98a; --warn: #fdae17; --crit: #ff4d4d;
   --r: 10px; --r-sm: 6px;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
   color-scheme: dark;
 }
 :root[data-theme="light"] {
-  --bg: #f4f6f9; --surface: #ffffff; --surface-2: #eef1f5; --border: #d7dde5;
-  --text: #18202b; --text-2: #566273; --accent: #2563eb; --on-accent: #ffffff;
-  --safe: #1a7f37; --watch: #8a6300; --warn: #b54a00; --crit: #cf222e;
+  --bg: #ffffff; --surface: #fafafa; --surface-2: #f0f0f0; --border: #e0e0e0;
+  --text: #0a0a0a; --text-2: #525252; --accent: #fdae17; --accent-text: #9a6200; --on-accent: #000000;
+  --safe: #404040; --watch: #a87400; --warn: #c27c00; --crit: #d92d20;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -38,7 +39,7 @@ button.ghost { background: transparent; }
 button.small { min-height: 26px; padding: 2px 10px; font-size: 12px; }
 button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 input::placeholder { color: var(--text-2); opacity: .8; }
-.link { color: var(--accent); font-size: 13px; text-decoration: none; white-space: nowrap; } .link:hover { text-decoration: underline; }
+.link { color: var(--accent-text); font-size: 13px; text-decoration: none; white-space: nowrap; } .link:hover { text-decoration: underline; }
 
 /* pills: neutral by default, colour only for a status that means something */
 .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 2px 10px;
@@ -54,9 +55,8 @@ input::placeholder { color: var(--text-2); opacity: .8; }
 .top { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--border);
        margin-bottom: 16px; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.logo { width: 22px; height: 22px; fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent);
-        stroke-width: 1.6; stroke-linejoin: round; }
-.logo .tick { fill: none; stroke-linecap: round; }
+.logo { width: 24px; height: 24px; fill: var(--accent); }
+h1.wordmark { font-size: 20px; font-weight: 800; letter-spacing: -.01em; text-transform: lowercase; }
 .meet { display: flex; align-items: center; gap: 8px; flex: 1 1 520px; flex-wrap: wrap; }
 .meet input { flex: 1 1 220px; min-width: 180px; max-width: 360px; }
 .tools { display: flex; align-items: center; gap: 8px; }
@@ -97,9 +97,9 @@ input::placeholder { color: var(--text-2); opacity: .8; }
 .levels { display: grid; grid-template-columns: auto 1fr 52px; gap: 6px 8px; align-items: center; margin-bottom: 4px; }
 .levels .num { font-size: 12px; text-align: right; }
 .meter { position: relative; height: 10px; background: var(--surface-2); border-radius: 5px; }
-.lv { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 5px; background: var(--accent);
+.lv { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 5px; background: var(--text-2);
       transition: width .12s linear; }
-.lv.hot { background: var(--safe); }
+.lv.hot { background: var(--accent); }                         /* above the speech gate */
 .gate-line { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); left: 50%; pointer-events: none; }
 #gate { position: absolute; inset: -6px 0; width: 100%; height: 22px; margin: 0; padding: 0; min-height: 0; opacity: 0;
         cursor: ew-resize; border: 0; background: transparent; }

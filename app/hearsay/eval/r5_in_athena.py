@@ -1,4 +1,4 @@
-"""R4ft vs R5 inside CallGuard's pipeline: how fast does each arm the Secret Shield on a fake caller, how often does it
+"""R4ft vs R5 inside Athena's pipeline: how fast does each arm the Secret Shield on a fake caller, how often does it
 arm on a real one, and does it keep up with the 2 s hop?
 
 Calls (fixed seed, Hearsay's held-out test_internal_testlike rows, read-only from HEARSAY_ROOT):
@@ -18,8 +18,8 @@ per mode: the level timeline, when the Secret Shield armed, and voice latency wi
 back-to-back latency bench per mode, and the arming delay / false arms under other half-lives and arm thresholds,
 recomputed from the recorded verdicts with the real ThreatEngine.
 
-Run: PYTHONDONTWRITEBYTECODE=1 .venv/Scripts/python app/hearsay/eval/r5_in_callguard.py
-     (writes docs/reports/hearsay_r5_in_callguard.{md,csv}; ~30-40 min on the dev laptop CPU)
+Run: PYTHONDONTWRITEBYTECODE=1 .venv/Scripts/python app/hearsay/eval/r5_in_athena.py
+     (writes docs/reports/hearsay_r5_in_athena.{md,csv}; ~30-40 min on the dev laptop CPU)
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ from app.source.threat import LEVELS, ThreatEngine  # noqa: E402
 from app.source.types import SR, Event  # noqa: E402
 
 OUT = REPO / "docs" / "reports"
-CACHE = REPO / "runs" / "cache" / "hearsay_r5_in_callguard.pkl"   # results, for --report-only
+CACHE = REPO / "runs" / "cache" / "hearsay_r5_in_athena.pkl"   # results, for --report-only
 SEED = 0
 N_CALLS = 40
 GAP = np.zeros(int(0.4 * SR), np.float32)
@@ -367,15 +367,15 @@ def write_report(df, sens, demos, benches, elapsed, load0):
                .agg(calls=("call", "size"), armed=("armed", "sum"), t_arm=("t_arm", "median"),
                     p_median=("p_median", "median")).round(2).reset_index())
     lines = [
-        "# Hearsay R5 vs R4ft inside CallGuard",
+        "# Hearsay R5 vs R4ft inside Athena",
         "",
-        f"`app/hearsay/eval/r5_in_callguard.py`, {time.strftime('%Y-%m-%d')}, dev laptop CPU "
+        f"`app/hearsay/eval/r5_in_athena.py`, {time.strftime('%Y-%m-%d')}, dev laptop CPU "
         f"({os.cpu_count()} logical cores), Hearsay driver on {THREADS} torch threads, {elapsed / 60:.0f} min. "
         f"CPU load from other processes when the run started: {load0:.0f} %.",
         "",
         "## Question",
         "",
-        "CallGuard switches its voice pillar from R4ft (the XLS-R fine-tune alone) to R5 (Hearsay's submitted fusion: "
+        "Athena switches its voice pillar from R4ft (the XLS-R fine-tune alone) to R5 (Hearsay's submitted fusion: "
         "R4ft + the R1 LightGBM on classic features, frozen weights). The Secret Shield arms when the smoothed voice "
         "risk V >= `secret.arm_voice` (0.5; stays armed while V >= `keep_voice` 0.3; V = EMA of p_synthetic, "
         "half-life 6 s). So the model decides when your spoken codes get bleeped. Does R5 arm sooner on fake callers, "
@@ -416,7 +416,7 @@ def write_report(df, sens, demos, benches, elapsed, load0):
         "",
         md(miss, index=False) if len(miss) else "None.",
         "",
-        "## Latency per 4 s window (back to back, no other CallGuard pillar)",
+        "## Latency per 4 s window (back to back, no other Athena pillar)",
         "",
         md(pd.DataFrame(benches).round(0), index=False),
         "",
@@ -477,7 +477,7 @@ def write_report(df, sens, demos, benches, elapsed, load0):
         "Keyguard's CLASSES now has 37 with space), so the mock attacker stood in there.",
         "",
     ]
-    (OUT / "hearsay_r5_in_callguard.md").write_text("\n".join(lines), encoding="utf-8")
+    (OUT / "hearsay_r5_in_athena.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 RECOMMENDATION = """
@@ -540,7 +540,7 @@ def main():
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.write_bytes(pickle.dumps(res))
     df, verdicts = res["df"], res["verdicts"]
-    df.to_csv(OUT / "hearsay_r5_in_callguard.csv", index=False)
+    df.to_csv(OUT / "hearsay_r5_in_athena.csv", index=False)
     sens = sensitivity(df, verdicts)
     print(summary(df).to_string())
     print(sens.round(2).to_string(index=False))

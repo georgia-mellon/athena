@@ -32,7 +32,7 @@ PROVISIONAL_AUG = REPO / "runs" / "provisional_keynet_speechaug.pt"  # plan 04's
 KEY_FRAMES = 26
 SPLIT_SEED = 0          # plan 04: per-key seeded 60/40 split of harrison presses
 TRAIN_FRAC = 0.6
-N_KEYS = 36             # harrison = A-Z0-9 = keyguard CLASSES[:36]; every attacker CallGuard trains has this head
+N_KEYS = 36             # harrison = A-Z0-9 = keyguard CLASSES[:36]; every attacker Athena trains has this head
 SHIELD_MODES = ("dsp", "adversarial", "dsp+adversarial")   # KeyguardShield.set_mode
 DASHBOARD_ADVERSARIAL = "dsp+adversarial"   # what the pipeline's / dashboard's "adversarial" runs (README: measured)
 
@@ -66,9 +66,9 @@ def harrison_split(seed: int = SPLIT_SEED):
 class KeyguardAttacker:
     """KeystrokeAttackerDriver around Keyguard's KeyNet.
 
-    Weights: `weights` arg, else CALLGUARD_ATTACKER_WEIGHTS, else the provisional speech-augmented KeyNet saved by
+    Weights: `weights` arg, else ATHENA_ATTACKER_WEIGHTS, else the provisional speech-augmented KeyNet saved by
     app/keystroke_guard/eval/attack_under_speech.py (the adaptive attacker: it has heard keys under speech), else a clean
-    provisional KeyNet that CallGuard trains once on the harrison train split with Keyguard's own train_attacker and
+    provisional KeyNet that Athena trains once on the harrison train split with Keyguard's own train_attacker and
     caches in runs/. The clean one reads keys well alone but not under speech. Provisional = ours, not the
     teammate's tuned attacker; it's replaced when their weights ship (plan 05).
     """
@@ -81,7 +81,7 @@ class KeyguardAttacker:
         # harrison has A-Z0-9 = CLASSES[:36]; Keyguard later appended space (37), so size the head from the weights
         self.classes = list(CLASSES)[:N_KEYS]
         self.net = KeyNet(len(self.classes)).eval()
-        path = weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS")
+        path = weights or os.environ.get("ATHENA_ATTACKER_WEIGHTS")
         self.provisional = not path
         path = Path(path) if path else (PROVISIONAL_AUG if PROVISIONAL_AUG.exists() else PROVISIONAL)
         if not path.exists():
@@ -97,7 +97,7 @@ class KeyguardAttacker:
         kind = ", speech-aug" if path == PROVISIONAL_AUG else ""
         self.name = f"keyguard-keynet{f' (provisional{kind})' if self.provisional else ''}"
         if self.provisional:
-            log.warning("attacker: using PROVISIONAL KeyNet %s (CallGuard-trained, not the teammate's)", path)
+            log.warning("attacker: using PROVISIONAL KeyNet %s (Athena-trained, not the teammate's)", path)
 
     def _train_provisional(self, path: Path, epochs: int) -> None:
         import torch
@@ -140,7 +140,7 @@ CTC_WIN = 1             # +/- frames averaged at the onset frame (Keyguard's ons
 class KeyguardCTCAttacker:
     """KeystrokeAttackerDriver around Keyguard's current attacker: MtlCRNN (CNN -> BiGRU -> CTC + per-frame onset head,
     `keyguard.ctc.train_overlap`), weights `runs/keyguard/ctc_rich_ft.pt` (or `weights` /
-    CALLGUARD_ATTACKER_WEIGHTS). Features are Keyguard's own `keyguard.ctc.model.logmel`.
+    ATHENA_ATTACKER_WEIGHTS). Features are Keyguard's own `keyguard.ctc.model.logmel`.
 
     Keyguard's decoder finds keystrokes with the onset head; here the onsets are given, so each one is read the way
     `onset_gated_decode` reads a peak: non-blank logits averaged over +/-1 frame at frame onset // HOP (the frames the
@@ -152,7 +152,7 @@ class KeyguardCTCAttacker:
         import torch
         from keyguard.ctc.data import VOCAB
         from keyguard.ctc.train_overlap import MtlCRNN
-        path = Path(weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS") or CTC_WEIGHTS)
+        path = Path(weights or os.environ.get("ATHENA_ATTACKER_WEIGHTS") or CTC_WEIGHTS)
         if not path.exists():
             raise FileNotFoundError(f"CTC attacker weights not found: {path} (run python -m app.keystroke_guard.get_assets)")
         state = torch.load(path, map_location="cpu")

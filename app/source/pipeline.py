@@ -160,6 +160,8 @@ class Pipeline:
         self.meet_pages: dict[int, tuple[float, str | None, dict]] = {}   # /meet/status: id -> (time, origin, status)
         self.meet_command: Callable[[dict], bool] | None = None        # set by the router: a command to the page
         self.speech_db = SPEECH_DB
+        self.voice_source = "far"               # far = the caller (default) | mic = your own mic (solo tests)
+        self._call_phase: str | None = None     # meet.call: none | open | call | local, from the extension's reports
         self.ready = False                      # drivers loaded and the voice model warmed up (system.state)
         self._run_stop: threading.Event | None = None
         self._run_thread: threading.Thread | None = None
@@ -250,16 +252,20 @@ class Pipeline:
         return y
 
     # --- workers ----------------------------------------------------------------------------------------------
+    def _voice_ring(self) -> Ring:
+        return self.mic.raw if self.voice_source == "mic" else self.far
+
     def voice_step(self) -> bool:
-        """Score the next due far-end window. True if a window was due (scored or skipped as silence)."""
-        total = self.far.total
+        """Score the next due window of the judged stream (the caller, or your mic). True if one was due."""
+        ring = self._voice_ring()
+        total = ring.total
         if total < self._next_voice:
             return False
         if total - self._next_voice > VOICE_HOP:        # fell behind (slow model): jump to the newest window
             self._next_voice = total
         stop = self._next_voice
         self._next_voice += VOICE_HOP
-        x = self.far.read_range(stop - VOICE_WIN, stop)
+        x = ring.read_range(stop - VOICE_WIN, stop)
         if x is None:
             return True
         speech = speech_fraction(x, energy_db=self.speech_db)
@@ -459,7 +465,19 @@ class Pipeline:
 
     def _publish_system(self) -> None:
         self.bus.emit("system.state", ready=self.ready, voice=self.voice.name, speech_db=self.speech_db,
-                      speech_min=SPEECH_MIN)
+                      speech_min=SPEECH_MIN, voice_source=self.voice_source)
+
+    def set_voice_source(self, source: str) -> str:
+        """Dashboard control: which stream Hearsay judges. far = the caller (the product); mic = your own mic, to test
+        alone (e.g. a phone playing an AI voice into your laptop's mic during a Meet). Starts a fresh voice history."""
+        if source not in ("far", "mic"):
+            raise ValueError("voice source must be far | mic")
+        self.voice_source = source
+        self._next_voice = self._voice_ring().total + VOICE_WIN
+        self._last_speech = None
+        self._flush("source")
+        self._publish_system()
+        return source
 
     def set_speech_db(self, db: float) -> float:
         """Dashboard control: the VAD gate. A far-end window is scored when >= SPEECH_MIN of its frames are louder."""
@@ -513,9 +531,9 @@ class Pipeline:
                     out[f"{k}_db"] = dbfs(ring.read_last(SR // LEVEL_HZ)) if total != seen[k] else None
                     seen[k] = total
                 self.bus.emit("audio.level", **out)
-        ts = [threading.Thread(target=loop, args=(f,), name=f"callguard-{f.__name__}", daemon=True)
+        ts = [threading.Thread(target=loop, args=(f,), name=f"athena-{f.__name__}", daemon=True)
               for f in (self.voice_step, self.attack_step, self.secret_step, self.request_step)]
-        ts.append(threading.Thread(target=levels, name="callguard-levels", daemon=True))
+        ts.append(threading.Thread(target=levels, name="athena-levels", daemon=True))
         for t in ts:
             t.start()
         return ts
@@ -618,7 +636,7 @@ class Pipeline:
         self._meet_anchor = ArrivalAnchor()
         self._workers(stop)
         self.engine.start()
-        threading.Thread(target=self._meet_watch, args=(stop,), name="callguard-meet-state", daemon=True).start()
+        threading.Thread(target=self._meet_watch, args=(stop,), name="athena-meet-state", daemon=True).start()
         self._publish_meet()
 
     def meet_mic(self, block: np.ndarray) -> np.ndarray:
@@ -683,6 +701,18 @@ class Pipeline:
             self.meet_pages[pid] = (time.monotonic(), origin, status)
         self._publish_meet()
 
+    def _call_event(self, page: dict | None) -> None:
+        """meet.call on every change of what the extension reports: a Meet tab opened / closed, a call joined / left
+        (the dashboard's event log, and any hook subscribed to meet.*)."""
+        phase = "none" if not page else "local" if page.get("site") != "meet" else "call" if page.get("in_call") else "open"
+        prev, self._call_phase = self._call_phase, phase
+        if prev is None or prev == phase:
+            return
+        event = {("open", "call"): "joined", ("local", "call"): "joined", ("none", "call"): "joined",
+                 ("call", "open"): "left", ("call", "none"): "left", ("call", "local"): "left"}.get((prev, phase))
+        event = event or {"open": "meet_open", "none": "meet_closed", "local": "test_room"}.get(phase, phase)
+        self.bus.emit("meet.call", event=event, site=page.get("site") if page else None)
+
     def _page(self) -> dict | None:
         """The page the dashboard shows: a live Meet page if there is one, else the newest live page."""
         now = time.monotonic()
@@ -695,6 +725,7 @@ class Pipeline:
         if m is None or self.mode != "meet":
             return
         owners, page = self.meet_owners, self._page()
+        self._call_event(page)
         state = dict(page=page and page.get("site"),     # "meet" | "local" (test room) | None: what the extension sees
                      in_call=bool(page and page.get("in_call")),
                      connected=any(owners.values()) or bool(sess and sess.alive),
@@ -709,11 +740,11 @@ class Pipeline:
             self.bus.emit("meet.state", **state)
 
     def meet(self, action: str, url: str | None = None) -> str:
-        """Dashboard control: join (open the Meet link as a normal tab in the user's Chrome; the CallGuard extension
+        """Dashboard control: join (open the Meet link as a normal tab in the user's Chrome; the Athena extension
         connects it) | extension (show the extension folder, to install it) | leave."""
         from app.source.connectors.meet import launcher
         if self.mode != "meet":
-            raise ValueError("Google Meet needs meet mode (callguard app, or callguard run --mode meet)")
+            raise ValueError("Google Meet needs meet mode (athena app, or athena run --mode meet)")
         page = self._page()
         if action == "leave":                           # leave the call itself: the page clicks Meet's Leave button
             if self.meet_session is not None:
@@ -723,7 +754,7 @@ class Pipeline:
             elif page and page.get("site") == "meet" and self.meet_command and self.meet_command({"cmd": "leave"}):
                 result = "leaving the call"
             else:
-                raise ValueError("no Google Meet tab is connected (is the CallGuard extension installed?)")
+                raise ValueError("no Google Meet tab is connected (is the Athena extension installed?)")
         elif action == "join":
             url = launcher.meet_url(url)                # ValueError on anything but a Meet / local URL
             if page and page.get("site") == "meet" and self.meet_command and self.meet_command({"cmd": "open", "url": url}):
@@ -788,7 +819,7 @@ class Pipeline:
                  play: bool = True) -> str:
         """Start/stop a realtime replay on a background thread (dashboard button, CLI)."""
         if self.mode in ("live", "meet"):
-            raise ValueError("scenarios run in replay mode (callguard run --mode replay)")
+            raise ValueError("scenarios run in replay mode (athena run --mode replay)")
         if action == "stop":
             if self._run_stop is not None:
                 self._run_stop.set()
@@ -810,7 +841,7 @@ class Pipeline:
             self.bus.publish(Event("control.scenario", {"action": "end", "name": name, "completed": completed}))
             if on_end is not None and completed:
                 on_end()
-        self._run_thread = threading.Thread(target=run, name="callguard-replay", daemon=True)
+        self._run_thread = threading.Thread(target=run, name="athena-replay", daemon=True)
         self._run_thread.start()
         return f"started {name} ({sc.seconds:.0f} s)"
 

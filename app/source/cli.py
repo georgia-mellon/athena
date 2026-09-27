@@ -1,11 +1,11 @@
-"""callguard run | app | devices | bench (plan 01 §3).
+"""athena run | app | devices | bench (plan 01 §3).
 
-  callguard run --mode replay --scenario ai_caller [--drivers real|mock] [--exit-at-end] [--mute] [--no-browser]
-  callguard run --mode live                        (VB-CABLE + Zoom, docs/plans/03)
-  callguard run --mode meet [--meet-url URL]       (Google Meet in CallGuard's own browser window; no VB-CABLE)
-  callguard app [--meet-url URL] [--port N]        (the desktop app: dashboard window + Meet)
-  callguard devices                                (routing check; prints the VB-CABLE install steps if missing)
-  callguard bench [--drivers real|mock]            (per-driver latency)
+  athena run --mode replay --scenario ai_caller [--drivers real|mock] [--exit-at-end] [--mute] [--no-browser]
+  athena run --mode live                        (VB-CABLE + Zoom, docs/plans/03)
+  athena run --mode meet [--meet-url URL]       (Google Meet in Athena's own browser window; no VB-CABLE)
+  athena app [--meet-url URL] [--port N]        (the desktop app: dashboard window + Meet)
+  athena devices                                (routing check; prints the VB-CABLE install steps if missing)
+  athena bench [--drivers real|mock]            (per-driver latency)
 """
 from __future__ import annotations
 
@@ -49,13 +49,13 @@ def cmd_run(args) -> int:
         load_scenario(args.scenario)                    # fail fast if the audio isn't built
     bus = EventBus()
     hooks.install(bus, cfg.hooks)
-    print(f"[callguard] loading drivers: voice={cfg.drivers.voice} ({cfg.drivers.hearsay_mode}) "
+    print(f"[athena] loading drivers: voice={cfg.drivers.voice} ({cfg.drivers.hearsay_mode}) "
           f"attacker={cfg.drivers.attacker} shield={cfg.drivers.shield} ...", flush=True)
     t0 = time.perf_counter()
     pipe = Pipeline(cfg, bus)
     pipe.meet_port = port
     pipe.warm_up()                                      # first inference is slow: pay it now, not on the first caller
-    print(f"[callguard] drivers ready in {time.perf_counter() - t0:.1f} s: {pipe.voice.name}, {pipe.attacker.name}, "
+    print(f"[athena] drivers ready in {time.perf_counter() - t0:.1f} s: {pipe.voice.name}, {pipe.attacker.name}, "
           f"{pipe.shield.name}", flush=True)
     app = create_app(bus, controls=pipe)
     app.include_router(make_router(pipe, port=port))
@@ -69,23 +69,23 @@ def cmd_run(args) -> int:
         while not server.started:
             time.sleep(0.1)
         pipe.announce()                                 # states published before the server was listening
-        print(f"[callguard] dashboard: {url}", flush=True)
+        print(f"[athena] dashboard: {url}", flush=True)
         if not args.no_browser:
             webbrowser.open(url)
         if args.mode == "live":
             pipe.start_live()
-            print("[callguard] live: mic -> shield -> virtual mic; scoring the meeting's output. Ctrl+C to stop.")
+            print("[athena] live: mic -> shield -> virtual mic; scoring the meeting's output. Ctrl+C to stop.")
         elif args.mode == "meet":
-            print(f"[callguard] meet: test room {url}meet/testroom", flush=True)
+            print(f"[athena] meet: test room {url}meet/testroom", flush=True)
             if not args.no_browser:
                 try:
-                    print(f"[callguard] {pipe.meet('join', args.meet_url)}", flush=True)
+                    print(f"[athena] {pipe.meet('join', args.meet_url)}", flush=True)
                 except ValueError as e:
-                    print(f"[callguard] {e}; use the dashboard's Join button", flush=True)
+                    print(f"[athena] {e}; use the dashboard's Join button", flush=True)
         else:
             time.sleep(args.delay)                      # let the browser connect before the story starts
             end = (lambda: setattr(server, "should_exit", True)) if args.exit_at_end else None
-            print(f"[callguard] replay: {pipe.scenario('start', args.scenario, on_end=end, play=not args.mute)}",
+            print(f"[athena] replay: {pipe.scenario('start', args.scenario, on_end=end, play=not args.mute)}",
                   flush=True)
     threading.Thread(target=begin, daemon=True).start()
     try:
@@ -163,8 +163,8 @@ def cmd_bench(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.WARNING, format="[%(name)s] %(message)s")
     warnings.filterwarnings("ignore", message="data discontinuity")  # soundcard loopback while nothing plays
-    p = argparse.ArgumentParser(prog="callguard", description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument("--config", help="TOML config (default: ./callguard.toml if present)")
+    p = argparse.ArgumentParser(prog="athena", description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    p.add_argument("--config", help="TOML config (default: ./athena.toml if present)")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run the pipeline and the dashboard")
     r.add_argument("--mode", choices=("live", "replay", "meet"), default="replay")

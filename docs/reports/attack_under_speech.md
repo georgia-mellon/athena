@@ -8,7 +8,7 @@ does Keyguard's shield bring it back toward chance while the speech stays intact
 ## Setup
 - **Keys:** Keyguard's `data/pool/harrison.npz` (one MacBook keyboard, 36 keys x 25 isolated presses, 16 kHz).
   Per-key seeded 60/40 split: 540 train, 360 test presses. No test press is used in training.
-- **Attacker: PROVISIONAL.** Keyguard's `KeyNet` + `torch_logmel`, trained by CallGuard in this script with Keyguard's
+- **Attacker: PROVISIONAL.** Keyguard's `KeyNet` + `torch_logmel`, trained by Athena in this script with Keyguard's
   `train_attacker` (40 epochs) on the public harrison bank. In-domain (same keyboard, same room), isolated presses.
   It stands in for the teammate's attacker and is to be replaced by the teammate's weights when they ship.
   - `clean`: trained on clean train presses.
@@ -21,7 +21,7 @@ does Keyguard's shield bring it back toward chance while the speech stays intact
   excerpt. **Level = speech-to-key power ratio**: mean power of the 1.5 s speech excerpt over mean power of the 0.3 s
   key window. The same excerpt and position are reused at every level (paired design).
 - **Onsets:** *oracle* (the true onset) and *detected* (Keyguard's `segment.onsets` on the mixture, nearest peak
-  within 30 ms; a miss counts as a wrong guess). A real attacker only has *detected*. The CallGuard dashboard attacks
+  within 30 ms; a miss counts as a wrong guess). A real attacker only has *detected*. The Athena dashboard attacks
   at OS key timestamps (oracle onsets = worst-case eavesdropper); with keys only, detected onsets are nearly as good
   (47.5 vs 53.6 % top-1), so oracle is a fair upper bound for quiet typing.
 - **Shield (headline):** Keyguard DSP `Shield` with **`ShieldConfig(key_frames=26)`** (208 ms, press + release;
@@ -35,7 +35,7 @@ does Keyguard's shield bring it back toward chance while the speech stays intact
   and wideband PESQ on each 1.5 s mixture, averaged.
 - **Hearsay check (criterion 3):** 100 full real clips (>= 3 s) from the *test* speakers; 5 test presses per clip
   (one per fifth of the clip) at +10 dB speech-to-key (same level definition, whole clip power); 26-frame shield with
-  true onsets; scored by CallGuard's `HearsayDriver(mode="r4ft", threads=8, device="cpu")`; flagged =
+  true onsets; scored by Athena's `HearsayDriver(mode="r4ft", threads=8, device="cpu")`; flagged =
   `p_synthetic > 0.5`.
 - Seed 0 throughout. Runtime 12.3 min on 8 CPU threads (attackers 3.2 min, attack grid 4.4 min, Hearsay 4.6 min).
   Full per-cell data: `attack_under_speech.csv` (`shield` = off / on (26 frames) / on14), `attack_under_speech_hearsay.csv`.
@@ -65,7 +65,7 @@ Top-3 at +10 dB: oracle 34.4 % [29.7, 39.5] off / 19.7 % [15.9, 24.1] on; detect
 |---|---|---|---|---|---|
 | no shield | 53.6 | 47.5 | 15.8 | 5.8 | |
 | key_frames 14 (Keyguard default) | 16.9 [13.4, 21.2] | 15.0 [11.7, 19.1] | 5.8 [3.9, 8.8] | 1.7 [0.8, 3.6] | 0.934 |
-| **key_frames 26 (CallGuard)** | 10.8 [8.0, 14.5] | 11.4 [8.5, 15.1] | 5.8 [3.9, 8.8] | 2.5 [1.3, 4.7] | **0.897** |
+| **key_frames 26 (Athena)** | 10.8 [8.0, 14.5] | 11.4 [8.5, 15.1] | 5.8 [3.9, 8.8] | 2.5 [1.3, 4.7] | **0.897** |
 
 The longer region helps on quiet typing (16.9 to 10.8 %) but not at +10 dB, where both leave 5.8 %; it costs STOI
 (0.934 to 0.897).
@@ -121,7 +121,7 @@ STOI over longer speech with sparser typing will be higher.
   trades STOI (0.934 to 0.897) for gains only on quiet typing. Needed: a shield that removes more key information per
   frame rather than more frames, e.g. the adversarial perturbation stage trained against the speech-aug attacker.
   Target: <= 5.6 % top-1 at +10 dB with STOI >= 0.9.
-- **Key-region length:** the default `key_frames=14` misses the key release (100-150 ms after onset). CallGuard ships
+- **Key-region length:** the default `key_frames=14` misses the key release (100-150 ms after onset). Athena ships
   26, chosen on these same test presses; please confirm on held-out data.
 - **Noise floor:** the provisional attackers were trained on near-silent harrison presses. With white noise 30 dB
   under the key-window power, the clean attacker drops from 70 % to 1.7 % top-1 and the speech-aug one from 61 % to
