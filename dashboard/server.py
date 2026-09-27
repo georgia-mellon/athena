@@ -48,8 +48,12 @@ class SecretCmd(BaseModel):
     action: Literal["allow", "arm", "disarm", "auto"]
 
 
+class ThresholdCmd(BaseModel):
+    db: float
+
+
 class MeetCmd(BaseModel):
-    action: Literal["join", "leave"]
+    action: Literal["join", "leave", "extension"]
     url: str | None = None
 
 
@@ -139,6 +143,14 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
         except ValueError as e:
             raise HTTPException(400, str(e))
         return {"ok": True, "result": out}
+
+    @app.post("/api/control/voice/threshold")
+    def control_voice_threshold(cmd: ThresholdCmd):
+        return _control("set_speech_db", cmd.db)
+
+    @app.post("/api/control/voice/flush")
+    def control_voice_flush():
+        return _control("flush_voice")
 
     @app.post("/api/control/shield")
     def control_shield(cmd: ShieldCmd):

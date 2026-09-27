@@ -54,6 +54,7 @@ def cmd_run(args) -> int:
     t0 = time.perf_counter()
     pipe = Pipeline(cfg, bus)
     pipe.meet_port = port
+    pipe.warm_up()                                      # first inference is slow: pay it now, not on the first caller
     print(f"[callguard] drivers ready in {time.perf_counter() - t0:.1f} s: {pipe.voice.name}, {pipe.attacker.name}, "
           f"{pipe.shield.name}", flush=True)
     app = create_app(bus, controls=pipe)

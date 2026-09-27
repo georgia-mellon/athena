@@ -73,8 +73,10 @@ A driver that raises is quarantined. The pipeline keeps audio flowing, emits `dr
 
 ## 4. Threat score (`threat.py`, all constants in config)
 Inputs, each in [0, 1]:
-- `V` voice risk = EMA (half-life 6 s) of `p_synthetic` over far-end *speech* windows. It decays toward 0 during
-  silence and resets when a new speaker is detected (stretch).
+- `V` voice risk = EMA of `p_synthetic` over far-end *speech* windows only (half-life 3 windows, ~6 s of speech).
+  Event-driven: it moves only when a speech window is scored, so silence and noise hold it flat (it never drifts to
+  "human" without human-sounding speech). It resets to 0 on a new speaker: the dashboard's Flush, the test room's clip
+  switch, or `new_speaker_gap_s` (20 s) of far-end audio without speech.
 - `E` exposure = attacker accuracy on the **raw** mic over the last 20 keystrokes, rescaled above chance
   (`(acc - 1/K) / (1 - 1/K)`). This is what leaks if you don't shield.
 - `L` residual leak = the same on the **shielded** stream. This is what still leaks.

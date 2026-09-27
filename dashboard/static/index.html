@@ -7,100 +7,128 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="bar">
-  <h1>CallGuard</h1>
-  <span id="conn" class="pill off">connecting…</span>
-  <div class="spacer"></div>
-  <label class="scn">Scenario <input id="scn-name" value="ai_caller" size="10" aria-label="scenario name"></label>
-  <button id="scn-start">Start</button>
-  <button id="scn-stop">Stop</button>
-  <button id="theme" title="Toggle light/dark">Light</button>
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5" class="tick"/></svg>
+    <h1>CallGuard</h1>
+    <span id="conn" class="pill off">connecting…</span>
+  </div>
+
+  <section id="meet-bar" class="meet" aria-label="Meeting">
+    <span id="meet-pill" class="pill off" aria-live="polite">not in a meeting</span>
+    <input id="meet-url" type="url" placeholder="meet.google.com/abc-defg-hij" aria-label="Google Meet link" spellcheck="false">
+    <button id="meet-join" class="primary">Join</button>
+    <button id="meet-leave" disabled title="leaves the call in your Meet tab">Leave</button>
+    <button id="meet-ext" title="Open the CallGuard extension folder: chrome://extensions → Developer mode → Load unpacked">Install extension</button>
+    <a href="/meet/testroom" target="_blank" rel="noopener" class="link">Test room ↗</a>
+  </section>
+
+  <div class="tools">
+    <label class="scn"><span class="lab">Demo</span><input id="scn-name" value="ai_caller" size="8" aria-label="scenario name"></label>
+    <button id="scn-start">Start</button>
+    <button id="scn-stop">Stop</button>
+    <button id="theme" class="ghost" title="Toggle light/dark">Light</button>
+  </div>
 </header>
 
-<section id="meet-bar" class="meet card" aria-label="Meeting">
-  <span class="lab">Meeting</span>
-  <span id="meet-pill" class="pill off" aria-live="polite">not in a meeting</span>
-  <input id="meet-url" type="url" placeholder="meet.google.com/abc-defg-hij" aria-label="Google Meet link" spellcheck="false">
-  <button id="meet-join">Join</button>
-  <button id="meet-leave">Leave</button>
-  <a href="/meet/testroom" target="_blank" rel="noopener" class="link">Test room ↗</a>
-  <div class="spacer"></div>
-  <span class="muted small" title="how long your voice is held before it leaves: Keyguard shield + secret delay line">Pipeline:
-    outgoing delay <b id="pipe-lat">–</b> <span id="pipe-split"></span></span>
-</section>
+<div id="alarm" class="alarm" role="alert" hidden></div>
 
-<div id="alarm" class="alarm" hidden></div>
+<section class="overview">
+  <div class="card threat" aria-label="Threat score">
+    <h2>Threat</h2>
+    <div class="threat-body">
+      <svg class="gauge" viewBox="0 0 200 116" role="img" aria-label="threat gauge">
+        <path d="M20 100 A80 80 0 0 1 180 100" class="g-track"/>
+        <path id="g-arc" d="M20 100 A80 80 0 0 1 180 100" class="g-arc" pathLength="100" stroke-dasharray="0 100"/>
+        <text id="g-num" x="100" y="96" text-anchor="middle" class="g-num">0</text>
+      </svg>
+      <div class="threat-text">
+        <div id="level" class="level lv-SAFE">SAFE</div>
+        <ul id="reasons" class="reasons"><li class="muted">Waiting for the call…</li></ul>
+      </div>
+    </div>
+  </div>
 
-<section class="threat card" aria-label="Threat score">
-  <svg class="gauge" viewBox="0 0 200 120" role="img" aria-label="threat gauge">
-    <path d="M20 100 A80 80 0 0 1 180 100" class="g-track"/>
-    <path id="g-arc" d="M20 100 A80 80 0 0 1 180 100" class="g-arc" pathLength="100" stroke-dasharray="0 100"/>
-    <text id="g-num" x="100" y="92" text-anchor="middle" class="g-num">0</text>
-  </svg>
-  <div class="threat-text">
-    <div id="level" class="level lv-SAFE">SAFE</div>
-    <ul id="reasons" class="reasons"><li class="muted">Waiting for the call…</li></ul>
+  <div class="card timeline">
+    <div class="card-head"><h2>Threat over the call</h2>
+      <span class="legend"><i class="k-SAFE"></i>Safe <i class="k-WATCH"></i>Watch <i class="k-WARN"></i>Warn <i class="k-CRITICAL"></i>Critical</span></div>
+    <svg id="tl" class="tl" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-label="threat timeline">
+      <rect x="0" y="0" width="1000" height="25" class="band b-CRITICAL"/>
+      <rect x="0" y="25" width="1000" height="25" class="band b-WARN"/>
+      <rect x="0" y="50" width="1000" height="25" class="band b-WATCH"/>
+      <rect x="0" y="75" width="1000" height="25" class="band b-SAFE"/>
+      <polyline id="tl-line" points=""/>
+    </svg>
+    <div class="foot muted" title="how long your voice is held before it leaves: Keyguard shield + secret delay line">
+      Outgoing delay <b id="pipe-lat" class="num">–</b> <span id="pipe-split"></span></div>
   </div>
 </section>
 
 <main class="panels">
   <section class="card" aria-label="Who is speaking">
-    <h2>Who is speaking?</h2>
+    <div class="card-head"><h2>Caller voice</h2>
+      <button id="voice-flush" class="small" title="A new person is speaking: forget the previous voice">Flush</button></div>
+    <div class="levels" aria-label="audio in">
+      <span class="lab">Mic</span>
+      <div class="meter"><div id="lv-mic" class="lv"></div></div>
+      <b id="lv-mic-n" class="num">–</b>
+      <span class="lab">Caller</span>
+      <div class="meter" title="drag the line: a 4 s window is judged only when at least half of it is louder than this">
+        <div id="lv-far" class="lv"></div>
+        <div id="gate-line" class="gate-line"></div>
+        <input id="gate" type="range" min="-80" max="-10" step="1" value="-45" aria-label="speech threshold, dBFS">
+      </div>
+      <b id="lv-far-n" class="num">–</b>
+    </div>
+    <div class="muted small gate-text">Speech gate <b id="gate-n" class="num">-45 dB</b> · <span id="vwin">no caller audio yet</span></div>
     <div class="voice">
-      <div id="vlight" class="vlight none" aria-live="polite"></div>
+      <div id="vlight" class="vlight none" aria-hidden="true"></div>
       <div>
-        <div id="vlabel" class="vlabel">listening…</div>
-        <div class="muted">p<sub>synthetic</sub> <b id="vp">–</b> · latency <b id="vlat">–</b></div>
+        <div id="vlabel" class="vlabel" aria-live="polite">listening…</div>
+        <div class="muted meta">AI score <b id="vp" class="num">–</b> · latency <b id="vlat" class="num">–</b></div>
       </div>
     </div>
-    <svg id="spark" class="spark" viewBox="0 0 600 120" preserveAspectRatio="none" aria-label="p synthetic, last 60 s">
-      <line x1="0" x2="600" y1="60" y2="60" class="thresh"/>
-      <polyline id="spark-line" points=""/>
-    </svg>
-    <div class="muted small">last 60 s · mean of the last 3 windows · dashed = decision threshold</div>
+    <div class="spark-wrap">
+      <div class="axis" aria-hidden="true"><span>AI</span><span>0.5</span><span>human</span></div>
+      <svg id="spark" class="spark" viewBox="0 0 600 120" preserveAspectRatio="none" aria-label="AI score, last 60 s">
+        <line x1="0" x2="600" y1="60" y2="60" class="thresh"/>
+        <polyline id="spark-line" points=""/>
+      </svg>
+    </div>
+    <div class="muted small">Last 60 s · mean of the last 3 windows · holds through silence · dashed = decision threshold</div>
   </section>
 
   <section class="card" aria-label="Your keyboard">
     <h2>Your keyboard</h2>
     <div class="row"><span class="lab">You typed</span><span id="typed" class="mono typed"></span></div>
-    <div class="row"><span class="lab">Eavesdropper reads<br><small>no shield</small></span><span id="raw" class="mono"></span></div>
-    <div class="row"><span class="lab">Eavesdropper reads<br><small>shielded</small></span><span id="shd" class="mono"></span></div>
+    <div class="row"><span class="lab">Eavesdropper<br><small>no shield</small></span><span id="raw" class="mono"></span></div>
+    <div class="row"><span class="lab">Eavesdropper<br><small>shielded</small></span><span id="shd" class="mono"></span></div>
     <div class="accs">
-      <div class="acc"><span>no shield</span><div class="bar-o"><div id="acc-raw" class="bar-i bad"></div><div id="chance1" class="chance"></div></div><b id="acc-raw-n">–</b></div>
-      <div class="acc"><span>shielded</span><div class="bar-o"><div id="acc-shd" class="bar-i good"></div><div id="chance2" class="chance"></div></div><b id="acc-shd-n">–</b></div>
-      <div class="muted small">true key in the attacker's top 3 · tick = chance (<span id="chance-n">–</span>)</div>
+      <div class="acc"><span class="lab">no shield</span><div class="bar-o"><div id="acc-raw" class="bar-i bad"></div><div id="chance1" class="chance"></div></div><b id="acc-raw-n" class="num">–</b></div>
+      <div class="acc"><span class="lab">shielded</span><div class="bar-o"><div id="acc-shd" class="bar-i good"></div><div id="chance2" class="chance"></div></div><b id="acc-shd-n" class="num">–</b></div>
+      <div class="muted small">True key in the attacker's top 3 · tick = chance (<span id="chance-n">–</span>)</div>
     </div>
-    <div class="shield" role="group" aria-label="shield mode">
+    <div class="seg" role="group" aria-label="shield mode">
       <span class="lab">Shield</span>
       <button data-mode="off">Off</button><button data-mode="dsp">DSP</button><button data-mode="adversarial">Adversarial</button>
     </div>
   </section>
 
   <section class="card" aria-label="What you're saying">
-    <h2>What you're saying</h2>
-    <div class="secret-head">
-      <span id="sec-pill" class="pill off">offline</span>
-      <span id="sec-why" class="muted"></span>
-    </div>
+    <div class="card-head"><h2>Spoken secrets</h2><span id="sec-pill" class="pill off">offline</span></div>
+    <div id="sec-why" class="muted meta"></div>
     <div class="muted small">Codes, PINs and card numbers you read aloud are cut from your mic while the caller is
-      unverified. Only the kind and length are shown; nothing you say is stored. Delay <b id="sec-delay">–</b>.</div>
-    <ol id="sec-log" class="sec-log"><li class="muted">nothing blocked</li></ol>
-    <div class="shield" role="group" aria-label="secret shield controls">
+      unverified. Only the kind and length are shown; nothing you say is stored. Delay <b id="sec-delay" class="num">–</b>.</div>
+    <ol id="sec-log" class="sec-log"><li class="muted">Nothing blocked</li></ol>
+    <div class="seg" role="group" aria-label="secret shield controls">
       <span class="lab">Secrets</span>
       <button data-sec="allow" title="let the next 30 s through">Allow 30 s</button><button data-sec="arm">Arm</button><button data-sec="auto">Auto</button><button data-sec="disarm">Off</button>
     </div>
   </section>
 </main>
 
-<section class="card bottom">
-  <h2>Threat over the call</h2>
-  <svg id="tl" class="tl" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-label="threat timeline">
-    <rect x="0" y="0" width="1000" height="25" class="band b-CRITICAL"/>
-    <rect x="0" y="25" width="1000" height="25" class="band b-WARN"/>
-    <rect x="0" y="50" width="1000" height="25" class="band b-WATCH"/>
-    <rect x="0" y="75" width="1000" height="25" class="band b-SAFE"/>
-    <polyline id="tl-line" points=""/>
-  </svg>
+<section class="card events">
+  <h2>Events</h2>
   <ol id="log" class="log"></ol>
 </section>
 

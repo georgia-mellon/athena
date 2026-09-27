@@ -46,9 +46,6 @@ class ThreatEngine:
         self.bus, self.cfg, self.now = bus, cfg or ThreatConfig(), now
         self._lock = threading.Lock()
         self.V = 0.0
-        self._p_last: float | None = None
-        self._t_verdict = -1e9
-        self._t_ema = now()
         self._voice_since: float | None = None      # start of the current run of p >= se_voice, for the reasons
         self._hits = {"raw": deque(maxlen=self.cfg.readout_window), "shielded": deque(maxlen=self.cfg.readout_window)}
         self._chance = min(3, self.cfg.num_classes) / self.cfg.num_classes
@@ -70,13 +67,12 @@ class ThreatEngine:
         d, now = ev.data, self.now()
         with self._lock:
             if ev.topic == "voice.verdict":
-                self._advance_v(now)
                 p = min(1.0, max(0.0, float(d["p_synthetic"])))
+                self.V += (p - self.V) * (1.0 - 0.5 ** (1.0 / self.cfg.voice_half_life_windows))
                 if p >= self.cfg.se_voice and self._voice_since is None:
                     self._voice_since = now
                 elif p < self.cfg.se_voice:
                     self._voice_since = None
-                self._p_last, self._t_verdict = p, now
             elif ev.topic == "keys.stroke":
                 self._strokes.append(now)
             elif ev.topic == "keys.readout":
@@ -94,22 +90,18 @@ class ThreatEngine:
                 self.shield = d.get("mode", self.shield)
                 self.shield_failed = bool(d.get("failed", False))
 
-    def _advance_v(self, now: float) -> None:
-        """Continuous-time EMA toward the last p_synthetic while speech is fresh, toward 0 in silence."""
-        dt = max(0.0, now - self._t_ema)
-        self._t_ema = now
-        fresh = self._p_last is not None and now - self._t_verdict <= self.cfg.voice_stale_s
-        target = self._p_last if fresh else 0.0
-        if not fresh:
+    def flush_voice(self) -> None:
+        """A new speaker: forget the voice history (V back to 0). Event-driven: the Flush button, the test room's
+        clip switch, or new_speaker_gap_s of far-end audio without speech."""
+        with self._lock:
+            self.V = 0.0
             self._voice_since = None
-        self.V += (target - self.V) * (1.0 - 0.5 ** (dt / self.cfg.voice_half_life_s))
 
     # --- scoring ------------------------------------------------------------------------------------------------
     def tick(self) -> dict:
         """Recompute, publish threat.update (and threat.level_change on a level change), return the update."""
         c, now = self.cfg, self.now()
         with self._lock:
-            self._advance_v(now)
             while self._strokes and now - self._strokes[0] > c.typing_window_s:
                 self._strokes.popleft()
             while self._secrets and now - self._secrets[0][0] > c.secret_window_s:

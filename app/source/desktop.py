@@ -9,6 +9,7 @@ WebView2 -> the system browser opens the dashboard and we serve until Ctrl+C. Cl
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import threading
@@ -39,26 +40,14 @@ def _wait_healthy(url: str, server, thread: threading.Thread | None = None, time
     return False
 
 
-def _open_window(url: str) -> bool:
-    """Blocks until the native window closes. False if pywebview couldn't start a GUI backend."""
-    try:
-        import webview
-        webview.create_window("CallGuard", url, width=1400, height=950, min_size=(900, 640))
-        webview.start()
-        return True
-    except Exception as e:                              # ImportError, no WebView2 runtime, no GUI backend
-        log.warning("native window unavailable (%s); opening the system browser", e)
-        return False
+LOADING = """<!doctype html><html><head><meta charset="utf-8"><title>CallGuard</title></head>
+<body style="margin:0;height:100vh;display:grid;place-items:center;background:#0d1117;color:#e6edf3;
+font:14px/1.5 system-ui,'Segoe UI',sans-serif"><div style="text-align:center">
+<div style="font-size:16px;font-weight:650">CallGuard</div>
+<div id="s" style="color:#9aa6b4;margin-top:6px">Starting&hellip;</div></div></body></html>"""
 
 
 def main(argv: list[str] | None = None) -> int:
-    import uvicorn
-
-    from app.source import hooks
-    from app.source.bus import EventBus
-    from app.source.pipeline import Pipeline
-    from dashboard.server import create_app
-
     logging.basicConfig(level=logging.WARNING, format="[%(name)s] %(message)s")
     p = argparse.ArgumentParser(prog="callguard app", description=__doc__,
                                 formatter_class=argparse.RawTextHelpFormatter)
@@ -69,6 +58,45 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-window", action="store_true", help="headless: serve only (tests, remote use)")
     args = p.parse_args(argv)
     STOP.clear()
+    if args.no_window:
+        return _run(args)
+    try:                                                # the window first, with a status line, while models load
+        import webview
+        win = webview.create_window("CallGuard", html=LOADING, width=1400, height=950, min_size=(900, 640))
+    except Exception as e:                              # ImportError, no WebView2 runtime, no GUI backend
+        log.warning("native window unavailable (%s); opening the system browser", e)
+        return _run(args, on_ready=webbrowser.open)
+
+    out: dict = {}
+
+    def say(msg: str) -> None:
+        try:
+            win.evaluate_js(f"document.getElementById('s').textContent = {json.dumps(msg)}")
+        except Exception:                               # noqa: BLE001 - the window is gone or not ready yet
+            pass
+
+    def boot() -> None:
+        out["rc"] = _run(args, say=say, on_ready=win.load_url)
+        if out["rc"]:
+            say("CallGuard could not start: see the terminal")
+    win.events.closed += STOP.set                       # closing the window stops everything
+    try:
+        webview.start(boot)                             # boot runs on its own thread; the window owns this one
+    except Exception as e:                              # noqa: BLE001 - no GUI backend after all
+        log.warning("native window unavailable (%s); opening the system browser", e)
+        return _run(args, on_ready=webbrowser.open)
+    STOP.set()
+    return out.get("rc", 0)
+
+
+def _run(args, say=lambda msg: None, on_ready=None) -> int:
+    """Engine + server until STOP: load the drivers, warm up the voice model, serve, then on_ready(url)."""
+    import uvicorn
+
+    from app.source import hooks
+    from app.source.bus import EventBus
+    from app.source.pipeline import Pipeline
+    from dashboard.server import create_app
 
     cfg = _cfg(args)
     port = args.port or cfg.server.port
@@ -77,12 +105,19 @@ def main(argv: list[str] | None = None) -> int:
     hooks.install(bus, cfg.hooks)
     print(f"[callguard] loading drivers: voice={cfg.drivers.voice} attacker={cfg.drivers.attacker} "
           f"shield={cfg.drivers.shield} secret={cfg.drivers.secret} ...", flush=True)
+    say("Loading the voice, keystroke and speech models (about 20 s)...")
     pipe = Pipeline(cfg, bus)
-    pipe.meet_port = port                               # the injected Meet bridge dials this server, not the default
+    pipe.meet_port = port                               # the test room's bridge dials this server
+    if port != 8765:
+        print(f"[callguard] note: the Meet extension connects to port 8765; on port {port} only the test room is "
+              "protected", file=sys.stderr, flush=True)
+    say("Warming up the voice model...")
+    pipe.warm_up()
     if hasattr(pipe, "start_meet"):
         pipe.start_meet()                               # before the server: no dashboard Arm can race its reset
     else:
         print("[callguard] this build has no meet mode yet; the pipeline stays idle", flush=True)
+    say("Starting the dashboard...")
     app = create_app(bus, controls=pipe)
     try:
         from app.source.connectors.meet.router import make_router
@@ -104,12 +139,11 @@ def main(argv: list[str] | None = None) -> int:
                 pipe.meet("join", args.meet_url)
             except Exception as e:                      # a bad URL or no browser must not kill the app
                 print(f"[callguard] could not join {args.meet_url}: {e}", file=sys.stderr, flush=True)
-        if args.no_window or not _open_window(url):
-            if not args.no_window:
-                webbrowser.open(url)
-            print("[callguard] serving; Ctrl+C to stop", flush=True)
-            while srv.is_alive() and not server.should_exit and not STOP.wait(0.2):
-                pass
+        if on_ready is not None:
+            on_ready(url)
+        print("[callguard] serving; close the window or Ctrl+C to stop", flush=True)
+        while srv.is_alive() and not server.should_exit and not STOP.wait(0.2):
+            pass
     except KeyboardInterrupt:
         pass
     finally:

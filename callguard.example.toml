@@ -28,8 +28,8 @@ host = "127.0.0.1"
 port = 8765
 
 [threat]                  # docs/plans/02 §4
-voice_half_life_s = 6.0
-voice_stale_s = 4.0
+voice_half_life_windows = 3.0   # V moves only on scored speech windows; silence holds it
+new_speaker_gap_s = 20.0        # this long without speech = a new speaker, V starts over (0 = off)
 readout_window = 20
 num_classes = 36
 typing_window_s = 10.0

@@ -5,9 +5,10 @@ const MAXC = 20;               // characters shown per keyboard row (the threat 
 const SPARK_S = 60;            // sparkline window, seconds
 const TL_MAX = 4000;           // timeline points kept
 const LOG_MAX = 200;
-const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict", "secret.state", "meet.state"]);
+const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict", "secret.state",
+                       "meet.state", "audio.level", "system.state"]);
 
-const st = { voice: [], threat: [], typed: 0, vclass: null, alarmTimer: 0 };
+const st = { voice: [], threat: [], recent: [], typed: 0, vclass: null, alarmTimer: 0, gate: -45 };
 
 // ---------- theme ----------
 function setTheme(t) {
@@ -63,21 +64,22 @@ function renderTimeline() {
 }
 
 function voiceClass(p) { return p >= 0.5 ? "synthetic" : p >= 0.25 ? "unverified" : "real"; }
-// The verdict and the curve are the mean of the last SMOOTH windows of one stretch of speech (a gap > GAP_S starts
-// over): one odd 4 s window doesn't flip the verdict or spike the graph.
-const SMOOTH = 3, GAP_S = 6;
+const VOICE_TEXT = { real: "human", unverified: "uncertain", synthetic: "AI voice" };
+// The verdict and the curve are the mean of the last SMOOTH scored windows: one odd 4 s window doesn't flip the
+// verdict or spike the graph. Silence doesn't move it (it only changes on speech); a new speaker starts over
+// (voice.flush: the Flush button, the test room's clip switch, or a long gap).
+const SMOOTH = 3;
 function renderVoice(d, t) {
   const raw = clamp(Number(d.p_synthetic) || 0, 0, 1);
-  const last = (st.recent || []).at(-1);
-  st.recent = [...(last && t - last[0] <= GAP_S ? st.recent : []), [t, raw]].slice(-SMOOTH);
+  st.recent = [...st.recent, [t, raw]].slice(-SMOOTH);
   const p = st.recent.reduce((a, [, x]) => a + x, 0) / st.recent.length;
   const c = voiceClass(p);
   $("vlight").className = "vlight " + c;
-  $("vlabel").textContent = c;
+  $("vlabel").textContent = VOICE_TEXT[c];
   $("vp").textContent = p.toFixed(2);
   $("vp").title = `this window ${raw.toFixed(2)}, mean of the last ${st.recent.length}`;
   $("vlat").textContent = d.latency_ms == null ? "–" : Math.round(d.latency_ms) + " ms";
-  if (c !== st.vclass) { log(t, `voice → ${c} (p=${p.toFixed(2)})`, c === "synthetic" ? "alert-c" : ""); st.vclass = c; }
+  if (c !== st.vclass) { log(t, `voice → ${VOICE_TEXT[c]} (AI score ${p.toFixed(2)})`, c === "synthetic" ? "alert-c" : ""); st.vclass = c; }
   st.voice.push([t, p]);
   renderSpark();
 }
@@ -88,6 +90,50 @@ function renderSpark() {
     st.voice.map(([t, p]) => `${(600 * (t - (now - SPARK_S)) / SPARK_S).toFixed(1)},${(120 * (1 - p)).toFixed(1)}`).join(" "));
 }
 setInterval(renderSpark, 1000);  // keep the window sliding while the far end is silent
+function renderFlush() {
+  st.recent = []; st.voice = []; st.vclass = null;
+  $("vlight").className = "vlight none"; $("vlabel").textContent = "listening…"; $("vp").textContent = "–";
+  renderSpark();
+}
+
+// ---------- audio in: levels, the speech gate, what happened to the last window ----------
+const DB_MIN = -80, DB_MAX = -10;
+const dbPct = (db) => (100 * (clamp(db, DB_MIN, DB_MAX) - DB_MIN) / (DB_MAX - DB_MIN)).toFixed(1) + "%";
+function renderLevels(d) {
+  for (const k of ["mic", "far"]) {
+    const db = d[k + "_db"];
+    $("lv-" + k).style.width = db == null ? "0" : dbPct(db);
+    $("lv-" + k).classList.toggle("hot", k === "far" && db != null && db > st.gate);
+    $("lv-" + k + "-n").textContent = db == null ? "–" : Math.round(db) + " dB";
+  }
+  if (d.far_db != null && !st.recent.length && !st.vclass) $("vlabel").textContent = "hearing the caller…";
+}
+function renderGate(db) {
+  st.gate = db;
+  $("gate-line").style.left = dbPct(db);
+  $("gate-n").textContent = Math.round(db) + " dB";
+  if (!st.gateDragging) $("gate").value = db;
+}
+function renderWindow(d) {
+  const sp = Math.round(100 * (Number(d.speech) || 0));
+  $("vwin").textContent = d.scored ? "last window " + sp + "% speech: judged"
+    : "last window " + sp + "% speech: below the gate, not judged (needs 50%)";
+}
+$("gate").oninput = () => { st.gateDragging = true; renderGate(Number($("gate").value)); };
+$("gate").onchange = () => { st.gateDragging = false; post("/api/control/voice/threshold", { db: Number($("gate").value) }); };
+function renderSystem(d) {
+  st.ready = !!d.ready;
+  if (d.speech_db != null) renderGate(Number(d.speech_db));
+  renderConn();
+}
+function renderConn() {
+  const c = $("conn");
+  if (!st.live) { c.textContent = st.everLive ? "reconnecting…" : "connecting…"; c.className = "pill bad"; return; }
+  c.textContent = st.ready ? "ready" : "starting…";
+  c.className = "pill " + (st.ready ? "ok" : "wait");
+  c.title = st.ready ? "models loaded and warmed up" : "loading models";
+}
+renderGate(-45);
 
 function renderStroke() {
   st.typed = Math.min(st.typed + 1, MAXC);
@@ -149,15 +195,17 @@ function renderPipeline() {
   $("pipe-lat").textContent = tot == null ? "–" : Math.round(tot) + " ms";
   $("pipe-split").textContent = tot == null ? "" : `(shield ${Math.round(Math.max(0, tot - sec))} + secret ${Math.round(sec)})`;
 }
+// The meeting pill is what the extension in the Meet tab reports (/meet/status), not what the buttons did.
 function renderMeet(d) {
   const pill = $("meet-pill");
   const ok = (b) => (b ? "✓" : "✗");
-  if (d.connected) {
-    pill.textContent = `in meeting: mic ${ok(d.mic)} far ${ok(d.far)}`;
+  if (!d.page) { pill.textContent = "no Meet tab"; pill.className = "pill off"; }
+  else if (d.page === "meet" && !d.in_call) { pill.textContent = "Meet open · not in a call"; pill.className = "pill wait"; }
+  else {
+    pill.textContent = (d.page === "meet" ? "in call" : "test room") + " · mic " + ok(d.mic) + " caller " + ok(d.far);
     pill.className = "pill " + (d.mic && d.far ? "ok" : "wait");
-  } else if (st.meetJoining) { pill.textContent = "joining…"; pill.className = "pill wait"; }
-  else { pill.textContent = "not in a meeting"; pill.className = "pill off"; }
-  if (d.connected) st.meetJoining = false;
+  }
+  $("meet-leave").disabled = d.page !== "meet";
   if (d.url && !$("meet-url").value) $("meet-url").value = d.url;
   pill.title = d.browser ? `${d.browser}${d.latency_ms != null ? ` · bridge ${Math.round(d.latency_ms)} ms` : ""}` : "";
 }
@@ -173,6 +221,10 @@ function handle(m) {
       return;
     case "threat.update": renderThreat(d, t); break;
     case "voice.verdict": renderVoice(d, t); break;
+    case "voice.flush": renderFlush(); break;
+    case "voice.window": renderWindow(d); break;
+    case "audio.level": renderLevels(d); break;
+    case "system.state": renderSystem(d); break;
     case "keys.stroke": renderStroke(); break;
     case "keys.readout": renderReadout(d); break;
     case "shield.state": renderShield(d.mode); st.shieldLat = d.latency_ms; renderPipeline(); break;
@@ -187,6 +239,7 @@ function handle(m) {
     else if (m.topic === "shield.state") text = `shield → ${d.mode}`;
     else if (m.topic === "secret.blocked") text = `${d.category === "digits" ? d.length + "-digit code" : d.category} ${d.allowed ? "allowed" : "blocked"} from your voice`;
     else if (m.topic === "secret.request") text = "caller asked for a code";
+    else if (m.topic === "voice.flush") text = d.reason === "gap" ? "new speaker (long silence): voice history cleared" : "voice history flushed";
     else if (m.topic === "control.meet") text = `meeting → ${d.action}${d.url ? " " + d.url : ""}`;
     else if (m.topic === "driver.error") text = `driver ${d.driver} error: ${d.error}`;
     else text += " " + JSON.stringify(d);
@@ -198,10 +251,10 @@ function handle(m) {
 let backoff = 500;
 function connect() {
   const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
-  ws.onopen = () => { backoff = 500; const c = $("conn"); c.textContent = "live"; c.className = "pill ok"; };
+  ws.onopen = () => { backoff = 500; st.live = st.everLive = true; renderConn(); };
   ws.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { console.error(err); } };
   ws.onclose = () => {
-    const c = $("conn"); c.textContent = "reconnecting…"; c.className = "pill off";
+    st.live = false; renderConn();
     setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 5000);
   };
   ws.onerror = () => ws.close();
@@ -218,6 +271,8 @@ async function post(path, body) {
 }
 for (const b of document.querySelectorAll("[data-mode]")) b.onclick = () => post("/api/control/shield", { mode: b.dataset.mode });
 for (const b of document.querySelectorAll("[data-sec]")) b.onclick = () => post("/api/control/secret", { action: b.dataset.sec });
+$("voice-flush").onclick = () => post("/api/control/voice/flush", {});
+$("meet-ext").onclick = () => post("/api/control/meet", { action: "extension" });
 $("scn-start").onclick = () => post("/api/control/scenario", { action: "start", name: $("scn-name").value || "ai_caller" });
 $("scn-stop").onclick = () => post("/api/control/scenario", { action: "stop", name: $("scn-name").value || "ai_caller" });
 
@@ -228,9 +283,6 @@ function meetUrl() {  // accept a full link, "meet.google.com/abc-defg-hij" or a
   if (/^https?:\/\//i.test(v)) return v;
   return v.includes("/") ? "https://" + v : "https://meet.google.com/" + v;
 }
-$("meet-join").onclick = async () => {
-  st.meetJoining = true; renderMeet({});
-  if (!(await post("/api/control/meet", { action: "join", url: meetUrl() }))) { st.meetJoining = false; renderMeet({}); }
-};
+$("meet-join").onclick = () => post("/api/control/meet", { action: "join", url: meetUrl() });
 $("meet-url").onkeydown = (e) => { if (e.key === "Enter") $("meet-join").click(); };
-$("meet-leave").onclick = () => { st.meetJoining = false; renderMeet({}); post("/api/control/meet", { action: "leave" }); };
+$("meet-leave").onclick = () => post("/api/control/meet", { action: "leave" });   // the extension clicks Meet's Leave

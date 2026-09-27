@@ -70,6 +70,12 @@
       <button id="playall" disabled>Play the 10 test voices</button>
       <button id="speak">Be the caller: judge my voice</button>
     </div>
+    <div class="row stat">For your phone (mp3):
+      <a href="/meet/audio/testclips/phone_ai_voice.mp3" download>long AI voice (83 s)</a> ·
+      <a href="/meet/audio/testclips/scam_2_it_desk.mp3" download>scam call: IT help desk (74 s)</a> ·
+      <a href="/meet/audio/testclips/scam_1_bank.mp3" download>scam call: bank (81 s)</a></div>
+    <p class="stat">The scam calls ask you to type a code, then to read one out loud ("read out your PIN", "read me the
+      code"). That request arms the Secret Shield: read a fake number in the pause after it and the room hears a tone.</p>
     <div class="row"><span class="label">caller</span><div class="meter"><div id="m-agent"></div></div></div>
     <div class="row"><span class="label">CallGuard (Hearsay) says</span><span class="stat" id="verdict">-</span></div>
     <p class="stat">A clip's verdict is the mean over its scored 4 s windows (Hearsay scores the caller's audio every
@@ -184,7 +190,7 @@ $('rec').onclick = () => {
 // (bridge: /meet/far = Hearsay) + your speakers. A clip, a file, the tone or your own mic plays into it.
 fetch('/meet/audio').then((r) => r.json()).then((files) => {
   for (const f of files) $('clip').add(new Option(f, f));
-  room.tests = files.filter((f) => /^testclips\//.test(f));
+  room.tests = files.filter((f) => /^testclips\/(real|ai)_/.test(f));      // the 10 test voices
   if (room.tests.length) $('clip').value = room.tests[0];
   $('playall').disabled = !room.tests.length;
 }).catch(() => {});
@@ -229,8 +235,12 @@ function showVerdict() {
   ws.onclose = () => setTimeout(events, 1000);
 })();
 
+// A new clip or your mic = a new speaker: CallGuard forgets the previous voice (the dashboard's Flush).
+const flush = () => fetch('/api/control/voice/flush', { method: 'POST' }).catch(() => {});
+
 async function play(name) {
   stopClip();
+  await flush();
   const l = await callerLine();
   $('agent').muted = false;
   const file = name ? null : $('file').files[0];
@@ -299,6 +309,7 @@ $('playall').onclick = async () => {
 $('speak').onclick = async () => {
   if (room.caller && room.caller.mic) { stopClip(); session = null; showVerdict(); return; }
   stopClip();
+  await flush();
   const l = await callerLine();
   const gum = (B && B.nativeGUM) || navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
   let mic;
