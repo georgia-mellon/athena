@@ -273,8 +273,6 @@ for (const b of document.querySelectorAll("[data-mode]")) b.onclick = () => post
 for (const b of document.querySelectorAll("[data-sec]")) b.onclick = () => post("/api/control/secret", { action: b.dataset.sec });
 $("voice-flush").onclick = () => post("/api/control/voice/flush", {});
 $("meet-ext").onclick = () => post("/api/control/meet", { action: "extension" });
-$("scn-start").onclick = () => post("/api/control/scenario", { action: "start", name: $("scn-name").value || "ai_caller" });
-$("scn-stop").onclick = () => post("/api/control/scenario", { action: "stop", name: $("scn-name").value || "ai_caller" });
 
 // ---------- meeting ----------
 function meetUrl() {  // accept a full link, "meet.google.com/abc-defg-hij" or a bare code; blank = Meet's home page
