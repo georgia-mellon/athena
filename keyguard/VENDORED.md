@@ -21,6 +21,9 @@ checkout (`KEYGUARD_ROOT`, else `upstream/keyguard`, `../../keyboard`, `../keybo
 - `shield/adversarial.py`: `harrison_windows` defaults to `DATA/harrison/MBPWavs` (was cwd-relative), so
   `co_train_population` / `co_train` run from CallGuard.
 - `web/index.html`: `/api/...` and `/static/...` made relative so the UI works mounted under a prefix.
+- `web/engine_map.html` (the CallGuard engine diagram): labels updated to the current models (Hearsay E5, CTC
+  attacker "Ares"). The maps (`diagram`, `project_map`, `engine_map`, `keyguard_map`, `pareto`) are served at
+  `/keyguard/static/<name>.html` and linked from the dashboard's Ares-vs-Athena panel.
 
 Not changed: some of Keyguard's own training/eval CLIs (`agents/pipeline.py`, `finetune_live.py`, `defense_demo.py`,
 `shield/separator.py`, `smart_dict.demo`) still default to paths relative to

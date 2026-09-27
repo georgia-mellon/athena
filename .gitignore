@@ -24,3 +24,4 @@ upstream/
 
 # vendored Keyguard data (weights live in runs/keyguard): app.keystroke_guard.get_assets
 data/keyguard/
+.tycho/
