@@ -176,6 +176,12 @@ Harness (`--shield-mode`, same attacker as above): shielded top-1 11.4 % (dsp), 
   bank (40-75 wpm, n = 458): raw 77.1 % / 89.3 %, DSP 62.9 % / 78.4 %: with neighbours in context
   the DSP shield dents it far less, as Keyguard's DEMO.md says; the adversarial deltas were trained against KeyNet, not this model.
   Retrain them against it with `adversarial train --attacker ctc` ([docs/gpu_retrain.md](../../docs/gpu_retrain.md)).
+- **CTC deltas, first run** (2026-09-27, `train --attacker ctc --speech keyguard`: Keyguard's 10 speech clips, 1000
+  steps, 873 s CPU, margin loss 4.16 -> 2.89, still falling). Isolated bank presses (harness, n = 370): top-1 54.1 % raw,
+  14.6 % dsp, 21.1 % adversarial, **3.8 % dsp+adversarial** (chance 2.7 %). Typing synthesized from the bank at
+  40-75 wpm (neighbours in context, n = 458): 77.1 % raw, 62.9 % dsp, 54.8 % dsp+adversarial: the deltas are trained
+  on isolated windows and don't hold up under overlap. Next: rerun with Hearsay speech (`--speech hearsay`), and train
+  on typing contexts rather than isolated presses.
 
 - The default attacker is now the teammate's (above). The KeyNet rows and the adversarial table describe the older
   **provisional** KeyNet (CallGuard-trained, one MacBook keyboard, isolated presses, in-domain).
