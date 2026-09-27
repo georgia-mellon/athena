@@ -63,21 +63,22 @@ function renderTimeline() {
 }
 
 function voiceClass(p) { return p >= 0.5 ? "synthetic" : p >= 0.25 ? "unverified" : "real"; }
-// The verdict and the curve are the mean of the last SMOOTH windows of one stretch of speech (a gap > GAP_S starts
-// over): one odd 4 s window doesn't flip the verdict or spike the graph.
-const SMOOTH = 3, GAP_S = 6;
+const VOICE_TEXT = { real: "human", unverified: "uncertain", synthetic: "AI voice" };
+// The verdict and the curve are the mean of the last SMOOTH scored windows: one odd 4 s window doesn't flip the
+// verdict or spike the graph. Silence doesn't move it (it only changes on speech); a new speaker starts over
+// (voice.flush: the Flush button, the test room's clip switch, or a long gap).
+const SMOOTH = 3;
 function renderVoice(d, t) {
   const raw = clamp(Number(d.p_synthetic) || 0, 0, 1);
-  const last = (st.recent || []).at(-1);
-  st.recent = [...(last && t - last[0] <= GAP_S ? st.recent : []), [t, raw]].slice(-SMOOTH);
+  st.recent = [...(st.recent || []), [t, raw]].slice(-SMOOTH);
   const p = st.recent.reduce((a, [, x]) => a + x, 0) / st.recent.length;
   const c = voiceClass(p);
   $("vlight").className = "vlight " + c;
-  $("vlabel").textContent = c;
+  $("vlabel").textContent = VOICE_TEXT[c];
   $("vp").textContent = p.toFixed(2);
   $("vp").title = `this window ${raw.toFixed(2)}, mean of the last ${st.recent.length}`;
   $("vlat").textContent = d.latency_ms == null ? "–" : Math.round(d.latency_ms) + " ms";
-  if (c !== st.vclass) { log(t, `voice → ${c} (p=${p.toFixed(2)})`, c === "synthetic" ? "alert-c" : ""); st.vclass = c; }
+  if (c !== st.vclass) { log(t, `voice → ${VOICE_TEXT[c]} (AI score ${p.toFixed(2)})`, c === "synthetic" ? "alert-c" : ""); st.vclass = c; }
   st.voice.push([t, p]);
   renderSpark();
 }
@@ -88,6 +89,11 @@ function renderSpark() {
     st.voice.map(([t, p]) => `${(600 * (t - (now - SPARK_S)) / SPARK_S).toFixed(1)},${(120 * (1 - p)).toFixed(1)}`).join(" "));
 }
 setInterval(renderSpark, 1000);  // keep the window sliding while the far end is silent
+function renderFlush() {
+  st.recent = []; st.voice = []; st.vclass = null;
+  $("vlight").className = "vlight none"; $("vlabel").textContent = "listening…"; $("vp").textContent = "–";
+  renderSpark();
+}
 
 function renderStroke() {
   st.typed = Math.min(st.typed + 1, MAXC);
@@ -173,6 +179,7 @@ function handle(m) {
       return;
     case "threat.update": renderThreat(d, t); break;
     case "voice.verdict": renderVoice(d, t); break;
+    case "voice.flush": renderFlush(); break;
     case "keys.stroke": renderStroke(); break;
     case "keys.readout": renderReadout(d); break;
     case "shield.state": renderShield(d.mode); st.shieldLat = d.latency_ms; renderPipeline(); break;
@@ -187,6 +194,7 @@ function handle(m) {
     else if (m.topic === "shield.state") text = `shield → ${d.mode}`;
     else if (m.topic === "secret.blocked") text = `${d.category === "digits" ? d.length + "-digit code" : d.category} ${d.allowed ? "allowed" : "blocked"} from your voice`;
     else if (m.topic === "secret.request") text = "caller asked for a code";
+    else if (m.topic === "voice.flush") text = d.reason === "gap" ? "new speaker (long silence): voice history cleared" : "voice history flushed";
     else if (m.topic === "control.meet") text = `meeting → ${d.action}${d.url ? " " + d.url : ""}`;
     else if (m.topic === "driver.error") text = `driver ${d.driver} error: ${d.error}`;
     else text += " " + JSON.stringify(d);
@@ -201,7 +209,7 @@ function connect() {
   ws.onopen = () => { backoff = 500; const c = $("conn"); c.textContent = "live"; c.className = "pill ok"; };
   ws.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { console.error(err); } };
   ws.onclose = () => {
-    const c = $("conn"); c.textContent = "reconnecting…"; c.className = "pill off";
+    const c = $("conn"); c.textContent = "reconnecting…"; c.className = "pill bad";
     setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 5000);
   };
   ws.onerror = () => ws.close();
@@ -218,6 +226,8 @@ async function post(path, body) {
 }
 for (const b of document.querySelectorAll("[data-mode]")) b.onclick = () => post("/api/control/shield", { mode: b.dataset.mode });
 for (const b of document.querySelectorAll("[data-sec]")) b.onclick = () => post("/api/control/secret", { action: b.dataset.sec });
+$("voice-flush").onclick = () => post("/api/control/voice/flush", {});
+$("meet-ext").onclick = () => post("/api/control/meet", { action: "extension" });
 $("scn-start").onclick = () => post("/api/control/scenario", { action: "start", name: $("scn-name").value || "ai_caller" });
 $("scn-stop").onclick = () => post("/api/control/scenario", { action: "stop", name: $("scn-name").value || "ai_caller" });
 
