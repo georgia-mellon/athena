@@ -32,7 +32,7 @@ def _clips(n=4):
             for r in t[t.label == lab].sample(n, random_state=0).itertuples()]
 
 
-@pytest.fixture(scope="module", params=["r4ft", "r5"])
+@pytest.fixture(scope="module", params=["r4ft", "r5", "e5"])
 def driver(request):
     return hr.HearsayDriver(mode=request.param, threads=4, device="cpu")
 

@@ -38,15 +38,15 @@ from app.source.types import SR  # noqa: E402
 HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT") or REPO.parent / "Hearsay")
 OUT = REPO / "demo" / "audio" / "ai_caller"
 SEED = 4821
-TOTAL = 60.0
-SEGMENTS = [("colleague", 0.0, 12.0, "real"), ("ai_agent", 12.0, 40.0, "synthetic"), ("colleague_returns", 40.0, 60.0, "real")]
+TOTAL = 64.0
+SEGMENTS = [("colleague", 0.0, 12.0, "real"), ("ai_agent", 12.0, 44.0, "synthetic"), ("colleague_returns", 44.0, 64.0, "real")]
 COLLEAGUE = "100"                         # LibriSpeech speaker id (the agent clones this voice)
 AGENT = ("diffssd", "elevenlabs", "librispeech:100")
 LOCAL = "2803"                            # the user at the keyboard
 CODE = "RESET4821"                        # fake code only
-TYPING = [20.5, 29.5]                     # shield off at the first, on (29 s) at the second
+TYPING = [24.0, 31.5]                     # shield off at the first, on (31 s) at the second
 # Spoken-secret beat (plan 06 section 7): the agent asks "just read me the code", the victim starts reading it.
-REQUEST_T, VICTIM_T = 34.4, 37.4
+REQUEST_T, VICTIM_T = 36.4, 39.4
 RECORDED = REPO / "demo" / "audio" / "recorded"
 AGENT_REQUEST = [RECORDED / "agent_request.wav", REPO / "demo" / "audio" / "agent_lines" / "06.wav"]
 VICTIM_LINE = RECORDED / "victim_code.wav"  # a consenting teammate reading the fake code; never TTS (plan 06)

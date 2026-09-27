@@ -139,18 +139,19 @@ def test_factory_real_is_lazy_and_passes_options(monkeypatch):
         base.make_voice({"voice": "bogus"})
 
 
-def test_hearsay_mode_defaults_to_r5_and_r4ft_stays_selectable(monkeypatch, tmp_path):
+def test_hearsay_mode_defaults_to_e5_and_others_stay_selectable(monkeypatch, tmp_path):
     from app.source import config
     seen = []
     monkeypatch.setattr(base, "_real", lambda mod, cls, **kw: seen.append(kw["mode"]))
     none = tmp_path / "none.toml"
     none.write_text("")
-    for env, mode in (({}, "r5"), ({"CALLGUARD_DRIVERS_HEARSAY_MODE": "r4ft"}, "r4ft")):
+    for env, mode in (({}, "e5"), ({"CALLGUARD_DRIVERS_HEARSAY_MODE": "r5"}, "r5"),
+                      ({"CALLGUARD_DRIVERS_HEARSAY_MODE": "r4ft"}, "r4ft")):
         cfg = config.load(none, env=env)
         assert cfg.drivers.hearsay_mode == mode
         cfg.drivers.voice = "real"
         base.make_voice(cfg)
     base.make_voice({"voice": "real"})                  # a bare dict: same default
-    assert seen == ["r5", "r4ft", "r5"]
+    assert seen == ["e5", "r5", "r4ft", "e5"]
     with pytest.raises(ValueError):
         config.load(none, env={"CALLGUARD_DRIVERS_HEARSAY_MODE": "r3"})

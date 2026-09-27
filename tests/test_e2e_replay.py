@@ -154,8 +154,8 @@ def test_real_replay_ai_caller():
           "".join(r["top1"] for r in ro["shielded"]))
     at = lambda t: [lv for tt, lv, _ in seen["levels"] if tt <= t][-1]  # noqa: E731
     assert at(11) == "SAFE"                                        # real colleague
-    assert "CRITICAL" in [lv for tt, lv, _ in seen["levels"] if 20 <= tt < 29]  # agent + readable typing
-    assert at(36) != "CRITICAL"                                    # shield on (29 s)
+    assert "CRITICAL" in [lv for tt, lv, _ in seen["levels"] if 24 <= tt < 31]  # agent + readable typing
+    assert at(38) != "CRITICAL"                                    # shield on (31 s)
     assert at(sc.seconds) in ("SAFE", "WATCH")                     # agent gone
     n = len(seen["readouts"]) // 2                                 # first burst: shield off; second: on
     raw_off = sum(r["hit"]["raw"] for r in seen["readouts"][:n])

@@ -46,7 +46,7 @@ no devices), at the commit that added this file.
 - The organizers' scoring is now confirmed as **Pspoof = 0.3, Cfa = 4** (moderator message, 2026-09-26). Hearsay's
   numbers are being recomputed by the Hearsay session. If the Hearsay deployment threshold changes, re-run the
   calibration (delete `runs/hearsay_calibration.json`).
-- Hearsay stays frozen until the NSA review answers. CallGuard only reads it.
+- (Superseded 2026-09-26: the freeze is lifted; see the latest update below.) CallGuard only reads Hearsay.
 
 ## Owner to-dos
 - Install VB-CABLE (vb-audio.com/Cable, admin, reboot) for live Zoom mode.
@@ -103,3 +103,12 @@ CallGuard now lives at https://github.com/georgia-mellon/callguard, a fork of da
 carries the CallGuard application (both histories kept). danmano411/callguard is no longer used. No attribution
 trailers in commits or PRs (owner rule, same as Hearsay). The root README and the Hearsay overview are templates to be
 written.
+
+## Update 2026-09-26 night: Hearsay E5 is the default
+The Hearsay freeze is lifted: the NSA review confirmed the scorer (Pspoof 0.3, Cfa 4, higher score = real). Official
+HGT test score for R5: minDCF 0.0584, EER 2.5 % (organizers); E5 is Hearsay's final submission (score pending).
+CallGuard's default voice model is now **E5** (LR fusion of R4ft + R6 + R1, `data/models/e5/e5_fusion.json`), with r5 /
+r4ft selectable. E5 on CPU, 4 threads: ~1.4 s per 4 s window (keeps the 2 s hop, no skipped windows in the realtime
+replay), 20/20 on held-out clips, threshold 0.97 calibrated on E5's val_testlike cross-fitted scores (cache keyed on
+both checkpoint shas). The ai_caller demo was retimed (agent 12-44 s, typing at 24 s, shield at 31 s) so the voice
+risk has built up when the typing starts.
