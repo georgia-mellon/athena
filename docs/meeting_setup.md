@@ -1,28 +1,36 @@
 # Meeting setup: Google Meet
 
-CallGuard joins Google Meet through **its own Chrome window**: no plugin, no bot, no virtual audio cable
-([app/source/connectors/meet](../app/source/connectors/meet/README.md)).
+CallGuard joins Google Meet in **your own Chrome**, through a small Chrome extension that connects Meet's audio to the
+CallGuard app on this computer: no bot, no virtual audio cable ([app/source/connectors/meet](../app/source/connectors/meet/README.md)).
 
 ```
-CallGuard's Chrome window (its own profile in %LOCALAPPDATA%\CallGuard\meet-profile, bridge.js injected before Meet's scripts)
-  your mic ─► ws /meet/mic ─► CallGuard (Keystroke Guard shield + Secret Shield delay line) ─► the track Meet sends
+your Chrome tab on meet.google.com (the CallGuard extension puts bridge.js in the page before Meet's scripts)
+  your mic ─► ws://127.0.0.1:8765/meet/mic ─► CallGuard (Keystroke Guard shield + Secret Shield delay line) ─► the track Meet sends
   remote participants ─► ws /meet/far ─► CallGuard (Hearsay + "read me the code" listener)
 ```
 
-## 1. Start
+## 1. Install the extension (once)
+1. Chrome (or Edge) → `chrome://extensions` → turn on **Developer mode**.
+2. **Load unpacked** → pick `app/source/connectors/meet/extension` in this repo (the dashboard's Meeting bar can open
+   the folder for you: `POST /api/control/meet {"action": "extension"}`).
+3. The first time a Meet page connects, Chrome may ask to let **meet.google.com access devices on your local network**:
+   allow it (that is CallGuard on 127.0.0.1).
+
+The extension only runs on `https://meet.google.com/*`; it removes Meet's Content-Security-Policy header there (so the
+bridge may open its local socket and audio worklet), the same thing the old automated window did.
+
+## 2. Start
 ```
-uv run callguard app                           # desktop window; Join opens Meet
+uv run callguard app                           # desktop window; Join opens the Meet link in your Chrome
 uv run callguard app --meet-url abc-defg-hij   # or open this meeting at start
 uv run callguard run --mode meet               # same engine, dashboard in your normal browser
 ```
-- Needs **Chrome or Edge** installed (Chrome first). Another path: set `CALLGUARD_BROWSER` to the browser's `.exe`.
-- The window uses a dedicated profile (`%LOCALAPPDATA%\CallGuard\meet-profile`, outside the repo so no Google session can end up in a zip of it). The first time, **sign in to Google** there
-  or join as a guest. Your everyday Chrome profile is never touched.
-- The window only opens Meet links (`https://meet.google.com/...` or a code like `abc-defg-hij`) and local pages.
+- CallGuard must run on port **8765** (the default): that is where the extension connects.
 - Join / Leave and the link box are on the dashboard's **Meeting** bar. Its pill reads `in meeting: mic ✓ far ✓`
-  and turns green once both bridge streams are connected (hover it for the bridge round trip).
+  and turns green once both bridge streams are connected. Leave = close the Meet tab.
+- Without the extension, Meet runs unprotected and the pill stays grey.
 
-## 2. Meet settings (in CallGuard's window)
+## 3. Meet settings
 ⋮ → Settings → Audio:
 - **Microphone:** your real mic (the bridge sits behind Meet's device choice).
 - **Speaker:** headphones. A speaker bleeding into the mic puts the caller's voice in the attacker's view too.

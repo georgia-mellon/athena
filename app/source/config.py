@@ -21,8 +21,10 @@ HEARSAY_MODES = ("r4ft", "r5", "e5")
 @dataclass
 class ThreatConfig:
     """Plan 02 §4. Scores are 0-100; V, E, L, T are in [0, 1]."""
-    voice_half_life_s: float = 6.0     # EMA half-life of V
-    voice_stale_s: float = 4.0         # no verdict for this long = silence, V decays toward 0
+    voice_half_life_windows: float = 3.0   # V = EMA over scored speech windows only (half-life in windows, 2 s
+                                           # apart): silence and noise never move it, human-sounding speech lowers it
+    new_speaker_gap_s: float = 20.0    # no scored speech for this long (far-end audio) = a new speaker: V starts over
+                                       # (0 = off; the dashboard's Flush does it by hand)
     readout_window: int = 20           # keystrokes for E and L
     num_classes: int = 36              # K (A-Z0-9): chance = 3/K for top-3 hits, unless the readout says otherwise
     typing_window_s: float = 10.0

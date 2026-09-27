@@ -78,7 +78,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[callguard] loading drivers: voice={cfg.drivers.voice} attacker={cfg.drivers.attacker} "
           f"shield={cfg.drivers.shield} secret={cfg.drivers.secret} ...", flush=True)
     pipe = Pipeline(cfg, bus)
-    pipe.meet_port = port                               # the injected Meet bridge dials this server, not the default
+    pipe.meet_port = port                               # the test room's bridge dials this server
+    if port != 8765:
+        print(f"[callguard] note: the Meet extension connects to port 8765; on port {port} only the test room is "
+              "protected", file=sys.stderr, flush=True)
     if hasattr(pipe, "start_meet"):
         pipe.start_meet()                               # before the server: no dashboard Arm can race its reset
     else:

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "CallGuard for Google Meet",
+  "version": "1.0",
+  "description": "Connects Google Meet's audio to the CallGuard app running on this computer (127.0.0.1:8765).",
+  "content_scripts": [{
+    "matches": ["https://meet.google.com/*"],
+    "js": ["bridge.js"],
+    "run_at": "document_start",
+    "world": "MAIN"
+  }],
+  "permissions": ["declarativeNetRequest"],
+  "host_permissions": ["https://meet.google.com/*"],
+  "declarative_net_request": {
+    "rule_resources": [{ "id": "meet_csp", "enabled": true, "path": "rules.json" }]
+  }
+}

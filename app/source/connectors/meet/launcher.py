@@ -120,6 +120,28 @@ def find_browser() -> Path | None:
     return None
 
 
+def open_tab(url: str) -> str:
+    """Open `url` as a normal tab in the user's own Chrome / Edge (their profile, no automation). The CallGuard
+    extension (extension/, loaded unpacked once) puts the bridge in the page. Returns what opened it."""
+    b = find_browser()
+    if b is None:
+        import webbrowser
+        webbrowser.open(url)
+        return "the default browser"
+    subprocess.Popen([str(b), url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return b.stem
+
+
+def show_extension() -> str:
+    """Open the extension folder in the file manager (for chrome://extensions > Load unpacked)."""
+    path = HERE / "extension"
+    if sys.platform == "win32":
+        os.startfile(path)                                  # noqa: S606 - a local folder
+    else:
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(path)])
+    return str(path)
+
+
 def _merge_features(args: list[str]) -> list[str]:
     """Chrome only honours the last --disable-features=...: fold them all into one."""
     off = [f for a in args if a.startswith("--disable-features=") for f in a.split("=", 1)[1].split(",") if f]
@@ -129,7 +151,7 @@ def _merge_features(args: list[str]) -> list[str]:
 
 def bridge_source(port: int) -> str:
     return (f"window.__callguardPort={int(port)};window.__callguardBridgeSource='cdp';\n"
-            + (HERE / "bridge.js").read_text(encoding="utf-8"))
+            + (HERE / "extension" / "bridge.js").read_text(encoding="utf-8"))
 
 
 class MeetSession:

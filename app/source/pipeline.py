@@ -164,6 +164,7 @@ class Pipeline:
         self._clear_shielded = False
         self._mic_errors = 0
         self._next_voice = VOICE_WIN
+        self._last_speech: int | None = None    # far-end sample where the last scored speech window ended
         self._readout = {"raw": deque(maxlen=self.cfg.threat.readout_window),
                          "shielded": deque(maxlen=self.cfg.threat.readout_window)}
         if getattr(self, "engine", None):
@@ -233,6 +234,10 @@ class Pipeline:
         if speech < SPEECH_MIN:
             self.bus.emit("voice.window", scored=False, **info)
             return True
+        gap = self.cfg.threat.new_speaker_gap_s
+        if gap and self._last_speech is not None and stop - VOICE_WIN - self._last_speech >= gap * SR:
+            self._flush("gap")                          # a long silence, then speech: treat it as a new speaker
+        self._last_speech = stop
         v = self.voice.score(x)
         if v is None:                                   # driver failed; driver.error already published
             return True
@@ -382,6 +387,17 @@ class Pipeline:
         self.bus.emit("secret.state", enabled=on, armed=self.armed, armed_by=self.armed_by, manual=self._manual,
                       allowed=self.clock() < self._bypass_until, allow_s=c.allow_s, delay_ms=c.delay_ms if on else 0,
                       error=self.secret_error, driver=self.spotter.name if self.spotter is not None else None)
+
+    def flush_voice(self) -> str:
+        """Dashboard control: a new speaker starts now. V back to 0, and no window mixes audio from before."""
+        self._next_voice = self.far.total + VOICE_WIN
+        self._last_speech = None
+        self._flush("manual")
+        return "flushed"
+
+    def _flush(self, reason: str) -> None:
+        self.engine.flush_voice()
+        self.bus.emit("voice.flush", reason=reason)
 
     def secret(self, action: str) -> str:
         """Dashboard control: allow (bypass for allow_s) | arm | disarm | auto."""
@@ -584,7 +600,8 @@ class Pipeline:
             self.bus.emit("meet.state", **state)
 
     def meet(self, action: str, url: str | None = None) -> str:
-        """Dashboard control: join (launch the Meet window, or focus / navigate the open one) | leave."""
+        """Dashboard control: join (open the Meet link as a normal tab in the user's Chrome; the CallGuard extension
+        connects it) | extension (show the extension folder, to install it) | leave."""
         from app.source.connectors.meet import launcher
         if self.mode != "meet":
             raise ValueError("Google Meet needs meet mode (callguard app, or callguard run --mode meet)")
@@ -595,18 +612,9 @@ class Pipeline:
             result = "left"
         elif action == "join":
             url = launcher.meet_url(url)                # ValueError on anything but a Meet / local URL
-            s = self.meet_session
-            if s is not None and s.alive:
-                if url != launcher.MEET_HOME and url != s.url:
-                    s.navigate(url)
-                s.focus()
-                result = f"focused {s.url}"
-            else:
-                try:
-                    self.meet_session = launcher.launch(url, self.meet_port or self.cfg.server.port)
-                except (FileNotFoundError, RuntimeError) as e:
-                    raise ValueError(f"could not open Meet: {e}") from e
-                result = f"opened {url} in {self.meet_session.browser}"
+            result = f"opened {url} in {launcher.open_tab(url)}"
+        elif action == "extension":
+            result = launcher.show_extension()
         else:
             raise ValueError(f"unknown meet action {action!r}")
         self.bus.publish(Event("control.meet", {"action": action, "url": url}))

@@ -298,7 +298,7 @@ class _NullBus:
 
 def first_arm(verdicts, dur: float, half_life: float, arm: float) -> float | None:
     now = [0.0]
-    eng = ThreatEngine(_NullBus(), replace(ThreatConfig(), voice_half_life_s=half_life), now=lambda: now[0])
+    eng = ThreatEngine(_NullBus(), replace(ThreatConfig(), voice_half_life_windows=half_life / 2), now=lambda: now[0])
     vs = sorted(verdicts)
     j = 0
     for k in range(int(dur / 0.25) + 1):

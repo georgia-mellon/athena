@@ -25,7 +25,9 @@ from app.source.config import REPO
 from app.source.types import BLOCK
 
 HERE = Path(__file__).parent
-STATIC = {"bridge.js": "text/javascript", "testroom.html": "text/html"}   # everything /meet/static/ serves
+EXTENSION = HERE / "extension"                  # the Chrome extension that injects bridge.js into Meet (load unpacked)
+STATIC = {"bridge.js": (EXTENSION / "bridge.js", "text/javascript"),       # everything /meet/static/ serves
+          "testroom.html": (HERE / "testroom.html", "text/html")}
 DEMO_AUDIO = REPO / "demo" / "audio"
 MEET_ORIGIN = "https://meet.google.com"
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -145,20 +147,23 @@ def make_router(pipeline, port: int | None = None) -> APIRouter:
     def static(name: str) -> FileResponse:
         if name not in STATIC:
             raise HTTPException(404)
-        return FileResponse(HERE / name, media_type=STATIC[name], headers={"cache-control": "no-store"})
+        path, media = STATIC[name]
+        return FileResponse(path, media_type=media, headers={"cache-control": "no-store"})
 
     @r.get("/meet/audio")
     def audio_list() -> JSONResponse:
-        """The demo's WAVs (demo/audio, gitignored) the test room can play as the remote participant."""
-        files = sorted(p.relative_to(DEMO_AUDIO).as_posix() for p in DEMO_AUDIO.rglob("*.wav")) \
-            if DEMO_AUDIO.is_dir() else []
+        """The test voices (demo/audio/testclips, gitignored; demo/build_testclips.py) the test room plays as the
+        remote participant."""
+        clips = DEMO_AUDIO / "testclips"
+        files = sorted(p.relative_to(DEMO_AUDIO).as_posix() for p in clips.glob("*.wav")) if clips.is_dir() else []
         return JSONResponse(files)
 
     @r.get("/meet/audio/{path:path}")
     def audio_file(path: str) -> FileResponse:
         p = (DEMO_AUDIO / path).resolve()
-        if p.suffix.lower() != ".wav" or not p.is_file() or not p.is_relative_to(DEMO_AUDIO.resolve()):
+        media = {".wav": "audio/wav", ".mp3": "audio/mpeg"}.get(p.suffix.lower())
+        if media is None or not p.is_file() or not p.is_relative_to(DEMO_AUDIO.resolve()):
             raise HTTPException(404)
-        return FileResponse(p, media_type="audio/wav")
+        return FileResponse(p, media_type=media)
 
     return r

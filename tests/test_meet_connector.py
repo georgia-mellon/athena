@@ -279,6 +279,14 @@ def test_meet_controls_and_pass_through_outside_meet_mode():
         with pytest.raises(ValueError):
             pipe.meet(*bad)
     assert pipe.meet("leave") == "left"
+    opened = []
+    launcher.open_tab, real = (lambda url: opened.append(url) or "chrome"), launcher.open_tab
+    try:
+        assert pipe.meet("join", "abc-defg-hij") == "opened https://meet.google.com/abc-defg-hij in chrome"
+    finally:
+        launcher.open_tab = real
+    assert opened == ["https://meet.google.com/abc-defg-hij"]            # a normal tab, no automated window
+    assert pipe.meet_session is None
     with pytest.raises(ValueError, match="replay mode"):
         pipe.scenario("start")
     pipe.stop()

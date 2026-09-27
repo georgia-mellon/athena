@@ -69,6 +69,7 @@
     <div class="row">
       <button id="playall" disabled>Play the 10 test voices</button>
       <button id="speak">Be the caller: judge my voice</button>
+      <a href="/meet/audio/testclips/phone_ai_voice.mp3" download>Download the AI voice for your phone (mp3, 83 s)</a>
     </div>
     <div class="row"><span class="label">caller</span><div class="meter"><div id="m-agent"></div></div></div>
     <div class="row"><span class="label">CallGuard (Hearsay) says</span><span class="stat" id="verdict">-</span></div>
@@ -184,7 +185,7 @@ $('rec').onclick = () => {
 // (bridge: /meet/far = Hearsay) + your speakers. A clip, a file, the tone or your own mic plays into it.
 fetch('/meet/audio').then((r) => r.json()).then((files) => {
   for (const f of files) $('clip').add(new Option(f, f));
-  room.tests = files.filter((f) => /^testclips\//.test(f));
+  room.tests = files.filter((f) => /^testclips\/(real|ai)_/.test(f));      // the 10 test voices
   if (room.tests.length) $('clip').value = room.tests[0];
   $('playall').disabled = !room.tests.length;
 }).catch(() => {});
@@ -229,8 +230,12 @@ function showVerdict() {
   ws.onclose = () => setTimeout(events, 1000);
 })();
 
+// A new clip or your mic = a new speaker: CallGuard forgets the previous voice (the dashboard's Flush).
+const flush = () => fetch('/api/control/voice/flush', { method: 'POST' }).catch(() => {});
+
 async function play(name) {
   stopClip();
+  await flush();
   const l = await callerLine();
   $('agent').muted = false;
   const file = name ? null : $('file').files[0];
@@ -299,6 +304,7 @@ $('playall').onclick = async () => {
 $('speak').onclick = async () => {
   if (room.caller && room.caller.mic) { stopClip(); session = null; showVerdict(); return; }
   stopClip();
+  await flush();
   const l = await callerLine();
   const gum = (B && B.nativeGUM) || navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
   let mic;

@@ -163,3 +163,38 @@ def test_real_replay_ai_caller():
     assert raw_off > 2 * shd_on, (raw_off, shd_on)                 # top-3 hits
     pipe.stop()
     bus.close()
+
+
+def test_new_speaker_gap_and_flush_reset_the_voice():
+    """No-speech stretches hold V; a long gap (new_speaker_gap_s) or the Flush control starts a new speaker."""
+    cfg = config.load(env={})
+    bus = EventBus()
+    pipe = Pipeline(cfg, bus, voice=PitchVoice(), attacker=MockAttacker(), shield=MockShield())
+    flushes = []
+    bus.subscribe("voice.flush", lambda e: flushes.append(e.data["reason"]))
+
+    def feed(x):
+        for s in range(0, len(x), 320):
+            pipe.far.write(x[s:s + 320])
+            while pipe.voice_step():
+                pass
+        bus.flush()
+
+    feed(_tone(600, 12))                                  # the agent
+    feed(np.zeros(4 * SR, np.float32))                    # (windows still overlapping the speech)
+    V = pipe.engine.V
+    assert V > 0.5
+    feed(np.zeros(10 * SR, np.float32))                   # 10 more s of silence: held, not a new speaker yet
+    assert pipe.engine.V == V
+    feed(_tone(600, 6))
+    bus.flush()
+    assert flushes == []
+    feed(np.zeros(25 * SR, np.float32))                   # 25 s of silence, then a voice: a new speaker
+    feed(_tone(300, 6))
+    bus.flush()
+    assert flushes == ["gap"] and pipe.engine.V < 0.1
+    feed(_tone(600, 12))
+    assert pipe.flush_voice() == "flushed" and pipe.engine.V == 0
+    bus.flush()
+    assert flushes == ["gap", "manual"]
+    bus.close()

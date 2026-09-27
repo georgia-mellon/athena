@@ -92,11 +92,16 @@ def test_chance_level_attacker_is_no_exposure():
     assert eng.tick()["E"] == 0.0
 
 
-def test_voice_decays_in_silence():
+def test_voice_holds_in_silence_until_evidence_or_flush():
     eng, clock, *_ = engine()
     run(eng, clock, 30, p=0.95)
+    V = eng.V
     assert eng.level == "WARN"
-    assert run(eng, clock, 30)["level"] == "SAFE"
+    assert run(eng, clock, 60)["level"] == "WARN" and eng.V == V      # no information: the verdict plateaus
+    assert run(eng, clock, 30, p=0.05)["level"] == "SAFE"             # human-sounding speech brings it down
+    run(eng, clock, 30, p=0.95)
+    eng.flush_voice()                                                 # a new speaker
+    assert eng.V == 0 and eng.tick()["level"] in ("SAFE", "WATCH")
 
 
 def test_hysteresis_rule():
