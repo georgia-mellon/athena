@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Athena Engine Map</title>
+<!-- Athena: plain slide-style diagram (cream background); matches project_map.html -->
+<style>
+  :root{--bg:#f7f3ea;--node:#fffdf8;--ink:#1f2328;--mut:#5f6673;--line:#8a8f98;--edge:#cfc9bb;
+        --shield:#b3392f;--secret:#8a4b7c;--voice:#2f5fa8;--bus:#1f6f78;}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px 16px 60px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px;letter-spacing:.2px}
+  .sub{color:var(--mut);margin:0 0 18px;font-size:13px}
+  svg{width:100%;height:auto;display:block}
+  .gl{font:600 10.5px sans-serif;letter-spacing:1.5px;fill:var(--mut);text-transform:uppercase}
+  .gs{font:9px ui-monospace,Menlo,Consolas,monospace;fill:var(--mut)}
+  .nt{font:600 11.5px sans-serif;fill:var(--ink)}
+  .ns{font:9px ui-monospace,Menlo,Consolas,monospace;fill:var(--mut)}
+  .el{font:9px ui-monospace,Menlo,Consolas,monospace;fill:var(--mut)}
+  .em{font:9px ui-monospace,Menlo,Consolas,monospace;fill:var(--secret)}
+  .eb{font:9px ui-monospace,Menlo,Consolas,monospace;fill:var(--voice)}
+  .eo{font:9px ui-monospace,Menlo,Consolas,monospace;fill:var(--shield)}
+  .note{font:italic 10px sans-serif;fill:var(--mut)}
+</style></head>
+<body><div class="wrap">
+  <h1>Athena Engine Map</h1>
+  <p class="sub">one pipeline for Meet, replay and the test room &middot; audio in &rarr; shield &rarr; rings &rarr; workers &rarr; event bus &rarr; threat score</p>
+<svg viewBox="0 0 1080 620" role="img" aria-label="Athena engine map">
+ <defs>
+   <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8a8f98"/></marker>
+   <marker id="ao" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#b3392f"/></marker>
+   <marker id="am" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8a4b7c"/></marker>
+   <marker id="ab" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2f5fa8"/></marker>
+   <marker id="at" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#1f6f78"/></marker>
+ </defs>
+
+ <!-- ===== group lanes ===== -->
+ <rect x="24" y="40" width="176" height="540" rx="6" fill="#f2efe6" stroke="var(--edge)"/>
+ <text class="gl" x="40" y="64">Chrome &middot; Meet tab</text><text class="gs" x="40" y="80">bridge.js, injected</text>
+ <rect x="236" y="40" width="560" height="540" rx="6" fill="#f2efe6" stroke="var(--edge)"/>
+ <text class="gl" x="252" y="64">Athena engine &middot; Python</text><text class="gs" x="252" y="80">one pipeline for Meet, replay and the test room</text>
+ <text class="gl" x="888" y="64">Outputs</text>
+
+ <text class="gs" x="216" y="300" transform="rotate(-90 216 300)" text-anchor="middle" letter-spacing="1">LOCAL WEBSOCKETS &middot; float32 blocks</text>
+
+ <!-- ===== CHROME nodes ===== -->
+ <g>
+  <rect x="40" y="96" width="150" height="46" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="52" y="118">What the call hears</text><text class="ns" x="52" y="134">RTCPeerConnection</text>
+  <rect x="40" y="152" width="150" height="46" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="52" y="174">Your microphone</text><text class="ns" x="52" y="190">getUserMedia</text>
+  <text class="note" x="40" y="286">If Athena stops</text><text class="note" x="40" y="300">answering, the page</text><text class="note" x="40" y="314">sends your raw mic.</text>
+  <rect x="40" y="494" width="150" height="58" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="52" y="516">Other participants</text><text class="ns" x="52" y="532">loopback (default)</text><text class="ns" x="52" y="545">or tab remote tracks</text>
+ </g>
+
+ <!-- ===== AUDIO THREAD inner box ===== -->
+ <rect x="250" y="92" width="540" height="98" rx="4" fill="#faf7ef" stroke="var(--edge)" stroke-dasharray="3 4"/>
+ <text class="gl" x="264" y="112">Audio thread &middot; every 20 ms</text>
+ <rect x="312" y="126" width="156" height="50" rx="4" fill="var(--node)" stroke="var(--shield)"/><text class="nt" x="326" y="150">Keystroke shield</text><text class="ns" x="326" y="166">DSP + adversarial &middot; 80 ms</text>
+ <rect x="560" y="126" width="156" height="50" rx="4" fill="var(--node)" stroke="var(--secret)"/><text class="nt" x="574" y="150">Secret delay line</text><text class="ns" x="574" y="166">bleeps marks &middot; 500 ms</text>
+
+ <!-- ===== rings ===== -->
+ <g>
+  <rect x="262" y="224" width="150" height="48" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="274" y="246">KeyClock</text><text class="ns" x="274" y="262">pynput &rarr; sample index</text>
+  <rect x="430" y="224" width="118" height="48" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="442" y="246">Raw mic ring</text><text class="ns" x="442" y="262">before shield</text>
+  <rect x="558" y="224" width="118" height="48" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="570" y="246">Shielded ring</text><text class="ns" x="570" y="262">what Meet gets</text>
+  <rect x="686" y="224" width="104" height="48" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="698" y="246">Outbound ring</text><text class="ns" x="698" y="262">before delay</text>
+ </g>
+
+ <!-- ===== workers ===== -->
+ <rect x="262" y="300" width="340" height="56" rx="4" fill="var(--node)" stroke="var(--shield)"/><text class="nt" x="278" y="324">Attacker worker</text><text class="ns" x="278" y="342">CTC attacker (Ares) reads every key twice: raw vs shielded</text>
+ <rect x="640" y="300" width="150" height="56" rx="4" fill="var(--node)" stroke="var(--secret)"/><text class="nt" x="654" y="324">Secret spotter</text><text class="ns" x="654" y="342">Vosk &middot; your voice</text>
+
+ <rect x="262" y="384" width="340" height="50" rx="4" fill="var(--node)" stroke="var(--shield)"/><text class="nt" x="278" y="406">Agents worker</text><text class="ns" x="278" y="423">one Ares-vs-Athena match per typing burst &middot; own thread</text>
+
+ <rect x="262" y="474" width="110" height="48" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="274" y="496">Far-end ring</text><text class="ns" x="274" y="512">caller audio</text>
+ <rect x="392" y="470" width="208" height="56" rx="4" fill="var(--node)" stroke="var(--voice)"/><text class="nt" x="408" y="494">Voice worker</text><text class="ns" x="408" y="512">Hearsay E5 &middot; 4 s every 2 s</text>
+ <rect x="628" y="470" width="162" height="56" rx="4" fill="var(--node)" stroke="var(--secret)"/><text class="nt" x="644" y="494">Request listener</text><text class="ns" x="644" y="512">Vosk &middot; "read me the code"</text>
+
+ <!-- ===== EVENT BUS ===== -->
+ <rect x="812" y="92" width="26" height="450" rx="4" fill="var(--bus)"/>
+ <text x="825" y="317" transform="rotate(-90 825 317)" text-anchor="middle" font-weight="600" font-size="11" letter-spacing="2" fill="#fffdf8">EVENT BUS &middot; PUB/SUB</text>
+
+ <!-- ===== OUTPUTS ===== -->
+ <rect x="876" y="126" width="196" height="50" rx="4" fill="var(--node)" stroke="var(--bus)"/><text class="nt" x="890" y="150">Threat engine</text><text class="ns" x="890" y="166">0-100 &middot; SAFE &rarr; CRITICAL</text>
+ <rect x="876" y="250" width="196" height="84" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="890" y="274">Dashboard</text><text class="ns" x="890" y="290">FastAPI &middot; /ws live push</text><text class="ns" x="890" y="303">Ares vs Athena card &middot; /keyguard</text><text class="ns" x="890" y="316">buttons control the engine</text><text class="ns" x="890" y="329">pywebview desktop window</text>
+ <rect x="876" y="386" width="196" height="48" rx="4" fill="var(--node)" stroke="var(--line)"/><text class="nt" x="890" y="408">Hooks</text><text class="ns" x="890" y="424">console &middot; JSONL &middot; webhook</text>
+
+ <!-- ===== edges ===== -->
+ <g fill="none">
+   <path d="M478,126 L478,85 L196,85 L196,119" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <text class="el" x="640" y="82" text-anchor="middle">processed block back to the page</text>
+   <path d="M356,224 L356,200 L378,200 L378,177" stroke="var(--shield)" stroke-width="1.2" marker-end="url(#ao)"/>
+   <text class="eo" x="388" y="212">key events</text>
+   <path d="M489,190 L489,223" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <path d="M617,190 L617,223" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <path d="M735,190 L735,223" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <text class="el" x="512" y="212" text-anchor="middle">copied every block</text>
+   <path d="M489,272 L489,290 L440,290 L440,299" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <path d="M617,272 L617,290 L520,290 L520,299" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <path d="M735,272 L735,290 L715,290 L715,299" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <path d="M715,300 L715,206 L638,206 L638,177" stroke="var(--secret)" stroke-width="1.2" marker-end="url(#am)"/>
+   <text class="em" x="800" y="200" text-anchor="end">marks spans to cut</text>
+   <!-- attacker worker -> agents worker -->
+   <path d="M432,356 L432,383" stroke="var(--shield)" stroke-width="1.2" marker-end="url(#ao)"/>
+   <text class="eo" x="440" y="373">typing bursts (raw mic clip)</text>
+   <!-- arms -->
+   <path d="M709,470 L709,357" stroke="var(--secret)" stroke-width="1.2" marker-end="url(#am)"/>
+   <text class="em" x="716" y="420">arms</text>
+   <path d="M520,470 L520,452 L660,452 L660,357" stroke="var(--voice)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#ab)"/>
+   <text class="eb" x="590" y="446" text-anchor="middle">V &ge; 0.5 arms</text>
+   <path d="M372,496 L391,496" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <path d="M190,523 L226,523 L226,496 L261,496" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <path d="M317,522 L317,552 L709,552 L709,527" stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)"/>
+   <text class="el" x="513" y="566" text-anchor="middle">same caller audio</text>
+   <path d="M790,328 L811,328" stroke="var(--bus)" stroke-width="1.2" marker-end="url(#at)"/>
+   <path d="M602,409 L802,409 L802,372 L811,372" stroke="var(--bus)" stroke-width="1.2" marker-end="url(#at)"/>
+   <path d="M790,498 L802,498 L802,470 L811,470" stroke="var(--bus)" stroke-width="1.2" marker-end="url(#at)"/>
+   <path d="M838,150 L875,150" stroke="var(--bus)" stroke-width="1.2" marker-end="url(#at)"/>
+   <path d="M875,164 L850,164 L850,150" stroke="var(--bus)" stroke-width="1.2" marker-end="url(#at)"/>
+   <path d="M838,292 L875,292" stroke="var(--bus)" stroke-width="1.2" marker-end="url(#at)"/>
+   <path d="M838,410 L875,410" stroke="var(--bus)" stroke-width="1.2" marker-end="url(#at)"/>
+ </g>
+</svg>
+</div></body></html>

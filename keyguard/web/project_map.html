@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KeyGuard System Map</title>
+<!-- Athena: restyled as a plain slide-style diagram (cream background, no emojis); same content as Keyguard's map -->
+<style>
+  :root{--bg:#f7f3ea;--node:#fffdf8;--ink:#1f2328;--mut:#5f6673;--line:#8a8f98;
+        --ares:#b3392f;--athena:#1f6f78;--data:#6b5b95;--arena:#9a7b1c;--out:#3a7d44;--edge:#cfc9bb;}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+        font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1320px;margin:0 auto;padding:28px 16px 60px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px;letter-spacing:.2px}
+  .sub{color:var(--mut);margin:0 0 18px;font-size:13px}
+  svg{width:100%;height:auto;display:block}
+  .cl{font:600 12px/1 sans-serif;letter-spacing:1.6px;text-transform:uppercase}
+  .nt{font:600 12.5px sans-serif;fill:var(--ink)} .ns{font:10.5px sans-serif;fill:var(--mut)}
+  .badge{font:600 12px sans-serif;fill:#fffdf8} .lbl{font:10.5px sans-serif;fill:var(--mut)}
+  .obj{font:500 13px ui-monospace,Menlo,Consolas,monospace;fill:var(--ink)}
+  .step{font:600 11px sans-serif;fill:var(--ink)}
+</style></head>
+<body><div class="wrap">
+  <h1>Ares vs Athena: KeyGuard System Map</h1>
+  <p class="sub">acoustic keystroke attack &rarr; adversarial LLM defense &middot; a call guardian for Google Meet / VoIP</p>
+
+<svg viewBox="0 0 1300 820" role="img" aria-label="KeyGuard architecture map">
+ <defs>
+   <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8a8f98"/></marker>
+   <marker id="aA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#b3392f"/></marker>
+   <marker id="aT" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1f6f78"/></marker>
+   <marker id="aG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#9a7b1c"/></marker>
+   <marker id="aO" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3a7d44"/></marker>
+ </defs>
+
+ <!-- cluster backdrops -->
+ <rect x="24" y="150" width="392" height="620" rx="6" fill="#fbf1ee" stroke="var(--edge)"/>
+ <rect x="884" y="150" width="392" height="620" rx="6" fill="#eef4f4" stroke="var(--edge)"/>
+ <rect x="452" y="330" width="396" height="250" rx="6" fill="#f8f2e2" stroke="var(--edge)"/>
+ <text class="cl" x="44" y="176" fill="var(--ares)">Ares &middot; the attacker</text>
+ <text class="cl" x="904" y="176" fill="var(--athena)">Athena &middot; the defender</text>
+ <text class="cl" x="650" y="356" fill="var(--arena)" text-anchor="middle">The arena &middot; arms race</text>
+
+ <!-- top DATA banner -->
+ <g transform="translate(452,70)">
+   <rect width="396" height="52" rx="4" fill="var(--node)" stroke="var(--data)"/>
+   <text class="nt" x="16" y="22" fill="var(--data)">Data: own-device + online corpora</text>
+   <text class="ns" x="16" y="40">your Mac (33 audible / ~2k keys) &middot; SKAID 67k &middot; Harrison MacBook &middot; wordfreq 8k</text>
+ </g>
+
+ <!-- ================= ARES stack ================= -->
+ <g font-size="12">
+  <g transform="translate(44,192)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--data)"/><text class="nt" x="14" y="21">Real Mac audio + onsets &amp; SPACE labels</text><text class="ns" x="14" y="38">ground-truth key timings (per keystroke)</text></g>
+  <g transform="translate(44,256)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--data)"/><text class="nt" x="14" y="21">Rich per-key bank + diverse synth</text><text class="ns" x="14" y="38">37 keys incl. space &middot; overlap-add broad vocab</text></g>
+  <g transform="translate(44,320)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="nt" x="14" y="21">log-mel front-end</text><text class="ns" x="14" y="38">16 kHz &middot; 64 mels &middot; 8 ms hops</text></g>
+  <g transform="translate(44,384)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="nt" x="14" y="21">CNN + BiGRU + CTC (MtlCRNN, 2.2M)</text><text class="ns" x="14" y="38">+ per-frame onset head</text></g>
+  <g transform="translate(44,448)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="nt" x="14" y="21">pretrain &rarr; fine-tune</text><text class="ns" x="14" y="38">synth (Mac) warm-start &rarr; real audible &middot; phrase-split</text></g>
+  <g transform="translate(44,512)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="nt" x="14" y="21">decode</text><text class="ns" x="14" y="38">greedy &middot; onset-gated &middot; char-LM beam</text></g>
+  <g transform="translate(44,576)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="nt" x="14" y="21">Attacker LLM (Gemini)</text><text class="ns" x="14" y="38">reconstructs the typed text from noise</text></g>
+  <g transform="translate(44,640)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="nt" x="14" y="21">Smart dictionary</text><text class="ns" x="14" y="38">ranks password guesses: #k of 36&#8319;</text></g>
+  <g transform="translate(44,706)"><rect width="352" height="46" rx="4" fill="var(--ares)"/><text class="badge" x="176" y="28" text-anchor="middle">Reads ~80% novel &middot; ~89% familiar</text></g>
+  <g stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)">
+   <line x1="220" y1="242" x2="220" y2="255"/><line x1="220" y1="306" x2="220" y2="319"/>
+   <line x1="220" y1="370" x2="220" y2="383"/><line x1="220" y1="434" x2="220" y2="447"/>
+   <line x1="220" y1="498" x2="220" y2="511"/><line x1="220" y1="562" x2="220" y2="575"/>
+   <line x1="220" y1="626" x2="220" y2="639"/><line x1="220" y1="690" x2="220" y2="705"/>
+  </g>
+ </g>
+
+ <!-- ================= ATHENA stack ================= -->
+ <g font-size="12">
+  <g transform="translate(904,192)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">Defender LLM (Gemini) &middot; triage</text><text class="ns" x="14" y="38">which span is sensitive? (password / PIN / card)</text></g>
+  <g transform="translate(904,256)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">invent a coherent decoy</text><text class="ns" x="14" y="38">believable false secret: deception, not noise</text></g>
+  <g transform="translate(904,320)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">differentiable log-mel</text><text class="ns" x="14" y="38">matches Ares' front-end (corr &gt; 0.9999)</text></g>
+  <g transform="translate(904,384)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">adversarial shield &middot; craft()</text><text class="ns" x="14" y="38">protect / deceive: optimize &delta; through Ares</text></g>
+  <g transform="translate(904,448)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">perceptual budget</text><text class="ns" x="14" y="38">&#8214;&delta;&#8214; &le; &epsilon; &middot; STOI &ge; floor (inaudible)</text></g>
+  <g transform="translate(904,512)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">min-max co-training</text><text class="ns" x="14" y="38">vs attacker ensemble: offline hardening</text></g>
+  <g transform="translate(904,576)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">Backboard memory</text><text class="ns" x="14" y="38">recalls which defense beat which attacker</text></g>
+  <g transform="translate(904,640)"><rect width="352" height="50" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="nt" x="14" y="21">real-time actuation</text><text class="ns" x="14" y="38">per-keystroke filter ~ms &middot; OS key timing only</text></g>
+  <g transform="translate(904,706)"><rect width="352" height="46" rx="4" fill="var(--athena)"/><text class="badge" x="176" y="28" text-anchor="middle">Secret &rarr; decoy &middot; speech intact (STOI ~0.98)</text></g>
+  <g stroke="var(--line)" stroke-width="1.2" marker-end="url(#a)">
+   <line x1="1080" y1="242" x2="1080" y2="255"/><line x1="1080" y1="306" x2="1080" y2="319"/>
+   <line x1="1080" y1="370" x2="1080" y2="383"/><line x1="1080" y1="434" x2="1080" y2="447"/>
+   <line x1="1080" y1="498" x2="1080" y2="511"/><line x1="1080" y1="562" x2="1080" y2="575"/>
+   <line x1="1080" y1="626" x2="1080" y2="639"/><line x1="1080" y1="690" x2="1080" y2="705"/>
+  </g>
+ </g>
+
+ <!-- data banner feeds both stacks -->
+ <g stroke="var(--data)" stroke-width="1.2" marker-end="url(#a)">
+   <path d="M470,122 C300,150 240,160 240,191" fill="none"/>
+   <path d="M830,122 C1030,150 1080,160 1080,191" fill="none"/>
+ </g>
+
+ <!-- ARENA contents -->
+ <g>
+   <text class="obj" x="650" y="392" text-anchor="middle">min_D  max_A  Leakage( A(D(x)) )</text>
+   <text class="obj" x="650" y="414" text-anchor="middle" font-size="11" fill="var(--mut)">s.t.  Perceptual(D(x), x) &le; &epsilon;</text>
+   <g font-size="11">
+     <g transform="translate(470,430)"><rect width="172" height="34" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="step" x="10" y="21" fill="var(--ares)">1. Ares reads the secret</text></g>
+     <g transform="translate(658,430)"><rect width="172" height="34" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="step" x="10" y="21" fill="var(--athena)">2. Athena plants a decoy</text></g>
+     <g transform="translate(470,486)"><rect width="172" height="34" rx="4" fill="var(--node)" stroke="var(--athena)"/><text class="step" x="10" y="21" fill="var(--athena)">4. Athena escalates</text></g>
+     <g transform="translate(658,486)"><rect width="172" height="34" rx="4" fill="var(--node)" stroke="var(--ares)"/><text class="step" x="10" y="21" fill="var(--ares)">3. Ares retrains through</text></g>
+   </g>
+   <g stroke="var(--arena)" stroke-width="1.2" marker-end="url(#aG)" fill="none">
+     <line x1="642" y1="447" x2="657" y2="447"/>
+     <path d="M744,464 C744,474 744,476 744,485"/>
+     <line x1="658" y1="503" x2="643" y2="503"/>
+     <path d="M556,486 C556,476 556,474 556,465"/>
+   </g>
+   <text class="lbl" x="650" y="548" text-anchor="middle">shown live = offline co-evolution, compressed</text>
+ </g>
+
+ <!-- Ares -> Arena, Arena -> Athena -->
+ <g stroke-width="1.4" fill="none">
+   <path d="M396,470 C430,470 440,455 451,455" stroke="var(--ares)" marker-end="url(#aA)"/>
+   <path d="M848,455 C862,455 872,470 903,470" stroke="var(--athena)" marker-end="url(#aT)"/>
+ </g>
+ <text class="lbl" x="415" y="462" fill="var(--ares)">reads</text>
+ <text class="lbl" x="858" y="446" fill="var(--athena)">shields</text>
+
+ <!-- the loop: defended audio flows back so Ares only ever sees shielded sound -->
+ <path d="M905,409 C700,300 600,300 470,300 C300,300 240,300 240,318"
+       fill="none" stroke="var(--athena)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#aT)"/>
+ <g transform="translate(548,286)"><rect width="230" height="26" rx="4" fill="var(--node)" stroke="var(--athena)"/><text x="115" y="17" text-anchor="middle" font-size="11" fill="var(--athena)">defended audio: Ares only ever sees this</text></g>
+
+ <!-- OUTPUTS -->
+ <g transform="translate(452,600)">
+   <rect width="396" height="46" rx="4" fill="var(--node)" stroke="var(--out)"/>
+   <text class="nt" x="16" y="20" fill="var(--out)">Deliverables</text>
+   <text class="ns" x="16" y="37">arena.html &middot; ARMS_RACE_REPLAY.md &middot; DEMO.md &middot; arms_race_demo.json</text>
+ </g>
+ <line x1="650" y1="580" x2="650" y2="599" stroke="var(--out)" stroke-width="1.2" marker-end="url(#aO)"/>
+
+ <!-- legend -->
+ <g transform="translate(28,800)" font-size="11">
+   <text fill="var(--mut)">legend:</text>
+   <circle cx="70" cy="-4" r="5" fill="var(--ares)"/><text x="80" y="0" fill="var(--mut)">attacker (Ares)</text>
+   <circle cx="200" cy="-4" r="5" fill="var(--athena)"/><text x="210" y="0" fill="var(--mut)">defender (Athena)</text>
+   <circle cx="345" cy="-4" r="5" fill="var(--data)"/><text x="355" y="0" fill="var(--mut)">data</text>
+   <circle cx="415" cy="-4" r="5" fill="var(--arena)"/><text x="425" y="0" fill="var(--mut)">arms race</text>
+   <circle cx="520" cy="-4" r="5" fill="var(--out)"/><text x="530" y="0" fill="var(--mut)">outputs</text>
+   <text x="640" y="0" fill="var(--mut)">dashed = the min-max loop (defended audio fed back to the attacker)</text>
+ </g>
+</svg>
+</div></body></html>

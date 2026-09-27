@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ares vs Athena — Live Battle</title>
+<style>
+  :root{
+    --bg:#0b0f1a; --panel:#121a2b; --panel2:#0e1524; --line:#1e2634; --text:#e7edf6; --muted:#8ea0ba;
+    --ares:#ff5d5d; --ares2:#ff9d5c; --athena:#38d6c6; --athena2:#5aa2ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;color:var(--text);font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 50% -220px,#141b2b,var(--bg));}
+  header{display:flex;align-items:center;justify-content:center;gap:14px;padding:20px 16px 6px;text-align:center}
+  h1{margin:0;font-size:26px;letter-spacing:.5px}
+  h1 .a{color:var(--ares)} h1 .t{color:var(--athena)}
+  .pill{font-size:13px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.live{color:#0b0f1a;background:var(--athena);border-color:transparent}
+  .pill.wait{color:var(--ares2)}
+  .status{text-align:center;color:var(--muted);margin:2px 0 14px}
+  .bar-wrap{max-width:900px;margin:0 auto 16px;padding:0 16px}
+  .bar{height:16px;border-radius:999px;overflow:hidden;background:var(--athena);border:1px solid var(--line);position:relative}
+  .bar > i{display:block;height:100%;width:50%;background:linear-gradient(90deg,var(--ares),var(--ares2));transition:width .5s ease}
+  .bar-lab{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
+  .arena{display:grid;grid-template-columns:1fr 64px 1fr;gap:14px;max-width:1100px;margin:0 auto;padding:0 16px 24px}
+  .side{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:14px;min-height:320px}
+  .side.ares{border-color:#3a1e22} .side.athena{border-color:#123531}
+  .fighter{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .ava{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:30px;
+    background:#0d1220;border:1px solid var(--line)}
+  .ares .ava{box-shadow:0 0 0 2px var(--ares) inset} .athena .ava{box-shadow:0 0 0 2px var(--athena) inset}
+  .fighter .name{font-weight:700;font-size:18px}
+  .ares .name{color:var(--ares)} .athena .name{color:var(--athena)}
+  .fighter .role{font-size:12px;color:var(--muted)}
+  .vs{display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--muted);font-size:20px}
+  .log{display:flex;flex-direction:column;gap:8px}
+  .move{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#0d1220;animation:pop .35s ease}
+  .side.ares .move{border-left:3px solid var(--ares)} .side.athena .move{border-left:3px solid var(--athena)}
+  .move .t{font-weight:600}
+  .move .r{font-size:13px;color:var(--muted);margin-top:2px}
+  .move .tag{display:inline-block;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-top:4px}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+  .hit{animation:shake .35s}
+  @keyframes shake{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  .result{max-width:1100px;margin:0 auto;padding:0 16px 40px;text-align:center}
+  .verdict{font-size:22px;font-weight:800;padding:12px;border-radius:12px;display:none;margin-bottom:12px}
+  .verdict.protected{display:block;background:rgba(56,214,198,.12);color:var(--athena);border:1px solid var(--athena)}
+  .verdict.leaked{display:block;background:rgba(255,93,93,.12);color:var(--ares);border:1px solid var(--ares)}
+  .sd{color:var(--muted)} .sd b{color:var(--text)} .sd .decoy{color:var(--athena2)}
+  .rounds{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+  .chip{font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;color:var(--muted)}
+  .idle{opacity:.6;font-style:italic}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="a">⚔️ Ares</span> vs <span class="t">Athena 🦉</span></h1>
+  <span id="conn" class="pill">connecting…</span>
+</header>
+<div class="status" id="status">Waiting for a typed burst to start a match…</div>
+
+<div class="bar-wrap">
+  <div class="bar" title="how much of the secret the attacker reads"><i id="expo"></i></div>
+  <div class="bar-lab"><span style="color:var(--ares)">Ares reads the secret</span><span style="color:var(--athena)">Athena protects it</span></div>
+</div>
+
+<div class="arena">
+  <div class="side ares" id="side-ares">
+    <div class="fighter"><div class="ava">⚔️</div><div><div class="name">Ares</div><div class="role">attacker · reads keystrokes off the call</div></div></div>
+    <div class="log" id="log-ares"><div class="move idle">no moves yet</div></div>
+  </div>
+  <div class="vs">VS</div>
+  <div class="side athena" id="side-athena">
+    <div class="fighter"><div class="ava">🦉</div><div><div class="name">Athena</div><div class="role">defender · plants a decoy, retrains the shield</div></div></div>
+    <div class="log" id="log-athena"><div class="move idle">no moves yet</div></div>
+  </div>
+</div>
+
+<div class="result">
+  <div class="verdict" id="verdict"></div>
+  <div class="sd" id="sd"></div>
+  <div class="rounds" id="rounds"></div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const isAthena = (a) => String(a || "").toLowerCase().includes("athena");
+let moveCount = 0;
+
+function setStatus(t) { $("status").textContent = t; }
+function resetArena(n_keys, shield) {
+  moveCount = 0;
+  for (const id of ["log-ares", "log-athena"]) $(id).innerHTML = '<div class="move idle">…</div>';
+  $("verdict").className = "verdict"; $("verdict").textContent = "";
+  $("sd").innerHTML = ""; $("rounds").innerHTML = "";
+  $("expo").style.width = "50%";
+  setStatus(`FIGHT — ${n_keys ?? "?"} keys typed${shield ? " · shield " + shield : ""}`);
+}
+function addMove(d) {
+  const athena = isAthena(d.agent);
+  const log = $(athena ? "log-athena" : "log-ares");
+  if (log.firstElementChild && log.firstElementChild.classList.contains("idle")) log.innerHTML = "";
+  const el = document.createElement("div");
+  el.className = "move";
+  const title = String(d.title || "").replace(/\*\*/g, "");
+  const res = String(d.result || "").replace(/\*\*/g, "");
+  el.innerHTML = `<div class="t">${title || "(move)"}</div>` + (res ? `<div class="r">${res}</div>` : "") +
+                 (d.tag ? `<div class="tag">${d.tag}</div>` : "");
+  log.prepend(el);
+  const foe = $(athena ? "side-ares" : "side-athena");
+  foe.classList.remove("hit"); void foe.offsetWidth; foe.classList.add("hit");
+  moveCount++;
+  setStatus(`match running… ${moveCount} moves`);
+}
+function finish(d) {
+  const rounds = d.rounds || [];
+  let read = null;
+  if (rounds.length) {
+    const last = rounds[rounds.length - 1];
+    read = last.after_retrain_reads_true ? 90 : (last.reads_true_secret ? 60 : 10);
+  }
+  if (read == null) read = d.protected ? 10 : 80;
+  $("expo").style.width = read + "%";
+  const v = $("verdict");
+  if (d.protected != null) {
+    v.className = "verdict " + (d.protected ? "protected" : "leaked");
+    v.textContent = d.protected ? "🦉 Athena wins — secret protected" : "⚔️ Ares wins — secret leaked";
+  }
+  if (d.secret != null || d.decoy != null)
+    $("sd").innerHTML = `you typed <b>${d.secret ?? "?"}</b> · Athena showed Ares the decoy <span class="decoy">${d.decoy ?? "?"}</span>`;
+  $("rounds").innerHTML = "";
+  for (const r of rounds) {
+    const c = document.createElement("span"); c.className = "chip";
+    c.textContent = `round ${r.round}: Ares read "${r.span_read ?? "?"}"` + (r.stoi != null ? ` · STOI ${Number(r.stoi).toFixed(2)}` : "");
+    $("rounds").appendChild(c);
+  }
+  setStatus(`match done${d.seconds != null ? ` in ${Number(d.seconds).toFixed(1)} s` : ""} · waiting for the next burst…`);
+  const moves = d.moves || [];
+  const shown = $("log-ares").querySelectorAll(".move:not(.idle)").length + $("log-athena").querySelectorAll(".move:not(.idle)").length;
+  if (shown < moves.length) { for (const id of ["log-ares","log-athena"]) $(id).innerHTML = ""; moves.forEach(addMove); }
+}
+
+function handle(m) {
+  const d = m.data || {};
+  switch (m.topic) {
+    case "snapshot":
+      for (const [topic, v] of Object.entries(d)) if (v && v.data && topic === "keyguard.arms_race") finish(v.data);
+      return;
+    case "keyguard.burst": resetArena(d.n_keys, d.shield); break;
+    case "keyguard.move": addMove(d); break;
+    case "keyguard.arms_race": finish(d); break;
+  }
+}
+
+let backoff = 500;
+function connect() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onopen = () => { backoff = 500; $("conn").textContent = "live"; $("conn").className = "pill live"; };
+  ws.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+  ws.onclose = () => { $("conn").textContent = "reconnecting…"; $("conn").className = "pill wait"; setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 5000); };
+  ws.onerror = () => ws.close();
+}
+connect();
+</script>
+</body>
+</html>

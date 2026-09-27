@@ -1,0 +1,84 @@
+# Copy to athena.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT,
+# ATHENA_ATTACKER_WEIGHTS, ATHENA_<SECTION>_<FIELD> (e.g. ATHENA_DRIVERS_VOICE=mock),
+# ATHENA_WEBHOOK_URL (adds a webhook for threat.level_change; keeps the URL out of files).
+
+# hearsay_root = "../Hearsay"                    # default: sibling of this repo
+# attacker_weights = ""                          # empty = Keyguard's CTC attacker (runs/keyguard/ctc_rich_ft.pt)
+
+[drivers]
+voice = "real"            # real | mock
+attacker = "real"         # real | mock
+shield = "real"           # real | mock
+secret = "real"           # real (Vosk, run app/secret_shield/get_model.py) | mock
+hearsay_mode = "e5"       # e5 (final Hearsay model: R4ft + R6 + R1) | r5 (R4ft + R1) | r4ft (XLS-R alone, fastest)
+hearsay_ai_p = 0.7        # AI when the calibrated p >= this; 0.5 = Hearsay's own threshold, higher = fewer false alarms
+shield_mode = "dsp"       # off | dsp | adversarial
+device = "auto"           # auto | cpu | cuda
+
+[devices]                 # substring of the device name; empty = system default
+meet_far_source = "system"   # meet mode, caller audio: system (speaker loopback, any app) | tab (the extension)
+mic = ""
+virtual_out = "CABLE Input"
+loopback = ""
+key_offset_s = 0.0        # KeyClock (virtual devices): + if keystroke sounds land later than their OS timestamps
+meet_key_offset_s = 0.0   # KeyClock (Google Meet bridge): leftover capture + socket latency after the jitter fit
+
+[server]
+host = "127.0.0.1"
+port = 8765
+
+[threat]                
+voice_half_life_windows = 3.0   # V moves only on scored speech windows; silence holds it
+new_speaker_gap_s = 20.0        # this long without speech = a new speaker, V starts over (0 = off)
+readout_window = 20
+num_classes = 36
+typing_window_s = 10.0
+typing_saturation = 10
+typing_on = 0.2
+w_v = 0.7
+w_l = 0.9
+se_voice = 0.5
+se_floor = 60.0
+se_gain = 40.0
+watch = 25.0
+warn = 50.0
+critical = 75.0
+hysteresis = 5.0
+tick_hz = 4.0
+
+[[hooks]]
+kind = "console"
+topics = ["threat.level_change", "driver.error"]
+
+[secret]                  # spoken-secret shield
+enabled = true            # adds a constant 500 ms delay to the outgoing mic while on
+delay_ms = 500.0
+style = "tone"            # mute | tone | noise
+arm_on_voice = true       # arm while the caller is unverified (Hearsay V >= arm_voice)
+arm_voice = 0.5
+keep_voice = 0.3
+arm_on_request = true     # arm when the caller asks for a code
+disarm_after_s = 60.0
+allow_s = 30.0            # dashboard "Allow" bypass
+min_digits = 3            # runs this long are reported (shorter runs are still cut)
+gap_s = 1.2
+
+[keyguard]                # live Ares-vs-Athena arms race on your typing bursts (needs drivers.attacker = "real")
+agents = true
+rounds = 2                # shield / retrain rounds per match
+burst_gap_s = 2.0         # a burst ends after this much typing silence
+snr_db = 16.0             # Athena's starting perturbation budget (dB)
+steps = 80                # craft steps per round (more = stronger shield, slower match; keyguard's demo uses 250)
+device = "auto"           # auto (= mps when available, else cpu) | cpu | mps | cuda
+
+[[hooks]]
+kind = "jsonl"
+topics = ["threat.*", "voice.verdict", "shield.state", "secret.*", "driver.error"]   # not keys.*: key timing is itself a side channel
+path = "logs/events.jsonl"
+
+# [[hooks]]
+# kind = "webhook"        # e.g. a Slack incoming webhook; prefer ATHENA_WEBHOOK_URL
+# url = "https://hooks.slack.com/services/..."
+# topics = ["threat.level_change"]
+# timeout_s = 3.0
+# retries = 2

@@ -1,0 +1,27 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.wav
+*.flac
+*.mp3
+*.pt
+*.pth
+*.npz
+*.parquet
+.env
+athena.toml
+runs/
+logs/
+demo/audio/
+experiments/cache/
+.claude/worktrees/
+.gstack/
+runs/meet-profile/
+
+# local copy of Keyguard (code, data, weights): never committed
+upstream/
+
+# vendored Keyguard data (weights live in runs/keyguard): app.keystroke_guard.get_assets
+data/keyguard/
+.tycho/
