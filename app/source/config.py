@@ -76,7 +76,8 @@ class KeyguardConfig:
     rounds: int = 2                    # shield / retrain rounds per match
     burst_gap_s: float = 2.0           # a burst ends after this much typing silence
     snr_db: float = 16.0               # Athena's starting perturbation budget
-    device: str = "auto"               # auto (measured faster on this Mac) | cpu | mps | cuda
+    steps: int = 80                    # craft steps per round (keyguard's offline demo uses 250: minutes per match)
+    device: str = "auto"               # auto = mps when available, else cpu | cpu | mps | cuda
 
 
 @dataclass
@@ -187,8 +188,8 @@ def _validate(cfg: Config) -> None:
         if h.kind == "webhook" and not h.url:
             raise ValueError("webhook hook needs a url")
     k = cfg.keyguard
-    if k.rounds < 1 or k.burst_gap_s <= 0:
-        raise ValueError("keyguard.rounds must be >= 1 and keyguard.burst_gap_s > 0")
+    if k.rounds < 1 or k.burst_gap_s <= 0 or k.steps < 1:
+        raise ValueError("keyguard.rounds and keyguard.steps must be >= 1 and keyguard.burst_gap_s > 0")
     t = cfg.threat
     if not (0 < t.watch < t.warn < t.critical <= 100) or t.tick_hz < 2:
         raise ValueError("threat thresholds must satisfy 0 < watch < warn < critical <= 100, tick_hz >= 2")

@@ -195,8 +195,8 @@ class Pipeline:
             return None
         try:
             from app.keystroke_guard.agents import AgentWorker, ArmsRace
-            return AgentWorker(ArmsRace(net, self.bus.emit, rounds=k.rounds, snr_db=k.snr_db, device=k.device),
-                               self.bus)
+            return AgentWorker(ArmsRace(net, self.bus.emit, rounds=k.rounds, snr_db=k.snr_db, steps=k.steps,
+                                        device=k.device), self.bus)
         except Exception as e:                          # noqa: BLE001 - the matches are extra; the call is not
             log.warning("keyguard agents unavailable: %s", e)
             return None

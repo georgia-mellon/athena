@@ -153,11 +153,11 @@ def test_agents_off_in_config():
 # --- config -----------------------------------------------------------------------------------------------------
 def test_keyguard_config(tmp_path):
     p = tmp_path / "c.toml"
-    p.write_text('[keyguard]\nagents = false\nrounds = 3\nburst_gap_s = 1.5\nsnr_db = 12\ndevice = "cpu"\n')
+    p.write_text('[keyguard]\nagents = false\nrounds = 3\nburst_gap_s = 1.5\nsnr_db = 12\nsteps = 40\ndevice = "cpu"\n')
     k = config.load(p, env={}).keyguard
-    assert (k.agents, k.rounds, k.burst_gap_s, k.snr_db, k.device) == (False, 3, 1.5, 12.0, "cpu")
-    assert config.load(env={}).keyguard.rounds == 2
-    for bad in ("rounds = 0", "burst_gap_s = 0"):
+    assert (k.agents, k.rounds, k.burst_gap_s, k.snr_db, k.steps, k.device) == (False, 3, 1.5, 12.0, 40, "cpu")
+    assert (config.load(env={}).keyguard.rounds, config.load(env={}).keyguard.steps) == (2, 80)
+    for bad in ("rounds = 0", "burst_gap_s = 0", "steps = 0"):
         p.write_text(f"[keyguard]\n{bad}\n")
         with pytest.raises(ValueError):
             config.load(p, env={})

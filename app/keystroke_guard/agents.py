@@ -354,7 +354,7 @@ def main(argv: list[str] | None = None) -> dict:
     ap = argparse.ArgumentParser(description="One Ares-vs-Athena match on keyguard's demo utterance.")
     ap.add_argument("--line", default="hey meet me at noon my password is hunter2 thanks")
     ap.add_argument("--rounds", type=int, default=2)
-    ap.add_argument("--steps", type=int, default=250)
+    ap.add_argument("--steps", type=int, default=80, help="craft steps per round (keyguard's offline demo: 250)")
     ap.add_argument("--device", default="auto")
     a = ap.parse_args(argv)
 

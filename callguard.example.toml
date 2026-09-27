@@ -67,7 +67,8 @@ agents = true
 rounds = 2                # shield / retrain rounds per match
 burst_gap_s = 2.0         # a burst ends after this much typing silence
 snr_db = 16.0             # Athena's starting perturbation budget (dB)
-device = "auto"           # auto | cpu | mps | cuda
+steps = 80                # craft steps per round (more = stronger shield, slower match; keyguard's demo uses 250)
+device = "auto"           # auto (= mps when available, else cpu) | cpu | mps | cuda
 
 [[hooks]]
 kind = "jsonl"
