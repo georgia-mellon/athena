@@ -1,142 +1,200 @@
-# HEARSAY — telling real speech from synthetic speech
+# CallGuard
 
-HackGT 2026 · NSA "HEARSAY" challenge. Score each of 1,671 test clips from **0.0 (confident real)** to **1.0 (confident
-synthetic)**. The metric is the organizers' ASVspoof 5 Track-1 **minDCF** (lower is better; 0 = perfect, 1 = trivial).
+**CallGuard protects what you hear, what you type, and what you say.**
 
-**Live status:** [`docs/STATUS.md`](docs/STATUS.md) · **All results:** [`reports/leaderboard.md`](reports/leaderboard.md)
+A desktop app that guards a Google Meet call with three pillars: **Hearsay** (is the voice you hear real?),
+**Keystroke Guard** (can the call hear your keys?) and **Secret Shield** (don't read the code to a fake caller). All
+three feed one live threat score on a dashboard. HackGT 13, team GeorgiaMellon.
 
-## Where we are
+## The threat
+An AI voice agent joins your Google Meet posing as IT: *"please type the reset code while we're on the line"*, then
+*"just read me the code"*. Three things go wrong at once:
 
-**Official score on the HGT test set: minDCF 0.0584, EER 2.5 %** (organizers' scorer: Pspoof 0.3, Cfa 4, higher
-score = real, so submissions are written flipped; see [`docs/scoring.md`](docs/scoring.md) §7). The submitted system
-is **R5**: an XLS-R-300M model fine-tuned end to end, fused with a classic-feature + speech-biology model. Full story:
-[`reports/final_results.md`](reports/final_results.md). How far it transfers to public benchmarks it never saw:
-[`reports/generalization.md`](reports/generalization.md).
+1. **What you hear:** the voice is synthetic, and you can't tell.
+2. **What you type:** your keystrokes are audible in your mic stream. Anyone recording the call can run a keystroke
+   classifier on it and read the code. No malware needed.
+3. **What you say:** you read the code out loud.
 
-Our own headline = combined minDCF on `test_internal_testlike`: 9,747 held-out clips at the test's ~70/30 real/fake mix.
-About half its fakes (1,434 of 2,924) come from three generators held out of training entirely. It is frozen, and
-nothing is ever tuned on it. The table below is the ladder up to R1; the final rungs are in `reports/final_results.md`
-(R4ft 0.0282, R5 0.0218).
+CallGuard, live: the voice light goes red; the keyboard panel shows what an eavesdropper reads from your raw mic vs.
+the shielded mic; the digits you start reading are cut from your outgoing audio (the dashboard shows "6-digit code
+blocked", never the digits); the threat score climbs to **CRITICAL** (synthetic caller + sensitive typing = social
+engineering in progress).
 
-| model | what it is | headline |
-|---|---|---|
-| R0 raw → after `prep()` | LightGBM on 9 trivial cues (duration, silence, level, bandwidth) | 0.542 → 0.921 |
-| R1 | LightGBM on 228 spectral + speech-biology features, full train set | **0.253** |
-| R5 (smoke) | LR fusion of R1's spectral-only and biology-only models ([`scripts/fuse.py`](scripts/fuse.py)) | 0.260 |
-| **R4ft** | XLS-R-300M (12 blocks) fine-tuned end to end + light back end ([report](reports/r4ft_xlsr.md)) | **0.0282** |
-| **R5 (submitted)** | LR fusion of R4ft + R1 | **0.0218** (optimistic; picked after seeing it) |
-
-## The approach in one picture (planned pipeline; see the table above for what has run)
-
-```mermaid
-flowchart LR
-  subgraph Data
-    A[Challenge data<br/>DiffSSD 70k fakes<br/>242 LJ reals] --> C[Clean + resample<br/>16 kHz mono]
-    B[11 external corpora<br/>57k reals, 54k fakes] --> C
-    S[Own TTS sim<br/>5.2k fakes] --> C
-    C --> M[Manifest + grouped splits<br/>185,915 clips<br/>frozen eval subsets]
-  end
-  subgraph Model input
-    M --> P["prep(): DC, trim,<br/>7 kHz low-pass, RMS"]
-    P --> G["augment(): mp3 / noise /<br/>resampler, both classes"]
-  end
-  subgraph Rungs
-    G --> R1[R1 classic ML<br/>LFCC/MFCC + biology]
-    G --> R3[R3 AASIST]
-    G --> R4[R4 SSL<br/>WavLM / XLS-R]
-    R1 & R3 & R4 --> R5[R5 LR fusion<br/>fit on val_testlike]
-  end
-  R5 --> T[1,671 HGT clips<br/>inference only] --> O[submission TSV]
+## How it works
 ```
+ CallGuard's own Chrome window (Google Meet, bridge.js injected over DevTools)
+   your mic ─► 16 kHz blocks ─► ws /meet/mic ─┐                    ┌─► processed blocks ─► the track Meet sends
+   remote participants' audio ─► ws /meet/far ─┐                   │
+                                               │  pipeline         │
+                                               │   mic: Keystroke Guard shield ─► Secret Shield delay line (500 ms)
+                                               │         └─ attacker reads raw vs shielded at each OS key event
+                                               └─► far: VAD ─► Hearsay (4 s windows every 2 s)
+                                                        └─► "read me the code" listener
+ events (voice.verdict, keys.readout, secret.*) ─► threat engine (0-100: SAFE/WATCH/WARN/CRITICAL)
+                                                ─► dashboard (native window, WebSocket) + hooks (console/JSONL/webhook)
+```
+- **No plugin, no bot, no virtual cable.** `callguard app` opens Meet in a dedicated Chrome (or Edge) profile and
+  injects an audio bridge before Meet's scripts run. The bridge swaps the mic track Meet sends for CallGuard's
+  processed audio and taps the remote audio. Details: [app/source/connectors/meet](app/source/connectors/meet/README.md).
+- **Fails open.** If CallGuard stops answering, the bridge sends your raw mic within the jitter buffer. A driver
+  that raises is quarantined and the audio passes through. Your mic is never muted by a bug.
+- **Threat-aware Secret Shield.** It arms only while the caller is unverified (Hearsay p ≥ 0.5), after the caller
+  asks for a code, or by hand. With a verified colleague the same sentence passes untouched. The recognized words
+  never leave the spotter; events carry category and length only.
+- **Swappable drivers** behind the Protocols in `app/source/types.py`: `real` (the models) or `mock` (deterministic,
+  no weights). Each pillar has a harness that checks a new driver against the contract and the real-time budget.
+- **Hooks** scrub key identities and attacker guesses before anything leaves the process (webhook URL via
+  `CALLGUARD_WEBHOOK_URL`).
 
-## What we learned (the short version)
-
-1. **The given data has a trap.** On the given data alone, a depth-3 tree on trivial cues (bandwidth, silence, level)
-   separated real from fake *perfectly*. One cue is the organizers' 242 real clips keeping energy up to 8 kHz, which
-   properly resampled clips lack. `prep()` (DC removal, silence trim, 7 kHz low-pass, RMS normalization) plus 0–7 kHz
-   features neutralize these cues: a trivial-cue LightGBM goes from 0.54 on raw audio to 0.92 (near chance) after
-   `prep()`. See [`reports/data_audit.md`](reports/data_audit.md).
-2. **One real speaker is not "real speech".** 242 clips of one voice against 70,000 diverse fakes teaches "LJ = real".
-   We added 57k real clips from 10 corpora (including the LibriSpeech speakers DiffSSD clones) and LJ-voice fakes.
-   See [`docs/external_data.md`](docs/external_data.md).
-3. **Biology helps, modestly.** 48 physiology-motivated features (jitter, shimmer, HNR, formant dynamics, micro-prosody)
-   are weak alone but add to spectral features. See [`docs/speech_biology.md`](docs/speech_biology.md).
-4. **Unseen generators are the real test.** Errors concentrate on two of the three held-out generators (PlayHT,
-   UnitSpeech; the third, DiffGAN-TTS, is easy) and on real corpora with unusual recording chains (ASVspoof 5 reals). See [`reports/error_analysis.md`](reports/error_analysis.md).
-5. **The scorer disagrees with the brief** about which error costs 4×. We report both readings everywhere. See
-   [`docs/scoring.md`](docs/scoring.md).
-
-## Read more
-
-| topic | document |
+## Repository layout
+| path | what's there |
 |---|---|
-| Plans, written before each phase | [`plans/`](plans/00_master_plan.md) |
-| Data: sources, cleaning, splits, frozen eval subsets | [`docs/dataset.md`](docs/dataset.md), [`reports/data_audit.md`](reports/data_audit.md) |
-| External corpora survey (20 datasets, licenses) | [`docs/external_data.md`](docs/external_data.md) |
-| How synthetic speech is made; our TTS sim; ElevenLabs | [`docs/synthetic_speech.md`](docs/synthetic_speech.md) |
-| How real speech is made, and what synthesis gets wrong | [`docs/speech_biology.md`](docs/speech_biology.md) |
-| The metric, both cost readings, default-value game theory | [`docs/scoring.md`](docs/scoring.md) |
-| Classic ML results + feature importance | [`reports/r1_classic.md`](reports/r1_classic.md) |
-| Two-machine setup (CPU coordinator + GPU worker) | [`plans/07_two_node_protocol.md`](plans/07_two_node_protocol.md) |
+| `app/source/` | the runtime: pipeline, threat engine, event bus, hooks, config, driver registry, CLI, desktop shell, shared harness helpers |
+| `app/source/audio/` | device I/O, ring buffers, VAD, key timing, replay (for replay and virtual-device modes) |
+| `app/source/connectors/meet/` | the Google Meet bridge: `bridge.js`, the Chrome launcher, the `/meet` router, the local test room |
+| `app/hearsay/` | Hearsay pillar: driver around the frozen model, mock, harness, README |
+| `app/keystroke_guard/` | Keystroke Guard pillar: attacker + shield drivers, mocks, harness, the attack-under-speech eval |
+| `app/secret_shield/` | Secret Shield pillar: Vosk spotter, delay-line redactor, mock, harness, eval, model fetcher |
+| `dashboard/` | FastAPI server + static UI (no CDNs) |
+| `demo/` | the `ai_caller` replay scenario and its audio builders, the second-device agent player |
+| `docs/` | plans, reports (all measured numbers), experiments, demo runbook, meeting setup |
+| `tests/` | pytest; runs on mock drivers without models or audio devices |
 
-## How the work was done
+## Quickstart (Windows, Python 3.12, [uv](https://docs.astral.sh/uv/), Chrome or Edge)
+```
+uv sync
+uv run pytest -q                                   # no models or audio devices needed
+uv run python -m app.secret_shield.get_model       # Vosk model for the Secret Shield (40 MB, sha256-checked, once)
+uv run callguard app                               # desktop window; click Join, paste a Meet link
+uv run callguard app --meet-url abc-defg-hij       # or open that meeting at start
+```
+The real Hearsay and Keystroke Guard drivers read the upstream repos read-only from sibling checkouts: `../Hearsay`
+and `../keyboard-acoustic-shield` (override with `HEARSAY_ROOT` / `KEYGUARD_ROOT`). Config: copy
+`callguard.example.toml` to `callguard.toml`.
 
-Two laptops, one repo. A CPU laptop (16 threads, 60 GB RAM) coordinates, and a GPU laptop (RTX 5050, 8 GB) trains the
-neural models. Each runs a Claude Code session. They talk through a small authenticated LAN hub
-([`tools/hub.py`](tools/hub.py)): messages, artifacts with sha256 checks, heartbeats. The task board is GitHub Issues,
-and **every PR is reviewed by the other machine before merge**. Those reviews caught real bugs: a submission writer that
-silently defaulted every row, a listener that could die on a hub restart, leaky cross-validation folds, and a training
-weight derived from the headline set.
+The first time, sign in to Google in CallGuard's Chrome window (its own profile in `%LOCALAPPDATA%\CallGuard\meet-profile`, outside the repo) or join as a
+guest. Turn Meet's noise cancellation off (it removes key clicks and hides the shield). Setup and troubleshooting:
+[docs/meeting_setup.md](docs/meeting_setup.md).
 
-## Reproduce
+| command | what it does |
+|---|---|
+| `uv run callguard app [--meet-url URL]` | desktop app: dashboard in a native window + CallGuard's Meet window |
+| `uv run callguard run --mode meet [--meet-url URL]` | the same engine, dashboard in your browser |
+| `uv run callguard run --mode replay --scenario ai_caller` | offline demo: the scripted 60 s call through the same pipeline (build its audio first, see [demo/](demo/README.md)) |
+| `uv run callguard run --mode replay --drivers mock` | UI work without models (numbers are meaningless) |
+| `uv run callguard bench` | per-driver latency |
+| `python -m app.hearsay.harness` (also `keystroke_guard`, `secret_shield`) | check a driver against its contract and budget |
 
-Windows PowerShell, from the repo root (Python 3.12):
-```
-py -3.12 -m venv .venv
-.venv\Scripts\pip install -r requirements.txt   # pins CPU torch via the PyTorch index in the file
-$env:HEARSAY_ROOT = (Get-Location).Path          # the code's default root is the author's laptop path (src/hearsay/audio.py)
-$env:PYTHONPATH = "src"
-```
-GPU machines: install a CUDA torch build first (we used `torch 2.14.0+cu130` from https://download.pytorch.org/whl/cu130),
-then install requirements.txt **without** its two torch lines, or pip swaps the CPU build back in.
+Dashboard: <http://127.0.0.1:8765/>. Test room: <http://127.0.0.1:8765/meet/testroom>. The expo script is
+[docs/demo_runbook.md](docs/demo_runbook.md).
 
-Put the challenge data under `data/raw/` (`diffssd/`, `lj_real/`, `hgt_test/`) and the organizers' `asvspoof5` repo
-under `third_party/`. Rebuild the dataset:
-```
-python scripts/clean_given.py                     # DiffSSD + LJ -> 16 kHz canonical clips + manifests
-python scripts/ingest_ljspeech.py                 # and ingest_librispeech.py, ingest_wavefake.py, ingest_hf_sasb.py,
-                                                  #     ingest_mlaad_tiny.py (docs/external_data.md, section 5)
-python scripts/run_sim.py                         # own TTS sim
-python scripts/make_splits.py                     # reads the committed splits/eval_subsets_frozen.csv
-```
-The current best (R1) and its submission:
-```
-python scripts/extract_classic.py --workers 10 --n-fake 200000   # spectral + biology features, every train row
-python scripts/extract_classic.py --hgt --workers 10              # the 1,671 test clips (inference only)
-python scripts/train_classic.py --suffix _full --no-svm           # -> R1_lgbm_all_full (+ __hgt scores)
-python scripts/make_submission.py --model R1_lgbm_all_full --team <team>
-python scripts/score.py validate submission/<team>_scores.tsv
-python -m pytest -q tests
-```
+## Testing the Secret Shield in a meeting
+**Local test room** (no second device, no network). A local page with one fake participant: your mic goes through
+the same bridge as in Meet, then over a real WebRTC connection to "the other side", which you can hear and record.
+1. `uv run callguard run --mode meet`, then open <http://127.0.0.1:8765/meet/testroom> (the dashboard's *Test room*
+   link; the page loads the bridge itself, so any Chrome or Edge works). Headphones on.
+2. **Join with mic**, tick **listen to what the room hears**.
+3. **Arm** the Secret Shield (or pick a demo clip and **Play as caller**: *Auto* arms on a synthetic voice or a
+   "read me the code" request).
+4. Read a fake code aloud, e.g. "the code is four eight two one nine three". You hear a tone where the digits were;
+   the dashboard logs "6-digit code blocked". **Record** saves what the room heard.
 
-```
-plans/  docs/  reports/   written record (plans first, then docs and results)
-src/hearsay/              package: audio I/O, preprocessing, features, sim, models, metrics, evaluation
-scripts/                  reproducible CLIs
-tools/                    two-node hub + client
-data/, third_party/       gitignored (audio, features, scores, weights; organizers' scorer)
-```
+**Real Google Meet** (a second device as the caller):
+1. On the laptop: `uv run callguard app`, Join, start a meeting.
+2. On a phone or second laptop, join the same meeting. Play the agent's lines from it
+   (`demo/agent_caller.py`, see [demo/](demo/README.md)) or just speak.
+3. On the laptop, read a fake code. On the second device you hear the tone, not the digits. Type a fake code into
+   any text box to see the keystroke readout.
 
-## Credits and licenses
+## Results
+All numbers are CPU-only on the dev laptop; sources are linked. The keystroke attacker is **provisional** (a KeyNet
+CallGuard trained on Keyguard's public harrison bank, one keyboard) until the teammate's weights ship.
 
-- **Organizers' scorer and baselines:** [asvspoof-challenge/asvspoof5](https://github.com/asvspoof-challenge/asvspoof5)
-  (evaluation package, Baseline-AASIST by Tak & Jung, NAVER + EURECOM, MIT). Imported in place from `third_party/`,
-  never copied or modified.
-- **Data:** DiffSSD (Purdue; CC BY-NC-ND 4.0), LJSpeech (public domain), LibriSpeech (CC BY 4.0), WaveFake,
-  LibriSeVoc and In-the-Wild (CC BY-SA 4.0), ASVspoof 2019 LA / ASVspoof 5 (ODC-By 1.0), CVoiceFake (CC BY 4.0), DFADD
-  (MIT), **SONAR and MLAAD-tiny (CC BY-NC 4.0)**. Per-clip licenses are in the manifest; details in
-  [`docs/external_data.md`](docs/external_data.md). Because DiffSSD, SONAR and MLAAD-tiny are non-commercial, **models
-  trained here are for non-commercial use only**. This repo redistributes no audio.
-- **Pretrained models:** microsoft/wavlm-base-plus, facebook/wav2vec2-xls-r-300m, and for the sim
-  kakao-enterprise/vits-ljs (MIT), facebook/mms-tts-eng (CC BY-NC 4.0), microsoft/speecht5_tts + speecht5_hifigan (MIT).
-- **Code license:** none chosen yet (owner's decision); the repository is private.
+**Full stack in a meeting.** Headless Chrome test room → bridge → meet mode with the real drivers: a spoken 6-digit
+code was blocked, with about 1 s leaked at its start (manual run, not yet a report). The bridge round-trip is
+asserted < 200 ms in `tests/test_meet_connector.py`. `uv run pytest -q`: 90 passed with the upstream repos and
+models present; without the Vosk model 84 pass and 7 skip.
+
+**End-to-end replay** (`ai_caller`, real drivers, `tests/test_e2e_replay.py`): SAFE → WATCH/WARN (synthetic voice)
+→ CRITICAL (typing the code while the agent speaks, shield off) → not CRITICAL once the shield is on.
+
+**Latency** (pillar harnesses): Hearsay R4ft median 545 ms per 4 s window (budget 2 s, off the audio thread);
+attacker 1.2 ms per keystroke; DSP shield 3.1 ms median per 20 ms block with a key active, plus a constant 80 ms
+lookahead; Secret Shield spotter 5.46 ms mean per 20 ms block (p99 79 ms) plus the constant 500 ms delay line.
+
+**Keystroke Guard** ([attack_under_speech.md](docs/reports/attack_under_speech.md), 360 held-out presses, top-1,
+adaptive speech-trained attacker, chance 2.8 %):
+
+| condition | no shield | Keyguard DSP shield |
+|---|---|---|
+| quiet typing, attacker knows key timing | 53.6 % | 10.8 % |
+| quiet typing, attacker detects keys itself | 47.5 % | 11.4 % |
+| speech +10 dB over the keys, known timing | 15.8 % | 5.8 % |
+| speech +10 dB, attacker detects keys itself | 5.8 % | 2.5 % |
+
+Keys are clearly readable on a call when you type while quiet. The shield cuts reads about 5x but does not reach
+chance against this adaptive attacker: plan 04 criterion 2 misses narrowly (5.8 % vs a 5.6 % bar; STOI 0.897 vs
+0.9). The fix is Keyguard's adversarial shield stage.
+
+**Secret Shield** ([secret_shield.md](docs/reports/secret_shield.md), 40 TTS sequences):
+
+| metric | target | result |
+|---|---|---|
+| secret words leaked per sequence | 0 (acceptance ≤ 1) | 1.32 |
+| sequences fully blocked | - | 36 % (45 % with a trigger phrase first) |
+| false redaction, LibriSpeech | < 1 s/min | 0.19 s/min |
+| false redaction, casual-number sentences | < 1 s/min | 4.85 s/min |
+| inbound "read me the code" requests caught | - | 7 / 8 |
+
+It misses both acceptance bars, and every test utterance is one synthetic voice. Without a trigger phrase the first
+digit passes by design (the delay line cannot wait for a whole sequence).
+
+**Hearsay in a call.** With the Keyguard shield on, Hearsay flags 2 / 100 real voices (0 / 100 unshielded). With
+typing as loud as the voice it flags ≤ 1.7 % of real speakers (Hearsay `reports/generalization.md` §2). It was never
+evaluated on a meeting codec with echo cancellation.
+
+## Hearsay model
+Hearsay is our submission to the NSA "HEARSAY" challenge at HackGT: score each clip from 0.0 (real) to 1.0
+(synthetic), judged by ASVspoof 5 Track-1 minDCF. CallGuard uses it as one component, read-only. The model-creation
+repository, with every plan, report and script, is **[swail-labs/hearsay](https://github.com/swail-labs/hearsay)**
+(a fork, per the organizers' guidance for main-track use). **The NSA challenge submission itself is separate and
+frozen**; CallGuard does not change it.
+
+- **Data.** The given data (70k DiffSSD fakes vs 242 clips of one real speaker) was a trap: a depth-3 tree on
+  trivial cues separated it perfectly. Hearsay added 57k real clips from 10 corpora, 11 external corpora in all, and
+  5.2k of its own TTS fakes: 185,915 clips with grouped splits and frozen evaluation sets.
+- **Preprocessing.** `prep()` (DC removal, silence trim, 7 kHz low-pass, RMS normalization) removes the channel
+  shortcuts: a trivial-cue model drops from minDCF 0.54 to 0.92 (near chance). Class-symmetric augmentation (MP3,
+  noise, resampler).
+- **Models.** R1: LightGBM on 228 spectral + speech-biology features (jitter, shimmer, HNR, formants). R4ft:
+  XLS-R-300M cut to 12 blocks, fine-tuned end to end with a light back end (2 h 24 min on an 8 GB laptop GPU).
+  R5: logistic fusion of R4ft + R1 (the submitted model).
+
+| model (held-out `test_internal_testlike`, 9,747 clips, half the fakes from unseen generators) | minDCF | EER |
+|---|---|---|
+| R1 classic features | 0.253 | 6.5 % |
+| **R4ft** XLS-R fine-tune (the honest estimate; CallGuard's default) | **0.0282** | 0.76 % |
+| R5 fusion, submitted (optimistic: the headline informed the switch) | 0.0218 | 0.54 % |
+
+In CallGuard, `p_synthetic = 0.5` sits at Hearsay's own deployment threshold (a real voice flagged costs 4x). More:
+[app/hearsay/README.md](app/hearsay/README.md).
+
+## Keystroke Guard credits
+The acoustic keystroke attacker architecture (KeyNet), its features and the DSP shield come from our teammate's repo
+**[LordKarV/keyboard-acoustic-shield](https://github.com/LordKarV/keyboard-acoustic-shield)**, used read-only.
+CallGuard streams the shield in 20 ms blocks and, until the teammate's trained weights ship, uses a provisional
+attacker trained on that repo's public harrison bank. More: [app/keystroke_guard/README.md](app/keystroke_guard/README.md).
+
+## Ethics
+Our own devices, consenting teammates and judges only. **Fake codes and passwords** in every demo. The AI caller uses
+public research clips or a consenting teammate's cloned voice. No audio, weights, recordings or webhook URLs are
+committed. CallGuard's analysis stays on the laptop; an optional webhook gets scrubbed events only.
+
+## What's next
+- **Keyguard's final attacker weights** (teammate): replace the provisional attacker; no code change
+  (`CALLGUARD_ATTACKER_WEIGHTS`).
+- **Adversarial shield stage** (teammate): the dashboard's *adversarial* mode waits for it; it is what should take
+  the attacker to chance under speech.
+- **CTC free-typing attacker** (teammate): reads continuous typing instead of isolated presses.
+- **A real victim recording** (owner): consenting teammates reading fake codes, to replace the TTS-only Secret Shield
+  evaluation and complete the demo's spoken-code beat.

@@ -1,39 +1,33 @@
-# HEARSAY — notes for Claude
+# CallGuard: notes for Claude
 
-HackGT 2026 NSA challenge: score 1,671 test clips 0.0 (real) → 1.0 (synthetic); graded 60% minDCF, 20% creativity,
-20% GitHub docs. Read, in order: this file → **`plans/07_two_node_protocol.md`** (two machines, roles, hub, rules)
-→ `docs/GPU_HANDOFF.md` (results so far, how to resume paused jobs). Live task list = GitHub issues (`gh issue list`).
+Primary HackGT 13 submission (team GeorgiaMellon). A desktop app that protects a Google Meet call with three
+pillars: **Hearsay** (real vs. synthetic voice), **Keystroke Guard** (Keyguard's acoustic keystroke attacker + shield)
+and **Secret Shield** (redacts codes you read aloud to an unverified caller), feeding one threat score and a dashboard.
 
-## Two-node setup (since 2026-09-26)
-- **cpu** node (hotspot host, 192.168.137.1) = coordinator; **gpu** node = CUDA worker. Which one you are is in your
-  first prompt; if unsure, `nvidia-smi` works only on the gpu node.
-- Required env on every node (the code's default root is the CPU laptop's path):
-  `HEARSAY_ROOT=<repo path>`, `HEARSAY_HUB=http://192.168.137.1:8770`, `HEARSAY_HUB_TOKEN=<from the owner, never commit>`.
-- Talk through the hub: `python tools/hubctl.py send|inbox|listen|job|put|get|ls|status` (see its docstring). Keep a
-  Monitor on `hubctl.py listen --me <node>` and re-arm it when it expires.
-- Single writers: the **cpu** node alone writes `reports/leaderboard.md`, `data/processed/manifest.parquet`,
-  `data/scores/` (canonical) and `submission/`. The gpu node uploads scores with `hubctl put` and self-checks with
-  `hearsay.evaluate.evaluate()`, never `report()`.
+## Reading order
+1. `docs/plans/00_brief.md`: the owner's intent; it wins every conflict.
+2. `HANDOFF.md`: current status and owner to-dos (latest section at the bottom).
+3. `docs/plans/01-06` (06 = the Secret Shield), then `README.md`.
+4. Before touching a pillar: its `app/<pillar>/README.md` (contract, placeholder vs real, harness).
 
-## Owner decisions (don't re-ask)
-- **Test audio (`data/raw/hgt_test`) is inference only**: no fitting, normalization stats, calibration, thresholds,
-  pseudo-labels, or model selection from it or from its score distribution.
-- **Stop** when `test_internal_testlike` combined minDCF ≤ 0.05, or after 3 consecutive rungs improve < 0.005.
-- Report **both** minDCF readings (`official_as_written`, `brief_as_written`) + `combined`; select models on
-  `val_testlike` combined. Why two readings: `docs/scoring.md` §2 (the organizers' scorer and the brief disagree).
-- TTS sim uses open-source models only (no ElevenLabs API).
+## Layout
+- `app/source/`: runtime (types.py contracts, pipeline, threat, bus, hooks, config, registry, cli, desktop.py,
+  harness.py, audio/, connectors/meet/ = Meet bridge + launcher + /meet router + test room).
+- `app/hearsay/`, `app/keystroke_guard/`, `app/secret_shield/`: driver around the real model, mock, harness
+  (`python -m app.<pillar>.harness`), eval, README.
+- `dashboard/` (FastAPI + static UI), `demo/` (replay scenario `ai_caller`), `docs/` (plans, reports,
+  experiments.md, demo_runbook.md, meeting_setup.md), `tests/`.
+- Run: `uv run callguard app` (desktop + Meet), `callguard run --mode meet|replay|live`, `/meet/testroom`.
 
-## Invariants
-- Every clip, train **and** test, goes through `hearsay.preprocess.prep()` (7 kHz low-pass, trim, DC, RMS). The
-  organizers' real clips keep 7–8 kHz energy that resampled clips lack; removing the band stops it deciding anything.
-- Train only on `split == "train"`; tune on `val`/`val_testlike`; `test_internal_testlike` is the headline, never tuned on.
-- Report every model through `hearsay.evaluate.report(name, df[path, score])` (higher = more fake); score HGT with
-  final models into `data/scores/<name>__hgt.parquet` (`filename`, `score`).
-- Submission: template order, `filename<TAB>cm-score`; validate with `python scripts/score.py validate`. Default
-  for any unscored clip = 0.3, never the template's 0.006 (`docs/scoring.md` §4).
+## Hard rules
+- **Never write to the upstream repos.** Hearsay (`HEARSAY_ROOT`, default `../Hearsay`) is frozen until the NSA review
+  answers. Keyguard (`KEYGUARD_ROOT`) is the teammate's. Import them read-only.
+- Contracts live in `app/source/types.py`; change them only deliberately, and update every driver and test.
+- Commit no audio, weights, recordings, `.env`, or webhook URLs. The repo is private but stays clean.
+- Demos use fake passwords and consenting voices only.
+- The audio path must never block or drop because of a model: drivers run off the audio thread; failures quarantine
+  the driver and pass audio through.
 
 ## Conventions
-- Run with `PYTHONPATH=src`; tests `python -m pytest -q tests`. Torch scripts take `--device auto|cpu|cuda`.
-- `data/`, `third_party/`, venvs are gitignored: never commit audio, parquet, npy, or weights.
-- Write a plan in `plans/` before a new phase; branch `<node>/<issue#>-<slug>` + PR; the other node reviews before
-  merge; write findings for judges in `reports/`/`docs/`. No AI attribution in commits or PRs (no Co-Authored-By trailers, no "Generated with" footers): owner rule.
+- Python 3.12, `uv` (`uv sync`, `uv run pytest -q`). Tests run without models or audio devices (mock drivers).
+- Branch `wp<N>-<slug>` + PR; plans before new phases; commits end with a `Co-Authored-By: Claude ...` line.
