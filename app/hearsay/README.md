@@ -22,7 +22,8 @@ CallGuard scores the far-end voice of a call (4 s windows, every 2 s, on a worke
 | real | `app.hearsay.driver:HearsayDriver` | Hearsay's final E5 fusion (`mode="e5"`, default: R4ft + R6 XLS-R + R1 LightGBM), the R5 fusion (`mode="r5"`: R4ft + R1), or R4ft alone (`mode="r4ft"`), read-only from `HEARSAY_ROOT` |
 
 Pick one in `callguard.toml` ([`callguard.example.toml`](../../callguard.example.toml)): `[drivers] voice = "real"|"mock"`,
-`hearsay_mode = "e5"|"r5"|"r4ft"` (default `e5`), `device`, `threads`; `HEARSAY_ROOT` defaults to `../Hearsay`. The real driver checks
+`hearsay_mode = "e5"|"r5"|"r4ft"` (default `e5`), `hearsay_ai_p` (decision threshold, default 0.7: a window is AI when its
+calibrated p >= 0.7 instead of Hearsay's 0.5; p_synthetic is re-centred so 0.5 still means "at the threshold"), `device`, `threads`; `HEARSAY_ROOT` defaults to `../Hearsay`. The real driver checks
 `best.pth` against the sha256 frozen in its `config.json` and caches the threshold calibration in
 `runs/hearsay_calibration.json`.
 

@@ -83,7 +83,8 @@ Inputs, each in [0, 1]:
 Score:
 ```
 threat = 100 * (1 - (1 - w_v*V) * (1 - w_l*L*T_on)) , boosted by the social-engineering rule:
-if V >= 0.5 and T_on (typing while an unverified voice speaks): threat = max(threat, 60 + 40*V*max(E, L))
+if V >= 0.5 and T_on (typing while an unverified voice speaks): threat = max(threat, 60 + 40*leak), leak = L with the
+shield on, E off (was 60 + 40*V*max(E, L); V dropped so a stricter Hearsay threshold, hearsay_ai_p, does not weaken it)
 levels: SAFE < 25 <= WATCH < 50 <= WARN < 75 <= CRITICAL      (hysteresis 5 points)
 ```
 Each update carries its `reasons` (human-readable). Exposure `E` doesn't raise the score when the shield is on

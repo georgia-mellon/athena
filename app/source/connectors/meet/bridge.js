@@ -23,7 +23,7 @@
   const md = navigator.mediaDevices;
   const nativeGUM = md && md.getUserMedia ? md.getUserMedia.bind(md) : null;
   window.__callguardBridge = { version: 1, port: PORT, source: window.__callguardBridgeSource || 'script',
-                               stats, NativePC };
+                               stats, NativePC, nativeGUM };
 
   // ---- the worklet: 16 kHz tap (both paths) + jitter buffer / fail-open switch (mic path) ------------------------
   const WORKLET = `
