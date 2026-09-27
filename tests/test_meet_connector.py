@@ -6,7 +6,6 @@ import os
 import socket
 import threading
 import time
-import wave
 
 import numpy as np
 import pytest
@@ -384,16 +383,6 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _tone_wav(path, seconds=10.0):
-    t = np.arange(int(seconds * SR)) / SR
-    x = (0.3 * np.sin(2 * np.pi * 330 * t) * 32767).astype("<i2")
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SR)
-        w.writeframes(x.tobytes())
-
-
 @pytest.fixture
 def served():
     """The real server stack (dashboard app + Meet router) on a free port, mock drivers, meet mode."""
@@ -417,6 +406,7 @@ def served():
     bus.close()
 
 
+# The fake device's built-in tone is the mic: --use-file-for-fake-audio-capture delivers silence on Chrome 153 (macOS)
 HEADLESS = ["--headless=new", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
             "--disable-features=WebRtcHideLocalIpsWithMdns", "--mute-audio"]
 needs_browser = pytest.mark.skipif(launcher.find_browser() is None or os.environ.get("ATHENA_SKIP_BROWSER") == "1",
@@ -432,13 +422,16 @@ def _wait(cond, timeout=20.0):
     return False
 
 
+def _room_hears_both(s, timeout=3.0) -> bool:
+    """Both room meters above the floor in the same 100 ms tick (the fake device beeps: half the ticks are gaps)."""
+    return _wait(lambda: all(v > 0.01 for v in s.evaluate("__room.meters.map((m) => m.rms)")), timeout)
+
+
 @needs_browser
 def test_browser_end_to_end_testroom(served, tmp_path):
     pipe, router, port, states, server = served
-    wav = tmp_path / "tone.wav"
-    _tone_wav(wav)
     s = launcher.launch(f"http://127.0.0.1:{port}/meet/testroom?auto=1", port, profile_dir=tmp_path / "profile",
-                        extra_args=HEADLESS + [f"--use-file-for-fake-audio-capture={wav}"])
+                        extra_args=HEADLESS)
     try:
         st = router.meet_stats
         assert _wait(lambda: st["mic_out"] > 100 and st["far_in"] > 50), f"no audio through the bridge: {st}"
@@ -456,22 +449,21 @@ def test_browser_end_to_end_testroom(served, tmp_path):
         assert 40 < mic_fps < 60 and 40 < far_fps < 60      # 50 blocks/s = realtime 16 kHz
         assert b["mic_out"] - b["mic_in"] in (0, -1)         # every block answered
         assert stats["rttMs"] < 200
-        # the mic audio really is the fake capture's tone (after the delay line), and the room hears it
-        # (Chrome's default noise suppression / AGC attenuate a steady tone, so check its pitch, not its level)
+        # the mic audio really is the fake device's tone (after the delay line), and the room hears it
         tone = pipe.mic.raw.read_last(SR)
         peak_hz = np.argmax(np.abs(np.fft.rfft(tone))) * SR / len(tone)
         print(f"[e2e] mic at the server: rms {np.sqrt(np.mean(tone ** 2)):.3f}, peak {peak_hz:.0f} Hz")
-        assert np.sqrt(np.mean(tone ** 2)) > 0.005 and abs(peak_hz - 330) < 5
-        level = s.evaluate("__room.meters.map((m) => m.rms)")
-        assert level and all(v > 0.01 for v in level), level
+        assert np.sqrt(np.mean(tone ** 2)) > 0.005 and 100 < peak_hz < 2000
+        assert _room_hears_both(s), s.evaluate("__room.meters.map((m) => m.rms)")
         assert any(x["mic"] and x["far"] and x["connected"] for x in states)
         # FAIL OPEN: Athena goes away mid-call -> the bridge switches to the raw mic; the room still hears you
         server.should_exit = True
         assert _wait(lambda: s.evaluate("__athenaBridge.stats.mic") == "raw", 10)
         time.sleep(0.5)
-        level = s.evaluate("__room.meters.map((m) => m.rms)")
-        print(f"[e2e] server stopped: bridge mic={s.evaluate('__athenaBridge.stats.mic')}, room levels {level}")
-        assert all(v > 0.01 for v in level), level
+        heard = _room_hears_both(s)
+        print(f"[e2e] server stopped: bridge mic={s.evaluate('__athenaBridge.stats.mic')}, "
+              f"room levels {s.evaluate('__room.meters.map((m) => m.rms)')}")
+        assert heard
     finally:
         s.close()
     assert not s.alive
@@ -485,10 +477,7 @@ def test_browser_bridge_on_real_meet_page(served, tmp_path):
     site, so this opens a meeting-code URL (the guest pre-join page, still meet.google.com); joining needs a real
     meeting, so getUserMedia is called from the page directly."""
     pipe, router, port, _, _ = served
-    wav = tmp_path / "tone.wav"
-    _tone_wav(wav)
-    s = launcher.launch("abc-defg-hij", port, profile_dir=tmp_path / "profile",
-                        extra_args=HEADLESS + [f"--use-file-for-fake-audio-capture={wav}"])
+    s = launcher.launch("abc-defg-hij", port, profile_dir=tmp_path / "profile", extra_args=HEADLESS)
     try:
         assert _wait(lambda: s.evaluate("location.hostname + ':' + document.readyState") == "meet.google.com:complete",
                      30), s.evaluate("location.href")

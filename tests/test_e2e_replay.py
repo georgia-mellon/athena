@@ -137,6 +137,8 @@ def test_real_replay_ai_caller():
         pytest.skip(str(e))
     cfg = config.load(env={})
     cfg.drivers.voice = cfg.drivers.attacker = cfg.drivers.shield = "real"
+    cfg.keyguard.agents = False    # a live arms race can't be interrupted: it would outlive this test and write
+                                   # keyguard memory into whatever file the next test points it at
     bus = EventBus()
     pipe = Pipeline(cfg, bus)
     seen = run(pipe, sc, bus)
