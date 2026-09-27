@@ -55,3 +55,4 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-p app"   # import app before output capture: on macOS it re-execs once (see app/__init__.py)
