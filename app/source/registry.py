@@ -6,7 +6,7 @@ are read from a ``drivers`` section first, then from the top level:
     voice     = "real" | "mock"   -> real: app.hearsay.driver.HearsayDriver(mode=voice_mode, threads=threads)
     attacker  = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardAttacker(weights=attacker_weights)
     shield    = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardShield(mode=shield_mode)
-    hearsay_mode (alias voice_mode) = "r4ft" | "r5" (default "r4ft"), threads = 4, device = "auto",
+    hearsay_mode (alias voice_mode) = "r5" | "r4ft" (default "r5"), threads = 4, device = "auto",
     attacker_weights = None, shield_mode = "dsp" ("off" is a runtime switch, so it still builds the dsp shield),
     mock_latency_ms = 0.0 (MockVoice sleep, to mimic the real timing profile)
 
@@ -71,7 +71,7 @@ def _kind(cfg: Any, key: str) -> str:
 def make_voice(cfg: Any = None):
     if _kind(cfg, "voice") == "real":
         _hf_offline_if_cached()
-        mode = _opt(cfg, "hearsay_mode", _opt(cfg, "voice_mode", "r4ft"))
+        mode = _opt(cfg, "hearsay_mode", _opt(cfg, "voice_mode", "r5"))
         return _real("app.hearsay.driver", "HearsayDriver", mode=mode, threads=int(_opt(cfg, "threads", 4)),
                      device=_opt(cfg, "device", "auto"))
     from app.hearsay.mock import MockVoice

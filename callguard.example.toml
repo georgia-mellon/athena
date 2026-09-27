@@ -11,7 +11,7 @@ voice = "real"            # real | mock
 attacker = "real"         # real | mock
 shield = "real"           # real | mock
 secret = "real"           # real (Vosk, run app/secret_shield/get_model.py) | mock
-hearsay_mode = "r4ft"     # r4ft (fast) | r5 (submitted fusion)
+hearsay_mode = "r5"       # r5 (submitted fusion) | r4ft (XLS-R alone, faster)
 shield_mode = "dsp"       # off | dsp | adversarial
 device = "auto"           # auto | cpu | cuda
 

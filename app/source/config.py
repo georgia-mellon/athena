@@ -47,7 +47,7 @@ class DriversConfig:
     attacker: str = "real"
     shield: str = "real"
     secret: str = "real"               # spoken-secret spotter (plan 06): real = Vosk (runs/models), mock
-    hearsay_mode: str = "r4ft"         # r4ft (fast) | r5 (submitted fusion)
+    hearsay_mode: str = "r5"           # r5 (submitted fusion, default) | r4ft (XLS-R alone, ~20 % faster)
     shield_mode: str = "dsp"           # off | dsp | adversarial
     device: str = "auto"               # torch device: auto | cpu | cuda
 
