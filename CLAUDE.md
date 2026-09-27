@@ -20,8 +20,9 @@ and **Secret Shield** (redacts codes you read aloud to an unverified caller), fe
 - Run: `uv run callguard app` (desktop + Meet), `callguard run --mode meet|replay|live`, `/meet/testroom`.
 
 ## Hard rules
-- **Never write to the upstream repos.** Hearsay (`HEARSAY_ROOT`, default `../Hearsay`) is frozen until the NSA review
-  answers. Keyguard (`KEYGUARD_ROOT`) is the teammate's. Import them read-only.
+- **Never write to the upstream repos.** Hearsay (`HEARSAY_ROOT`, default `../Hearsay`) and Keyguard (`KEYGUARD_ROOT`,
+  the teammate's) are imported read-only. The Hearsay freeze is lifted (the NSA review confirmed the scorer: Pspoof 0.3,
+  Cfa 4, higher score = real); CallGuard uses Hearsay's final model E5 (R4ft + R6 + R1 fusion).
 - Contracts live in `app/source/types.py`; change them only deliberately, and update every driver and test.
 - Commit no audio, weights, recordings, `.env`, or webhook URLs. The repo is private but stays clean.
 - Demos use fake passwords and consenting voices only.

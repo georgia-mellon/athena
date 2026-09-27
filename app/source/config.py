@@ -15,7 +15,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 DRIVER_KINDS = ("real", "mock")
 SHIELD_MODES = ("off", "dsp", "adversarial")
-HEARSAY_MODES = ("r4ft", "r5")
+HEARSAY_MODES = ("r4ft", "r5", "e5")
 
 
 @dataclass
@@ -47,7 +47,7 @@ class DriversConfig:
     attacker: str = "real"
     shield: str = "real"
     secret: str = "real"               # spoken-secret spotter (plan 06): real = Vosk (runs/models), mock
-    hearsay_mode: str = "r5"           # r5 (submitted fusion, default) | r4ft (XLS-R alone, ~20 % faster)
+    hearsay_mode: str = "e5"           # e5 (final Hearsay model, default) | r5 (R4ft + R1) | r4ft (XLS-R alone)
     shield_mode: str = "dsp"           # off | dsp | adversarial
     device: str = "auto"               # torch device: auto | cpu | cuda
 
