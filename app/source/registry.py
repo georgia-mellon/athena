@@ -5,9 +5,10 @@ are read from a ``drivers`` section first, then from the top level:
 
     voice     = "real" | "mock"   -> real: app.hearsay.driver.HearsayDriver(mode=voice_mode, threads=threads)
     attacker  = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardAttacker(weights=attacker_weights)
-    shield    = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardShield(mode=shield_mode)
+    shield    = "real" | "mock"   -> real: app.keystroke_guard.driver.KeyguardShield, set_mode'd for shield_mode
     hearsay_mode (alias voice_mode) = "r5" | "r4ft" (default "r5"), threads = 4, device = "auto",
-    attacker_weights = None, shield_mode = "dsp" ("off" is a runtime switch, so it still builds the dsp shield),
+    attacker_weights = None, shield_mode = "off" | "dsp" | "adversarial" (default "dsp"; "off" is a runtime switch
+    that builds the dsp shield; "adversarial" = driver.DASHBOARD_ADVERSARIAL, stays dsp without trained deltas),
     mock_latency_ms = 0.0 (MockVoice sleep, to mimic the real timing profile)
 
 Real drivers are imported lazily so a missing upstream repo only fails when "real" is actually asked for.
@@ -87,8 +88,15 @@ def make_attacker(cfg: Any = None):
 
 def make_shield(cfg: Any = None):
     if _kind(cfg, "shield") == "real":
-        mode = _opt(cfg, "shield_mode", "dsp")
-        return _real("app.keystroke_guard.driver", "KeyguardShield", mode="dsp" if mode == "off" else mode)
+        shield = _real("app.keystroke_guard.driver", "KeyguardShield", mode="dsp")  # one driver, every mode, same delay
+        if _opt(cfg, "shield_mode", "dsp") == "adversarial":
+            from app.keystroke_guard.driver import DASHBOARD_ADVERSARIAL
+            try:
+                shield.set_mode(DASHBOARD_ADVERSARIAL)
+            except FileNotFoundError as e:              # no trained deltas: stay on dsp; the pipeline reports it
+                import logging
+                logging.getLogger(__name__).warning("%s; shield stays on dsp", e)
+        return shield
     from app.keystroke_guard.mock import MockShield
     return MockShield()
 
