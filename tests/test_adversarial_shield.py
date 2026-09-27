@@ -1,5 +1,5 @@
 """Adversarial keystroke shield: the runtime delta stage, the KeyguardShield modes and the pipeline switch.
-No trained model needed: a fake deltas file is written to tmp_path. Driver-level tests skip without KEYGUARD_ROOT."""
+No trained model needed: a fake deltas file is written to tmp_path. Driver-level tests skip without the Keyguard data (get_assets)."""
 import numpy as np
 import pytest
 import torch
@@ -15,7 +15,7 @@ from app.source.types import BLOCK, SR, ShieldDriver
 
 K, BUDGET_DB, GAIN = 4, -18.0, 0.5
 RADIUS = 10 ** (BUDGET_DB / 20) * np.sqrt(adv.KEY_WIN)
-keyguard = pytest.mark.skipif(not (kr.keyguard_root() / "keyguard").is_dir(), reason="KEYGUARD_ROOT not available")
+keyguard = pytest.mark.skipif(not kr.HARRISON.exists(), reason="Keyguard data missing (get_assets)")
 
 
 @pytest.fixture

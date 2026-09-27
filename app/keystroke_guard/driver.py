@@ -1,24 +1,25 @@
 """Real Keyguard drivers: the keystroke attacker (KeyNet) and the streaming DSP shield.
 
-Keyguard (KEYGUARD_ROOT) is the teammate's repo and is read-only: we import it via sys.path with bytecode writing off,
-so nothing (not even __pycache__) lands inside it. What we use from it:
+Keyguard is vendored into this repo as the top-level `keyguard` package (keyguard/VENDORED.md); its weights and data
+live in runs/keyguard and data/keyguard (gitignored; `python -m app.keystroke_guard.get_assets` copies them from a
+Keyguard checkout). What we use from it:
 - keyguard.config: SR, KEY_WIN, PRE_S, CLASSES, HOP, N_FFT
 - keyguard.attackers.supervised.KeyNet, keyguard.shield.adversarial.torch_logmel / train_attacker (attacker)
 - keyguard.segment.windows (window cutting, identical to Keyguard training)
 - keyguard.shield.shield.Shield / ShieldConfig (the DSP shield, streamed here with a lookahead buffer)
-- data/pool/harrison.npz (provisional attacker training data)
+- data/keyguard/pool/harrison.npz (provisional attacker training data), data/keyguard/live_bank_rich.npz (press bank)
 """
 from __future__ import annotations
 
 import logging
 import os
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
 from app.source.types import BLOCK, SR, KeyGuess
+from keyguard.config import DATA as KEYGUARD_DATA, RUNS as KEYGUARD_RUNS   # runs/keyguard, data/keyguard
 
 log = logging.getLogger(__name__)
 
@@ -36,42 +37,21 @@ SHIELD_MODES = ("dsp", "adversarial", "dsp+adversarial")   # KeyguardShield.set_
 DASHBOARD_ADVERSARIAL = "dsp+adversarial"   # what the pipeline's / dashboard's "adversarial" runs (README: measured)
 
 
-def keyguard_root() -> Path:
-    """KEYGUARD_ROOT, else the local copy upstream/keyguard (gitignored: code, data, weights), else
-    ../keyboard-acoustic-shield, else ../../keyboard (the checkout layouts in use)."""
-    if os.environ.get("KEYGUARD_ROOT"):
-        return Path(os.environ["KEYGUARD_ROOT"])
-    for p in (REPO / "upstream" / "keyguard", REPO.parent / "keyboard-acoustic-shield", REPO.parents[1] / "keyboard"):
-        if (p / "keyguard").is_dir():
-            return p
-    return REPO.parent / "keyboard-acoustic-shield"
+BANK = KEYGUARD_DATA / "live_bank_rich.npz"   # Keyguard's per-key press bank (the teammate's MacBook)
+HARRISON = KEYGUARD_DATA / "pool" / "harrison.npz"
 
 
-BANK = Path("data") / "live_bank_rich.npz"   # Keyguard's per-key press bank (the teammate's MacBook), relative to root
-
-
-def keyguard_bank(root: Path | None = None) -> dict[str, np.ndarray]:
+def keyguard_bank(path: Path | None = None) -> dict[str, np.ndarray]:
     """{key: (n, clip) presses} from Keyguard's bank, each clip starting PRE_S before its onset. It is the CTC
     attacker's training domain (Keyguard's own demos synthesize typing from it), so reads on it are optimistic."""
-    d = np.load(Path(root or keyguard_root()) / BANK)
+    d = np.load(Path(path or BANK))
     return {k: d[k].astype(np.float32) for k in d.files}
 
 
-def _import_keyguard(root: Path | None = None) -> None:
-    """Put KEYGUARD_ROOT on sys.path without letting Python write caches into it."""
-    root = Path(root or keyguard_root())
-    if not (root / "keyguard").is_dir():
-        raise FileNotFoundError(f"Keyguard repo not found at {root} (set KEYGUARD_ROOT)")
-    sys.dont_write_bytecode = True  # read-only upstream: no __pycache__ inside it
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-
-
-def harrison_split(root: Path | None = None, seed: int = SPLIT_SEED):
+def harrison_split(seed: int = SPLIT_SEED):
     """Harrison press bank split per key, seeded: (Xtr, ytr, Xte, yte), labels as class indices."""
-    _import_keyguard(root)
     from keyguard.config import CLS_IDX
-    d = np.load(Path(root or keyguard_root()) / "data" / "pool" / "harrison.npz")
+    d = np.load(HARRISON)
     wins, labels = d["wins"].astype(np.float32), d["labels"]
     rng = np.random.default_rng(seed)
     tr, te = [], []
@@ -94,9 +74,8 @@ class KeyguardAttacker:
     """
     name = "keyguard-keynet"
 
-    def __init__(self, weights: str | Path | None = None, root: Path | None = None, epochs: int = 40):
+    def __init__(self, weights: str | Path | None = None, epochs: int = 40):
         import torch
-        _import_keyguard(root)
         from keyguard.attackers.supervised import KeyNet
         from keyguard.config import CLASSES
         # harrison has A-Z0-9 = CLASSES[:36]; Keyguard later appended space (37), so size the head from the weights
@@ -108,7 +87,7 @@ class KeyguardAttacker:
         if not path.exists():
             if not self.provisional:
                 raise FileNotFoundError(f"attacker weights not found: {path}")
-            self._train_provisional(path, root, epochs)
+            self._train_provisional(path, epochs)
         state = torch.load(path, map_location="cpu")
         state = state.get("state_dict", state)                    # cache dict or a bare Keyguard state_dict
         if state["head.weight"].shape[0] != len(self.classes):
@@ -120,13 +99,13 @@ class KeyguardAttacker:
         if self.provisional:
             log.warning("attacker: using PROVISIONAL KeyNet %s (CallGuard-trained, not the teammate's)", path)
 
-    def _train_provisional(self, path: Path, root, epochs: int) -> None:
+    def _train_provisional(self, path: Path, epochs: int) -> None:
         import torch
         from keyguard.shield.adversarial import train_attacker
         log.warning("attacker: training provisional KeyNet on harrison (CPU, ~1-3 min, cached at %s)", path)
         t0 = time.perf_counter()
         torch.manual_seed(SPLIT_SEED)
-        Xtr, ytr, _, _ = harrison_split(root)
+        Xtr, ytr, _, _ = harrison_split()
         self.net.train()
         train_attacker(self.net, torch.from_numpy(Xtr), torch.from_numpy(ytr).long(), epochs=epochs)
         self.net.eval()
@@ -153,14 +132,14 @@ class KeyguardAttacker:
         return [KeyGuess(int(o), [(self.classes[j], float(p[i, j])) for j in top[i]]) for i, o in enumerate(onsets)]
 
 
-CTC_WEIGHTS = Path("runs") / "ctc_rich_ft.pt"   # Keyguard's current attacker (Ares), relative to KEYGUARD_ROOT
+CTC_WEIGHTS = KEYGUARD_RUNS / "ctc_rich_ft.pt"  # Keyguard's current attacker (Ares)
 CTC_CTX = SR // 2       # samples of context each side of an onset (the pipeline hands 0.5 s before / after)
 CTC_WIN = 1             # +/- frames averaged at the onset frame (Keyguard's onset_gated_decode / frame_key_target)
 
 
 class KeyguardCTCAttacker:
     """KeystrokeAttackerDriver around Keyguard's current attacker: MtlCRNN (CNN -> BiGRU -> CTC + per-frame onset head,
-    `keyguard.ctc.train_overlap`), weights `runs/ctc_rich_ft.pt` in KEYGUARD_ROOT (or `weights` /
+    `keyguard.ctc.train_overlap`), weights `runs/keyguard/ctc_rich_ft.pt` (or `weights` /
     CALLGUARD_ATTACKER_WEIGHTS). Features are Keyguard's own `keyguard.ctc.model.logmel`.
 
     Keyguard's decoder finds keystrokes with the onset head; here the onsets are given, so each one is read the way
@@ -169,14 +148,13 @@ class KeyguardCTCAttacker:
     own 1 s window (0.5 s each side), the same audio the live pipeline hands over.
     """
 
-    def __init__(self, weights: str | Path | None = None, root: Path | None = None):
+    def __init__(self, weights: str | Path | None = None):
         import torch
-        _import_keyguard(root)
         from keyguard.ctc.data import VOCAB
         from keyguard.ctc.train_overlap import MtlCRNN
-        path = Path(weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS") or Path(root or keyguard_root()) / CTC_WEIGHTS)
+        path = Path(weights or os.environ.get("CALLGUARD_ATTACKER_WEIGHTS") or CTC_WEIGHTS)
         if not path.exists():
-            raise FileNotFoundError(f"CTC attacker weights not found: {path}")
+            raise FileNotFoundError(f"CTC attacker weights not found: {path} (run python -m app.keystroke_guard.get_assets)")
         state = torch.load(path, map_location="cpu")
         self.net = MtlCRNN(n_sym=len(VOCAB)).eval()
         self.net.load_state_dict(state.get("state_dict", state))
@@ -220,9 +198,8 @@ class KeyguardShield:
     inpainting, then the delta. The level of the delta comes from the raw input, before the DSP stage.
     """
 
-    def __init__(self, mode: str = "dsp", root: Path | None = None, lookahead: int = 4 * BLOCK,
+    def __init__(self, mode: str = "dsp", lookahead: int = 4 * BLOCK,
                  history: int = 24 * BLOCK, seed: int = 0, deltas: str | Path | None = None, **shield_cfg):
-        _import_keyguard(root)
         from keyguard.config import HOP, N_FFT
         from keyguard.shield.shield import Shield, ShieldConfig
         self.name = "keyguard-shield"

@@ -41,7 +41,6 @@ import soundfile as sf
 sys.dont_write_bytecode = True  # read-only upstreams: no __pycache__ inside them
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
-os.environ.setdefault("KEYGUARD_ROOT", str(REPO.parent / "keyboard-acoustic-shield"))
 from app.hearsay.driver import HEARSAY_ROOT, HearsayDriver  # noqa: E402
 from app.keystroke_guard.mock import MockAttacker, MockShield  # noqa: E402
 from app.secret_shield.mock import MockSpotter  # noqa: E402

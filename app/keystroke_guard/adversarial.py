@@ -198,8 +198,6 @@ def _torch(threads: int):
     sys.dont_write_bytecode = True
     import torch
     torch.set_num_threads(threads)
-    from app.keystroke_guard.driver import _import_keyguard
-    _import_keyguard()
     from keyguard.config import KEY_WIN as KW, PRE_S, SR
     assert (KW, int(PRE_S * SR)) == (KEY_WIN, PRE), "Keyguard's window changed: update KEY_WIN / PRE here"
     return torch
@@ -225,12 +223,12 @@ def speech_bank(which: str, n: int, seed: int, length: int = KEY_WIN) -> np.ndar
 def keyguard_speech(n: int, seed: int, length: int = KEY_WIN) -> np.ndarray:
     """(n, length) excerpts of Keyguard's own speech clips (data/speech/*.wav, a few LibriSpeech speakers): the
     stand-in when Hearsay's pools aren't on the machine. Far fewer speakers than speech_bank."""
-    from app.keystroke_guard.driver import keyguard_root
+    from keyguard.config import DATA
     from app.source.audio.replay import load_wav
-    pool = [load_wav(p) for p in sorted((keyguard_root() / "data" / "speech").glob("*.wav"))]
+    pool = [load_wav(p) for p in sorted((DATA / "speech").glob("*.wav"))]
     pool = [x for x in pool if len(x) > length]
     if not pool:
-        raise FileNotFoundError(f"no speech clips in {keyguard_root() / 'data' / 'speech'}")
+        raise FileNotFoundError(f"no speech clips in {DATA / 'speech'} (run python -m app.keystroke_guard.get_assets)")
     r = np.random.default_rng(seed)
     out = np.empty((n, length), np.float32)
     for i in range(n):

@@ -50,7 +50,7 @@ explicit = true
 torch = { index = "pytorch-cpu" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["app", "dashboard"]
+packages = ["app", "dashboard", "keyguard"]
 
 [build-system]
 requires = ["hatchling"]

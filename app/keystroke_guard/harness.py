@@ -172,12 +172,11 @@ def _shield(rep: Report, spec: Any, box: dict, mode: str | None = None) -> None:
 
 
 def _harrison(presses: int):
-    from app.keystroke_guard.driver import harrison_split, keyguard_root
-    root = keyguard_root()
-    if not (root / "data" / "pool" / "harrison.npz").exists():
-        raise Skip(f"no harrison.npz under {root}/data/pool (set KEYGUARD_ROOT)")
-    _, _, X, y = harrison_split(root)
-    from keyguard.config import CLASSES, PRE_S     # importable now: harrison_split put KEYGUARD_ROOT on sys.path
+    from app.keystroke_guard.driver import HARRISON, harrison_split
+    if not HARRISON.exists():
+        raise Skip(f"no {HARRISON} (run python -m app.keystroke_guard.get_assets)")
+    _, _, X, y = harrison_split()
+    from keyguard.config import CLASSES, PRE_S
     if presses:
         idx = np.random.default_rng(0).permutation(len(X))[:presses]
         X, y = X[idx], y[idx]
@@ -185,10 +184,9 @@ def _harrison(presses: int):
 
 
 def _bank(presses: int):
-    from app.keystroke_guard.driver import BANK, _import_keyguard, keyguard_bank, keyguard_root
-    if not (keyguard_root() / BANK).exists():
-        raise Skip(f"no {BANK} under {keyguard_root()} (set KEYGUARD_ROOT)")
-    _import_keyguard()
+    from app.keystroke_guard.driver import BANK, keyguard_bank
+    if not BANK.exists():
+        raise Skip(f"no {BANK} (run python -m app.keystroke_guard.get_assets)")
     from keyguard.config import KEY_WIN, PRE_S
     bank, rng = keyguard_bank(), np.random.default_rng(0)
     per_key = presses // len(bank) if presses else 10

@@ -1,7 +1,7 @@
 """Config: dataclasses, loaded from TOML (`callguard.toml`, gitignored; see `callguard.example.toml`) plus env.
 
 Precedence: defaults < TOML < env. Env overrides:
-- `HEARSAY_ROOT`, `KEYGUARD_ROOT`, `CALLGUARD_ATTACKER_WEIGHTS` (top-level paths);
+- `HEARSAY_ROOT`, `CALLGUARD_ATTACKER_WEIGHTS` (top-level paths; Keyguard is vendored, see keyguard/VENDORED.md);
 - `CALLGUARD_<SECTION>_<FIELD>` for any scalar field, e.g. `CALLGUARD_SERVER_PORT=9000`, `CALLGUARD_DRIVERS_VOICE=mock`;
 - `CALLGUARD_WEBHOOK_URL` appends a webhook hook for `threat.level_change`, so the URL never lands in a file.
 """
@@ -98,8 +98,7 @@ class HookConfig:
 @dataclass
 class Config:
     hearsay_root: Path = REPO.parent / "Hearsay"
-    keyguard_root: Path = REPO.parent / "keyboard-acoustic-shield"
-    attacker_weights: str = ""         # empty = Keyguard's CTC attacker, KEYGUARD_ROOT/runs/ctc_rich_ft.pt
+    attacker_weights: str = ""         # empty = Keyguard's CTC attacker, runs/keyguard/ctc_rich_ft.pt
     drivers: DriversConfig = field(default_factory=DriversConfig)
     devices: DevicesConfig = field(default_factory=DevicesConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
@@ -142,8 +141,7 @@ def load(path: str | Path | None = None, env: dict[str, str] | None = None) -> C
         _fill(getattr(cfg, name), raw.pop(name, {}), name)
     _fill(cfg, raw, "root")
 
-    for key, attr in (("HEARSAY_ROOT", "hearsay_root"), ("KEYGUARD_ROOT", "keyguard_root"),
-                      ("CALLGUARD_ATTACKER_WEIGHTS", "attacker_weights")):
+    for key, attr in (("HEARSAY_ROOT", "hearsay_root"), ("CALLGUARD_ATTACKER_WEIGHTS", "attacker_weights")):
         if env.get(key):
             setattr(cfg, attr, _coerce(env[key], getattr(cfg, attr)))
     for name, cls in SECTIONS.items():

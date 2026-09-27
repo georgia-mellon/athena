@@ -124,7 +124,7 @@ def _real_available():
     try:
         from app.hearsay import driver as hearsay_real
         from app.keystroke_guard import driver as keyguard_real
-        return hearsay_real.RUN.exists() and (keyguard_real.keyguard_root() / "keyguard").is_dir()
+        return hearsay_real.RUN.exists() and keyguard_real.CTC_WEIGHTS.exists()
     except Exception:
         return False
 

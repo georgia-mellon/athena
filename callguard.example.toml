@@ -1,10 +1,9 @@
-# Copy to callguard.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT, KEYGUARD_ROOT,
+# Copy to callguard.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT,
 # CALLGUARD_ATTACKER_WEIGHTS, CALLGUARD_<SECTION>_<FIELD> (e.g. CALLGUARD_DRIVERS_VOICE=mock),
 # CALLGUARD_WEBHOOK_URL (adds a webhook for threat.level_change; keeps the URL out of files).
 
 # hearsay_root = "../Hearsay"                    # default: sibling of this repo
-# keyguard_root = "../keyboard-acoustic-shield"
-# attacker_weights = ""                          # empty = Keyguard's CTC attacker (runs/ctc_rich_ft.pt)
+# attacker_weights = ""                          # empty = Keyguard's CTC attacker (runs/keyguard/ctc_rich_ft.pt)
 
 [drivers]
 voice = "real"            # real | mock

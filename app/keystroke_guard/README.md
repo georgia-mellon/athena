@@ -23,21 +23,22 @@ In [`app/source/types.py`](../source/types.py):
 |---|---|---|
 | placeholder attacker | `app.keystroke_guard.mock:MockAttacker` | reads the true key with a set accuracy when the pipeline hands it the truth, chance otherwise and on shielded onsets |
 | placeholder shield | `app.keystroke_guard.mock:MockShield` | adds a quiet 7.6 kHz pilot tone for 100 ms after each key event (the mock attacker listens for it) |
-| real attacker | `app.keystroke_guard.driver:KeyguardCTCAttacker` | Keyguard's current attacker ("Ares"): `MtlCRNN` (CNN + BiGRU + CTC + per-frame onset head) on Keyguard's `ctc.model.logmel`, 37 keys (A-Z, 0-9, space). Weights: `CALLGUARD_ATTACKER_WEIGHTS` / `attacker_weights`, else `KEYGUARD_ROOT/runs/ctc_rich_ft.pt`. Each onset is read like Keyguard's `onset_gated_decode` reads a peak (non-blank logits, +/-1 frame at the onset frame, 1 s window) |
+| real attacker | `app.keystroke_guard.driver:KeyguardCTCAttacker` | Keyguard's current attacker ("Ares"): `MtlCRNN` (CNN + BiGRU + CTC + per-frame onset head) on Keyguard's `ctc.model.logmel`, 37 keys (A-Z, 0-9, space). Weights: `CALLGUARD_ATTACKER_WEIGHTS` / `attacker_weights`, else `runs/keyguard/ctc_rich_ft.pt`. Each onset is read like Keyguard's `onset_gated_decode` reads a peak (non-blank logits, +/-1 frame at the onset frame, 1 s window) |
 | older attacker | `app.keystroke_guard.driver:KeyguardAttacker` | the **provisional** KeyNet CallGuard trained on harrison presses; no longer the default, kept because `adversarial.py`'s deltas are trained against it |
 | real shield | `app.keystroke_guard.driver:KeyguardShield` | Keyguard's DSP `Shield`, streamed with an 80 ms lookahead; `key_frames=26` (press + release) |
 
-Real code comes read-only from the teammate's repo
-[LordKarV/keyboard-acoustic-shield](https://github.com/LordKarV/keyboard-acoustic-shield) at `KEYGUARD_ROOT`
-(found in this order: `KEYGUARD_ROOT`, the local copy `upstream/keyguard/`, `../keyboard-acoustic-shield`,
-`../../keyboard`).
+Real code is the teammate's Keyguard
+([LordKarV/keyboard-acoustic-shield](https://github.com/LordKarV/keyboard-acoustic-shield), commit `55bb112`),
+**vendored** as the top-level `keyguard/` package (`import keyguard...`; local edits listed in
+[`keyguard/VENDORED.md`](../../keyguard/VENDORED.md)). CallGuard never imports from the teammate's checkout.
 
-**Local copy** (`upstream/keyguard/`, gitignored, ~2 GB): the whole Keyguard checkout (code, `data/`, `runs/` weights,
-`vendor/`) with its own `.env` (`GEMINI_API_KEY`, `BACKBOARD_API_KEY`) and uv env, so every Keyguard feature runs from
-here. Refresh: `rsync -a --exclude .git --exclude .venv --exclude __pycache__ --exclude .env ../../keyboard/
-upstream/keyguard/`. Keyguard's own tools run inside it, e.g. `cd upstream/keyguard && KEYGUARD_DEVICE=cpu uv run
-python -m keyguard.agents.arms_race_demo` (Ares vs Athena, writes `keyguard/web/arms_race_data.js` for
-`keyguard/web/arena.html`), `uv run uvicorn keyguard.server:app --port 8000`, `uv run python -m keyguard.agents.live
+**Weights and data** (gitignored): `uv run python -m app.keystroke_guard.get_assets` copies them once from a Keyguard
+checkout (`KEYGUARD_ROOT`, else `upstream/keyguard`, `../../keyboard`, `../keyboard-acoustic-shield`; `--root PATH`)
+into `runs/keyguard/` (`ctc_rich_ft.pt`, `demo_attacker.pt`, `supervised_mbp.pt`, `arena/`, `arena_memory.jsonl`, ...)
+and `data/keyguard/` (`live_bank_rich.npz`, `pool/harrison.npz`, `speech/`, `harrison/MBPWavs/`, ~300 MB), which is
+where `keyguard.config.RUNS` / `DATA` point. `.env` (`GEMINI_API_KEY`, `BACKBOARD_API_KEY`) is callguard's own, loaded by
+`keyguard.config`. Keyguard's tools run from here, e.g. `uv run python -m keyguard.agents.arms_race_demo` (Ares vs Athena;
+writes `runs/keyguard/arms_race_data.js`), `uv run uvicorn keyguard.server:app --port 8000`, `uv run python -m keyguard.agents.live
 record --defend`. Config ([`callguard.example.toml`](../../callguard.example.toml)):
 `[drivers] attacker`, `shield` = `"real"|"mock"`, `shield_mode = "off"|"dsp"|"adversarial"` (see below),
 top-level `attacker_weights`.
@@ -58,7 +59,7 @@ python -m app.keystroke_guard.harness [--attacker mock|real|module:Class|none] [
 ```
 
 Contract and latency checks for both drivers, then two informational rows on Keyguard's harrison TEST-split presses
-(per-key seeded 60/40 split, the 40 %: 360 presses; skipped without `KEYGUARD_ROOT`): the attacker's keys-only top-1 /
+(per-key seeded 60/40 split, the 40 %: 360 presses; skipped without the Keyguard data): the attacker's keys-only top-1 /
 top-3 at the true onsets vs chance, and the same attacker on those presses streamed through the shield (presses
 250 ms apart, 20 ms blocks, each key event one block late). Exit code 1 on any FAIL. Real run (CPU, 2026-09-26):
 

@@ -16,14 +16,13 @@ Protocol (fixed seeds, CPU, 8 threads, ~12 min):
 - Hearsay check (pass criterion 3): full real clips (>= 3 s) from the test speakers, with test presses at +10 dB
   speech-to-key, scored clean / keys unshielded / keys shielded by CallGuard's Hearsay driver (r4ft, CPU).
 
-Run: .venv/Scripts/python app/keystroke_guard/eval/attack_under_speech.py   (reads KEYGUARD_ROOT, HEARSAY_ROOT; writes docs/reports/)
+Run: .venv/Scripts/python app/keystroke_guard/eval/attack_under_speech.py   (reads the vendored keyguard + data/keyguard, HEARSAY_ROOT; writes docs/reports/)
 """
 from __future__ import annotations
 
 import os
 import sys
 import time
-import types
 from pathlib import Path
 
 import numpy as np
@@ -34,15 +33,8 @@ import torch
 os.environ.setdefault("KEYGUARD_DEVICE", "cpu")
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))  # app.keystroke_guard.driver when run as a script
-from app.keystroke_guard.driver import keyguard_root  # noqa: E402  same lookup as the drivers
-KEYGUARD_ROOT = keyguard_root()
 HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT") or REPO.parent / "Hearsay")
-sys.path.insert(0, str(KEYGUARD_ROOT))
-sys.dont_write_bytecode = True  # never leave __pycache__ inside the read-only Keyguard checkout
-try:
-    import keyguard.memory  # noqa: F401  (pulled in by adversarial; may need pymongo/dotenv)
-except Exception:
-    sys.modules["keyguard.memory"] = types.ModuleType("keyguard.memory")
+sys.dont_write_bytecode = True  # never leave __pycache__ inside the read-only Hearsay checkout
 from keyguard import segment  # noqa: E402
 from keyguard.attackers.supervised import KeyNet  # noqa: E402
 from keyguard.config import PRE_S, SR  # noqa: E402
@@ -89,7 +81,7 @@ def load_keys(rng):
     order, so the speech-aug attacker saw 206 harrison_split test presses; fixed 2026-09-26). `rng` is still advanced
     by one permutation per key, as the old loop did (every key has 25 presses), so the speaker split drawn next from
     the same rng, and every speech pool derived from it, is unchanged."""
-    Xtr, ytr, Xte, yte = harrison_split(KEYGUARD_ROOT)
+    Xtr, ytr, Xte, yte = harrison_split()
     for k in np.unique(np.concatenate([ytr, yte])):
         rng.permutation(int((ytr == k).sum() + (yte == k).sum()))
     return Xtr, ytr, Xte, yte
