@@ -62,6 +62,13 @@ allow_s = 30.0            # dashboard "Allow" bypass
 min_digits = 3            # runs this long are reported (shorter runs are still cut)
 gap_s = 1.2
 
+[keyguard]                # live Ares-vs-Athena arms race on your typing bursts (needs drivers.attacker = "real")
+agents = true
+rounds = 2                # shield / retrain rounds per match
+burst_gap_s = 2.0         # a burst ends after this much typing silence
+snr_db = 16.0             # Athena's starting perturbation budget (dB)
+device = "auto"           # auto | cpu | mps | cuda
+
 [[hooks]]
 kind = "jsonl"
 topics = ["threat.*", "voice.verdict", "shield.state", "secret.*", "driver.error"]   # not keys.*: key timing is itself a side channel

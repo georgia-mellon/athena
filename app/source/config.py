@@ -70,6 +70,16 @@ class SecretConfig:
 
 
 @dataclass
+class KeyguardConfig:
+    """Live Ares-vs-Athena arms race on the user's typing bursts (app/keystroke_guard/agents.py)."""
+    agents: bool = True                # needs the real CTC attacker; off = no matches
+    rounds: int = 2                    # shield / retrain rounds per match
+    burst_gap_s: float = 2.0           # a burst ends after this much typing silence
+    snr_db: float = 16.0               # Athena's starting perturbation budget
+    device: str = "auto"               # auto (measured faster on this Mac) | cpu | mps | cuda
+
+
+@dataclass
 class DevicesConfig:
     """Device names (substring match; empty = system default). See docs/plans/03."""
     mic: str = ""
@@ -104,11 +114,12 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     threat: ThreatConfig = field(default_factory=ThreatConfig)
     secret: SecretConfig = field(default_factory=SecretConfig)
+    keyguard: KeyguardConfig = field(default_factory=KeyguardConfig)
     hooks: list[HookConfig] = field(default_factory=lambda: [HookConfig("console")])
 
 
 SECTIONS = {"drivers": DriversConfig, "devices": DevicesConfig, "server": ServerConfig, "threat": ThreatConfig,
-            "secret": SecretConfig}
+            "secret": SecretConfig, "keyguard": KeyguardConfig}
 
 
 def _coerce(value, like):
@@ -175,6 +186,9 @@ def _validate(cfg: Config) -> None:
             raise ValueError(f"unknown hook kind {h.kind!r}")
         if h.kind == "webhook" and not h.url:
             raise ValueError("webhook hook needs a url")
+    k = cfg.keyguard
+    if k.rounds < 1 or k.burst_gap_s <= 0:
+        raise ValueError("keyguard.rounds must be >= 1 and keyguard.burst_gap_s > 0")
     t = cfg.threat
     if not (0 < t.watch < t.warn < t.critical <= 100) or t.tick_hz < 2:
         raise ValueError("threat thresholds must satisfy 0 < watch < warn < critical <= 100, tick_hz >= 2")
