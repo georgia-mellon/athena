@@ -1,8 +1,8 @@
 # GPU retrain handoff (2026-09-27)
 
 CallGuard's keystroke attacker is now Keyguard's CTC model (`MtlCRNN`, `runs/ctc_rich_ft.pt`). Job 1 (shield deltas) runs on the Mac; job 2
-(a stronger Ares) runs on the GPU. Run on the GPU machine, then copy the outputs back to
-the Mac. Neither job changes any contract or config.
+(a stronger Ares) runs on the GPU, then its output is copied back to the Mac. Neither job changes any contract
+or config.
 
 ## 0. Setup on the GPU machine
 
@@ -63,9 +63,3 @@ KEYGUARD_CKPT=runs/ctc_mix_ft.pt \
   (look at `greedy_acc`; ctc_rich_ft: 0.804).
 - **Only if it wins:** copy `runs/ctc_mix_ft.pt` to the Mac as `callguard/upstream/keyguard/runs/ctc_rich_ft.pt` (keep
   the old file as a backup), then rerun job 1 against it. If it loses, keep `ctc_rich_ft.pt`.
-
-## Optional: a stronger Ares
-
-`ctc_rich_ft.pt` came from the rich-synth recipe (commit 26fa6b0: synth from `live_bank_rich.npz`, then fine-tune on
-the real sessions in `data/continuous/live`, `keyguard.agents.finetune_live`). Rerunning it with more steps is Dan's
-GPU agent's call (`GPU_AGENT.md`). If Ares changes, rerun job 1 against the new weights.
