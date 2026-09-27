@@ -46,7 +46,7 @@ def test_missing_deltas_fail_clearly(tmp_path):
 
 
 def test_delta_added_at_absolute_position_under_budget(deltas):
-    st = adv.DeltaStage.load(deltas)
+    st = adv.DeltaStage.load(deltas, seed=0, harden=())       # no per-stroke shift: exact placement
     lat, e = 4 * BLOCK, 10 * BLOCK + 37
     x = clicks(40 * BLOCK, [e])
     buf_len = 24 * BLOCK + lat
@@ -56,8 +56,8 @@ def test_delta_added_at_absolute_position_under_budget(deltas):
         st.add(events)
         return st.apply(np.zeros(len(block), np.float32), t[0] - lat - len(block), x[max(0, t[0] - buf_len):t[0]], t[0])
     y = stream(proc, x, [e])[lat:]                  # absolute index s of the stream = y[s]
-    (a, k, level), = st.history
-    assert a == e - adv.PRE and 0 <= k < K
+    (a, k, level, scale), = st.history
+    assert a == e - adv.PRE and 0 <= k < K and scale == 1.0   # one stroke: the cap doesn't bite
     assert level == pytest.approx(GAIN * np.sqrt(np.mean(x[a:a + adv.EST].astype(np.float64) ** 2)), rel=1e-5)
     want = np.zeros_like(y)
     want[a:a + adv.KEY_WIN] = level * st.deltas[k][:len(y) - a]
@@ -68,11 +68,13 @@ def test_delta_added_at_absolute_position_under_budget(deltas):
 def test_random_choice_among_k(deltas):
     st = adv.DeltaStage.load(deltas, seed=3)
     x = np.full(200 * adv.KEY_WIN, 0.1, np.float32)
-    for i in range(40):
-        st.add([i * adv.KEY_WIN + adv.PRE])
-        t = (i + 1) * adv.KEY_WIN
-        st.apply(np.zeros(BLOCK, np.float32), t - BLOCK, x[:t], t)
-    ks = [k for _, k, _ in st.history]
+    for i in range(40):                                      # each stroke on time: its start hasn't gone out yet
+        a = i * adv.KEY_WIN + 2000
+        st.add([a + adv.PRE])
+        start = a - adv.SHIFT - BLOCK // 2               # the block reaches the earliest shifted start
+        t = start + BLOCK + 4 * BLOCK                        # the driver's 80 ms lookahead covers EST + SHIFT
+        st.apply(np.zeros(BLOCK, np.float32), start, x[:t], t)
+    ks = [k for _, k, _, _ in st.history]
     assert len(ks) == 40 and set(ks) == set(range(K))       # every delta used, none fixed
 
 
@@ -102,10 +104,10 @@ def test_driver_adversarial_adds_the_delta_only(deltas):
     x = clicks(60 * BLOCK, [e])
     s = kr.KeyguardShield(mode="adversarial", deltas=deltas)
     y = stream(s.process, x, [e])[s.latency:]
-    (a, k, level), = s.adv.history
+    (a, k, level, scale), = s.adv.history
     d = y - x[:len(y)]
-    assert np.all(np.isfinite(y)) and a == e - adv.PRE
-    np.testing.assert_allclose(d[a:a + adv.KEY_WIN], level * s.adv.deltas[k][:len(d) - a], atol=1e-6)
+    assert np.all(np.isfinite(y)) and abs(a - (e - adv.PRE)) <= adv.SHIFT   # per-stroke random shift (hardening)
+    np.testing.assert_allclose(d[a:a + adv.KEY_WIN], scale * level * s.adv.deltas[k][:len(d) - a], atol=1e-6)
     assert np.abs(d[:a]).max() == 0 and np.abs(d[a + adv.KEY_WIN:]).max() == 0
     s.set_mode("dsp+adversarial")                   # DSP inpainting too: changes more than the delta
     s.reset()

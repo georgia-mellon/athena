@@ -82,7 +82,9 @@ class DeltaStage:
 
     def __init__(self, deltas: np.ndarray, level_gain: float, seed: int | None = None, meta: dict | None = None,
                  harden: tuple = HARDEN):
-        self.deltas = np.ascontiguousarray(deltas, np.float32)          # (K, KEY_WIN), level-relative units
+        # (K, KEY_WIN), level-relative units; tapered here so no stroke starts or ends with a step (ponytail: the
+        # taper isn't in training yet; retrain with it applied inside the perturbation for the optimum)
+        self.deltas = np.ascontiguousarray(np.asarray(deltas, np.float32) * taper(), np.float32)
         assert self.deltas.ndim == 2 and self.deltas.shape[1] == KEY_WIN, self.deltas.shape
         self.level_gain, self.seed, self.meta, self.harden = float(level_gain), seed, meta or {}, tuple(harden)
         self.level_gain_dsp = float(self.meta.get("level_gain_dsp", level_gain))

@@ -102,7 +102,14 @@ driver, so the 80 ms lookahead, and the stream's delay, never change. The dashbo
   (speech + key), which masks it. Measured per-stroke key-to-delta ratio on the 360 test presses: median 18.0 dB,
   min 17.0 dB (the level estimate can overshoot the budget by up to 1 dB). CPU: ~0 ms per block for the delta,
   DSP as before (harness p95 3.2 ms per 20 ms block in `dsp+adversarial`). No key events = exact pass-through.
-  Overlapping strokes (< 300 ms apart) sum their deltas.
+- **Hardening (2026-09-26 review fixes).** The delta is picked with an OS-entropy rng and shifted by a random +/-10 ms
+  per stroke (inside the trained jitter), so an attacker holding the 8 deltas can't subtract a predictable pattern.
+  Deltas are tapered (3 ms in, 20 ms out) so strokes don't start or end with a step, and a running delta fades out
+  over 5 ms when a new stroke or a mode switch cuts it. Repeated events within 30 ms count once. Overlapping strokes
+  are capped: every attacker window near a stroke stays within that stroke's budget (probe: 5 presses 120 ms apart,
+  worst window exactly 18.0 dB below the key level; before the fix, 15 dB). A late OS event shifts its delta later
+  (up to 40 ms) instead of dropping its head. In `dsp+adversarial` the level is taken from the DSP output, so the
+  budget holds for what actually goes out.
 - **Missing `runs/adversarial_deltas.pt`**: `set_shield("adversarial")` raises a clear 400 on the dashboard and the
   mode stays where it was; a config asking for it starts on dsp and publishes `driver.error`. dsp / off unaffected.
 - **Training** (`python -m app.keystroke_guard.adversarial train [--budget-db -18] [--k 8] [--steps 500]`; 457 s on
@@ -116,7 +123,7 @@ driver, so the 80 ms lookahead, and the stream's delay, never change. The dashbo
   move) joins and phase 2 (500 steps) runs vs all 4. **Held out of training:** `widecnn-s3-speechaug` (Keyguard's
   WideCNN population architecture, seed 3) and `keynet-s4-retrained-on-deltas` (a fresh KeyNet trained on train
   presses + speech + the FROZEN final deltas: the adaptive attacker). Attackers are cached in `runs/adv_attacker_*`.
-- **Eval** (`python -m app.keystroke_guard.adversarial eval`, 297 s; writes `runs/adversarial_eval.json`): top-1 on
+- **Eval, measured before the hardening above** (`python -m app.keystroke_guard.adversarial eval`, 297 s; writes `runs/adversarial_eval.json`); * the speech-aug provisional attacker had seen 206 test presses (split bug, fixed since: one `harrison_split` everywhere): top-1 on
   the 360 harrison TEST presses, oracle onsets, chance 2.8 %. The first four columns are **white-box** (the deltas were
   optimized against them). Streamed rows go through the live driver (presses 250 ms apart, events one block late);
   speech rows use the other (test) speaker pool.
