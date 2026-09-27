@@ -32,11 +32,12 @@ import soundfile as sf
 import torch
 
 os.environ.setdefault("KEYGUARD_DEVICE", "cpu")
-KEYGUARD_ROOT = Path(os.environ.get("KEYGUARD_ROOT", r"C:\Users\danma\Documents\Dan\Projects\keyboard-acoustic-shield"))
-HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT", r"C:\Users\danma\Documents\Dan\Projects\Hearsay"))
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO))  # app.keystroke_guard.driver when run as a script
+from app.keystroke_guard.driver import keyguard_root  # noqa: E402  same lookup as the drivers
+KEYGUARD_ROOT = keyguard_root()
+HEARSAY_ROOT = Path(os.environ.get("HEARSAY_ROOT") or REPO.parent / "Hearsay")
 sys.path.insert(0, str(KEYGUARD_ROOT))
-sys.path.insert(0, str(REPO))  # app.keystroke_guard.driver.harrison_split when run as a script
 sys.dont_write_bytecode = True  # never leave __pycache__ inside the read-only Keyguard checkout
 try:
     import keyguard.memory  # noqa: F401  (pulled in by adversarial; may need pymongo/dotenv)
