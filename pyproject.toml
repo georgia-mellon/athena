@@ -24,7 +24,8 @@ dependencies = [
     "matplotlib>=3.11.2",
     "pesq>=0.0.4",
     "praat-parselmouth>=0.4.7",
-    "vosk>=0.3.45",
+    "vosk>=0.3.45; sys_platform != 'darwin'",
+    "vosk==0.3.44; sys_platform == 'darwin'",  # 0.3.45 ships no macOS wheel
     "pywebview>=5",
 ]
 
