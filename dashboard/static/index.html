@@ -92,6 +92,35 @@
   </section>
 </main>
 
+<section id="kg" class="card kg" aria-labelledby="kg-h">
+  <div class="kg-head">
+    <h2 id="kg-h">Ares ⚔️ vs Athena 🦉</h2>
+    <span id="kg-state" class="pill off" aria-live="polite">no match yet</span>
+    <span id="kg-verdict" class="pill off" hidden></span>
+    <div class="spacer"></div>
+    <a href="/keyguard/static/arena.html" target="_blank" rel="noopener" class="link">This match ↗</a>
+    <a href="/keyguard/" target="_blank" rel="noopener" class="link">Keyguard console ↗</a>
+  </div>
+  <div class="muted small">Ares (acoustic readers + Gemini + smart dictionary) tries to read the secret you typed;
+    Athena (Gemini) plants a decoy and retrains against him. Brain: <b id="kg-route" class="mono">–</b></div>
+  <div class="kg-grid">
+    <div>
+      <div class="row"><span class="lab">Secret → decoy</span><span class="mono kg-sd"><span id="kg-secret">–</span> → <span id="kg-decoy">–</span></span></div>
+      <table class="kg-tbl" aria-label="rounds">
+        <caption class="lab">Rounds</caption>
+        <thead><tr><th scope="col">#</th><th scope="col">Ares reads</th><th scope="col">STOI</th><th scope="col">after retrain</th></tr></thead>
+        <tbody id="kg-rounds"><tr><td colspan="4" class="muted">–</td></tr></tbody>
+      </table>
+      <table class="kg-tbl" aria-label="attacker agents">
+        <caption class="lab">Ares' agents: read before / after Athena</caption>
+        <thead><tr><th scope="col">agent</th><th scope="col">before</th><th scope="col">after</th></tr></thead>
+        <tbody id="kg-agents"><tr><td colspan="3" class="muted">–</td></tr></tbody>
+      </table>
+    </div>
+    <ol id="kg-moves" class="kg-moves" aria-label="moves" aria-live="polite"><li class="muted">waiting for a typed burst…</li></ol>
+  </div>
+</section>
+
 <section class="card bottom">
   <h2>Threat over the call</h2>
   <svg id="tl" class="tl" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-label="threat timeline">

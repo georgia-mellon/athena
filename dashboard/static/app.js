@@ -5,7 +5,7 @@ const MAXC = 20;               // characters shown per keyboard row (the threat 
 const SPARK_S = 60;            // sparkline window, seconds
 const TL_MAX = 4000;           // timeline points kept
 const LOG_MAX = 200;
-const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict", "secret.state", "meet.state"]);
+const QUIET = new Set(["keys.stroke", "voice.window", "threat.update", "keys.readout", "voice.verdict", "secret.state", "meet.state", "keyguard.move"]);
 
 const st = { voice: [], threat: [], typed: 0, vclass: null, alarmTimer: 0 };
 
@@ -162,6 +162,66 @@ function renderMeet(d) {
   pill.title = d.browser ? `${d.browser}${d.latency_ms != null ? ` · bridge ${Math.round(d.latency_ms)} ms` : ""}` : "";
 }
 
+// ---------- Ares vs Athena (Keyguard arms race); every field may be absent ----------
+const KG_MOVES_MAX = 60;
+const txt = (x) => (x == null || x === "" ? "–" : String(x));
+const plain = (x) => txt(x).replace(/\*\*/g, "");  // Keyguard writes light markdown in results
+function kgState(text, cls) { const p = $("kg-state"); p.textContent = text; p.className = "pill " + cls; }
+function renderKgBurst(d) {
+  kgState(`match running… (${txt(d.n_keys)} keys${d.shield ? ", shield " + d.shield : ""})`, "wait");
+  $("kg-moves").textContent = "";
+  $("kg-verdict").hidden = true;
+}
+function renderKgMove(d) {
+  const ol = $("kg-moves");
+  if (ol.firstElementChild && ol.firstElementChild.classList.contains("muted")) ol.textContent = "";
+  const li = document.createElement("li");
+  const who = document.createElement("span"); who.className = "who"; who.textContent = txt(d.agent);
+  li.append(who, document.createTextNode(plain(d.title)));
+  if (d.tag) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = d.tag; li.appendChild(tg); }
+  if (d.result) { const r = document.createElement("span"); r.className = "res"; r.textContent = plain(d.result); li.appendChild(r); }
+  ol.prepend(li);
+  while (ol.children.length > KG_MOVES_MAX) ol.lastChild.remove();
+}
+function fillRows(tbody, rows, ncol) {
+  tbody.textContent = "";
+  if (!rows.length) rows = [[{ v: "–", cls: "muted", span: ncol }]];
+  for (const cells of rows) {
+    const tr = document.createElement("tr");
+    for (const c of cells) {
+      const td = document.createElement("td");
+      td.textContent = txt(c.v);
+      if (c.cls) td.className = c.cls;
+      if (c.span) td.colSpan = c.span;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+}
+const readCls = (hitsTrue) => "mono " + (hitsTrue === true ? "bad-c" : hitsTrue === false ? "ok-c" : "");
+function renderKgMatch(d) {
+  $("kg-route").textContent = txt(d.route || d.backend);
+  $("kg-secret").textContent = txt(d.secret);
+  $("kg-decoy").textContent = txt(d.decoy);
+  fillRows($("kg-rounds"), (d.rounds || []).map((r) => [
+    { v: r.round }, { v: r.span_read, cls: readCls(r.reads_true_secret) },
+    { v: r.stoi == null ? null : Number(r.stoi).toFixed(2) },
+    { v: r.after_retrain_read, cls: readCls(r.after_retrain_reads_true) },
+  ]), 4);
+  fillRows($("kg-agents"), Object.entries(d.agents || {}).map(([name, a]) => [
+    { v: name }, { v: a && a.before, cls: "mono" }, { v: a && a.after, cls: "mono" },
+  ]), 3);
+  const v = $("kg-verdict");
+  v.hidden = d.protected == null;
+  if (d.protected != null) {
+    v.textContent = d.protected ? "🦉 secret protected" : "⚔️ secret leaked";
+    v.className = "pill " + (d.protected ? "ok" : "off");
+  }
+  kgState(`match done${d.seconds != null ? ` in ${Number(d.seconds).toFixed(1)} s` : ""}`, "ok");
+  const moves = d.moves || [];  // a page opened mid-call only saw the last move: rebuild the feed from the log
+  if ($("kg-moves").querySelectorAll(".who").length < moves.length) { $("kg-moves").textContent = ""; moves.forEach(renderKgMove); }
+}
+
 // ---------- dispatch ----------
 function handle(m) {
   const d = m.data || {}, t = m.t || Date.now() / 1000;
@@ -179,6 +239,9 @@ function handle(m) {
     case "secret.state": renderSecretState(d); st.secretDelay = d.enabled ? d.delay_ms : 0; renderPipeline(); break;
     case "meet.state": renderMeet(d); break;
     case "secret.blocked": renderSecretBlocked(d, t); break;
+    case "keyguard.burst": renderKgBurst(d); break;
+    case "keyguard.move": renderKgMove(d); break;
+    case "keyguard.arms_race": renderKgMatch(d); break;
     case "driver.error": if (!m.replay) alarm(`Driver ${d.driver || "?"} failed: ${d.error || ""} (audio keeps flowing)`); break;
   }
   if (!QUIET.has(m.topic) && !m.replay) {
@@ -188,6 +251,8 @@ function handle(m) {
     else if (m.topic === "secret.blocked") text = `${d.category === "digits" ? d.length + "-digit code" : d.category} ${d.allowed ? "allowed" : "blocked"} from your voice`;
     else if (m.topic === "secret.request") text = "caller asked for a code";
     else if (m.topic === "control.meet") text = `meeting → ${d.action}${d.url ? " " + d.url : ""}`;
+    else if (m.topic === "keyguard.burst") text = `keyguard: ${txt(d.n_keys)} keys typed, Ares vs Athena match started`;
+    else if (m.topic === "keyguard.arms_race") text = `keyguard: match done, ${d.protected == null ? "no verdict" : d.protected ? "secret protected" : "secret leaked"}`;
     else if (m.topic === "driver.error") text = `driver ${d.driver} error: ${d.error}`;
     else text += " " + JSON.stringify(d);
     log(t, text, m.topic === "driver.error" || (m.topic === "threat.level_change" && (d.level || d.to) === "CRITICAL") ? "alert-c" : "");
