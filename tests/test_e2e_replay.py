@@ -129,7 +129,7 @@ def _real_available():
         return False
 
 
-@pytest.mark.skipif(not _real_available() or os.environ.get("CALLGUARD_SKIP_REAL"), reason="upstream repos missing")
+@pytest.mark.skipif(not _real_available() or os.environ.get("ATHENA_SKIP_REAL"), reason="upstream repos missing")
 def test_real_replay_ai_caller():
     try:
         sc = load_scenario("ai_caller")

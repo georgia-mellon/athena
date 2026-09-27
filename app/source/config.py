@@ -1,9 +1,9 @@
-"""Config: dataclasses, loaded from TOML (`callguard.toml`, gitignored; see `callguard.example.toml`) plus env.
+"""Config: dataclasses, loaded from TOML (`athena.toml`, gitignored; see `athena.example.toml`) plus env.
 
 Precedence: defaults < TOML < env. Env overrides:
-- `HEARSAY_ROOT`, `CALLGUARD_ATTACKER_WEIGHTS` (top-level paths; Keyguard is vendored, see keyguard/VENDORED.md);
-- `CALLGUARD_<SECTION>_<FIELD>` for any scalar field, e.g. `CALLGUARD_SERVER_PORT=9000`, `CALLGUARD_DRIVERS_VOICE=mock`;
-- `CALLGUARD_WEBHOOK_URL` appends a webhook hook for `threat.level_change`, so the URL never lands in a file.
+- `HEARSAY_ROOT`, `ATHENA_ATTACKER_WEIGHTS` (top-level paths; Keyguard is vendored, see keyguard/VENDORED.md);
+- `ATHENA_<SECTION>_<FIELD>` for any scalar field, e.g. `ATHENA_SERVER_PORT=9000`, `ATHENA_DRIVERS_VOICE=mock`;
+- `ATHENA_WEBHOOK_URL` appends a webhook hook for `threat.level_change`, so the URL never lands in a file.
 """
 from __future__ import annotations
 
@@ -142,10 +142,10 @@ def _fill(obj, values: dict, where: str):
 
 
 def load(path: str | Path | None = None, env: dict[str, str] | None = None) -> Config:
-    """Load config. `path=None` reads `<repo>/callguard.toml` if present; `env` defaults to os.environ."""
+    """Load config. `path=None` reads `<repo>/athena.toml` if present; `env` defaults to os.environ."""
     env = os.environ if env is None else env
     cfg = Config()
-    p = Path(path) if path else REPO / "callguard.toml"
+    p = Path(path) if path else REPO / "athena.toml"
     raw = tomllib.loads(p.read_text(encoding="utf-8")) if (path or p.exists()) else {}
 
     hooks = raw.pop("hooks", None)
@@ -155,17 +155,17 @@ def load(path: str | Path | None = None, env: dict[str, str] | None = None) -> C
         _fill(getattr(cfg, name), raw.pop(name, {}), name)
     _fill(cfg, raw, "root")
 
-    for key, attr in (("HEARSAY_ROOT", "hearsay_root"), ("CALLGUARD_ATTACKER_WEIGHTS", "attacker_weights")):
+    for key, attr in (("HEARSAY_ROOT", "hearsay_root"), ("ATHENA_ATTACKER_WEIGHTS", "attacker_weights")):
         if env.get(key):
             setattr(cfg, attr, _coerce(env[key], getattr(cfg, attr)))
     for name, cls in SECTIONS.items():
         section = getattr(cfg, name)
         for f in fields(cls):
-            key = f"CALLGUARD_{name}_{f.name}".upper()
+            key = f"ATHENA_{name}_{f.name}".upper()
             if key in env:
                 setattr(section, f.name, _coerce(env[key], getattr(section, f.name)))
-    if env.get("CALLGUARD_WEBHOOK_URL"):
-        cfg.hooks.append(HookConfig("webhook", url=env["CALLGUARD_WEBHOOK_URL"]))
+    if env.get("ATHENA_WEBHOOK_URL"):
+        cfg.hooks.append(HookConfig("webhook", url=env["ATHENA_WEBHOOK_URL"]))
 
     _validate(cfg)
     return cfg

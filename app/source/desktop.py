@@ -1,4 +1,4 @@
-"""CallGuard as a desktop app: engine + dashboard server in-process, dashboard in a native window.
+"""Athena as a desktop app: engine + dashboard server in-process, dashboard in a native window.
 
   python -m app.source.desktop [--meet-url URL] [--port N] [--drivers real|mock] [--no-window]
 
@@ -19,12 +19,12 @@ import webbrowser
 
 from app.source.cli import _cfg
 
-log = logging.getLogger("callguard.desktop")
+log = logging.getLogger("athena.desktop")
 STOP = threading.Event()  # set it to shut a headless main() down (tests; window-less runs use Ctrl+C)
 
 
 def _wait_healthy(url: str, server, thread: threading.Thread | None = None, timeout: float = 30.0) -> bool:
-    """True once OUR server answers GET /api/health; False if it died (e.g. the port is taken by another CallGuard,
+    """True once OUR server answers GET /api/health; False if it died (e.g. the port is taken by another Athena,
     which would answer the health check itself) or the timeout passed."""
     end = time.monotonic() + timeout
     while time.monotonic() < end and not server.should_exit and (thread is None or thread.is_alive()):
@@ -40,18 +40,18 @@ def _wait_healthy(url: str, server, thread: threading.Thread | None = None, time
     return False
 
 
-LOADING = """<!doctype html><html><head><meta charset="utf-8"><title>CallGuard</title></head>
-<body style="margin:0;height:100vh;display:grid;place-items:center;background:#0d1117;color:#e6edf3;
+LOADING = """<!doctype html><html><head><meta charset="utf-8"><title>Athena</title></head>
+<body style="margin:0;height:100vh;display:grid;place-items:center;background:#000;color:#fafafa;
 font:14px/1.5 system-ui,'Segoe UI',sans-serif"><div style="text-align:center">
-<div style="font-size:16px;font-weight:650">CallGuard</div>
-<div id="s" style="color:#9aa6b4;margin-top:6px">Starting&hellip;</div></div></body></html>"""
+<div style="font-size:22px;font-weight:800;color:#fdae17">athena</div>
+<div id="s" style="color:#a3a3a3;margin-top:6px">Starting&hellip;</div></div></body></html>"""
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.WARNING, format="[%(name)s] %(message)s")
-    p = argparse.ArgumentParser(prog="callguard app", description=__doc__,
+    p = argparse.ArgumentParser(prog="athena app", description=__doc__,
                                 formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument("--config", help="TOML config (default: ./callguard.toml if present)")
+    p.add_argument("--config", help="TOML config (default: ./athena.toml if present)")
     p.add_argument("--drivers", choices=("real", "mock"), help="override every driver slot")
     p.add_argument("--port", type=int)
     p.add_argument("--meet-url", help="join this Meet as soon as the app is up")
@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         return _run(args)
     try:                                                # the window first, with a status line, while models load
         import webview
-        win = webview.create_window("CallGuard", html=LOADING, width=1400, height=950, min_size=(900, 640))
+        win = webview.create_window("Athena", html=LOADING, width=1400, height=950, min_size=(900, 640))
     except Exception as e:                              # ImportError, no WebView2 runtime, no GUI backend
         log.warning("native window unavailable (%s); opening the system browser", e)
         return _run(args, on_ready=webbrowser.open)
@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     def boot() -> None:
         out["rc"] = _run(args, say=say, on_ready=win.load_url)
         if out["rc"]:
-            say("CallGuard could not start: see the terminal")
+            say("Athena could not start: see the terminal")
     win.events.closed += STOP.set                       # closing the window stops everything
     try:
         webview.start(boot)                             # boot runs on its own thread; the window owns this one
@@ -103,20 +103,20 @@ def _run(args, say=lambda msg: None, on_ready=None) -> int:
     url = f"http://{cfg.server.host}:{port}/"
     bus = EventBus()
     hooks.install(bus, cfg.hooks)
-    print(f"[callguard] loading drivers: voice={cfg.drivers.voice} attacker={cfg.drivers.attacker} "
+    print(f"[athena] loading drivers: voice={cfg.drivers.voice} attacker={cfg.drivers.attacker} "
           f"shield={cfg.drivers.shield} secret={cfg.drivers.secret} ...", flush=True)
     say("Loading the voice, keystroke and speech models (about 20 s)...")
     pipe = Pipeline(cfg, bus)
     pipe.meet_port = port                               # the test room's bridge dials this server
     if port != 8765:
-        print(f"[callguard] note: the Meet extension connects to port 8765; on port {port} only the test room is "
+        print(f"[athena] note: the Meet extension connects to port 8765; on port {port} only the test room is "
               "protected", file=sys.stderr, flush=True)
     say("Warming up the voice model...")
     pipe.warm_up()
     if hasattr(pipe, "start_meet"):
         pipe.start_meet()                               # before the server: no dashboard Arm can race its reset
     else:
-        print("[callguard] this build has no meet mode yet; the pipeline stays idle", flush=True)
+        print("[athena] this build has no meet mode yet; the pipeline stays idle", flush=True)
     say("Starting the dashboard...")
     app = create_app(bus, controls=pipe)
     try:
@@ -126,22 +126,22 @@ def _run(args, say=lambda msg: None, on_ready=None) -> int:
         log.warning("Meet connector not available (%s); dashboard only", e)
     server = uvicorn.Server(uvicorn.Config(app, host=cfg.server.host, port=port, log_level="warning"))
     server.install_signal_handlers = lambda: None       # not the main thread: Ctrl+C is handled below
-    srv = threading.Thread(target=server.run, name="callguard-server", daemon=True)
+    srv = threading.Thread(target=server.run, name="athena-server", daemon=True)
     srv.start()
     try:
         if not _wait_healthy(url, server, srv):
-            print(f"[callguard] server did not come up on {url}", file=sys.stderr, flush=True)
+            print(f"[athena] server did not come up on {url}", file=sys.stderr, flush=True)
             return 1
         pipe.announce()                                 # the server wasn't listening when meet mode started
-        print(f"[callguard] dashboard: {url}", flush=True)
+        print(f"[athena] dashboard: {url}", flush=True)
         if args.meet_url and hasattr(pipe, "meet"):
             try:
                 pipe.meet("join", args.meet_url)
             except Exception as e:                      # a bad URL or no browser must not kill the app
-                print(f"[callguard] could not join {args.meet_url}: {e}", file=sys.stderr, flush=True)
+                print(f"[athena] could not join {args.meet_url}: {e}", file=sys.stderr, flush=True)
         if on_ready is not None:
             on_ready(url)
-        print("[callguard] serving; close the window or Ctrl+C to stop", flush=True)
+        print("[athena] serving; close the window or Ctrl+C to stop", flush=True)
         while srv.is_alive() and not server.should_exit and not STOP.wait(0.2):
             pass
     except KeyboardInterrupt:

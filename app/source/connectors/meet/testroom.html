@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CallGuard test room</title>
+<title>Athena test room</title>
 <style>
-  :root { --bg: #0f1216; --panel: #181d23; --text: #e6e9ee; --dim: #8b95a3; --accent: #4fa3ff; --ok: #3ecf8e;
-          --warn: #ffb547; --bad: #ff5d5d; }
+  :root { --bg: #000000; --panel: #0b0b0b; --text: #fafafa; --dim: #a3a3a3; --accent: #fdae17; --ok: #d4d4d4;
+          --warn: #ffd98a; --bad: #ff4d4d; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
   main { max-width: 860px; margin: 0 auto; padding: 20px 16px 40px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
@@ -14,13 +14,13 @@
   section { background: var(--panel); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
   h2 { font-size: 15px; margin: 0 0 10px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
-  button, select, input[type=file] { font: inherit; color: var(--text); background: #232a33; border: 1px solid #2f3843;
+  button, select, input[type=file] { font: inherit; color: var(--text); background: #161616; border: 1px solid #272727;
           border-radius: 6px; padding: 6px 12px; cursor: pointer; }
   button:hover { border-color: var(--accent); }
   button:disabled { opacity: .45; cursor: default; }
   select { max-width: 320px; }
-  .meter { flex: 1 1 200px; height: 10px; background: #0b0e11; border-radius: 5px; overflow: hidden; min-width: 120px; }
-  .meter > div { height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+  .meter { flex: 1 1 200px; height: 10px; background: #161616; border-radius: 5px; overflow: hidden; min-width: 120px; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
   .label { width: 190px; color: var(--dim); }
   .stat { font-variant-numeric: tabular-nums; color: var(--dim); }
   .stat b { color: var(--text); font-weight: 600; }
@@ -28,15 +28,15 @@
   a { color: var(--accent); }
   .ai { color: var(--bad); font-weight: 600; } .real { color: var(--ok); font-weight: 600; }
   table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
-  td, th { text-align: left; padding: 3px 6px; border-bottom: 1px solid #2f3843; }
+  td, th { text-align: left; padding: 3px 6px; border-bottom: 1px solid #272727; }
   th { color: var(--dim); font-weight: 500; }
-  code { background: #0b0e11; padding: 1px 5px; border-radius: 4px; }
+  code { background: #161616; padding: 1px 5px; border-radius: 4px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>CallGuard test room</h1>
-  <p class="lead">A local meeting with one fake participant. Your mic goes through CallGuard exactly as in Google Meet
+  <h1>Athena test room</h1>
+  <p class="lead">A local meeting with one fake participant. Your mic goes through Athena exactly as in Google Meet
     (the same bridge), then over a real WebRTC connection to "the other side", which you can listen to and record.
     Read a fake code aloud while the shield is armed and hear what the room hears. Use headphones.</p>
 
@@ -52,7 +52,7 @@
       <button id="leave" disabled>Leave</button>
       <label><input type="checkbox" id="listen"> listen to what the room hears</label>
       <button id="rec" disabled>Record</button>
-      <a id="saved" hidden download="callguard-room.webm">download recording</a>
+      <a id="saved" hidden download="athena-room.webm">download recording</a>
     </div>
     <div class="row"><span class="label">the room hears you</span><div class="meter"><div id="m-sent"></div></div></div>
     <audio id="monitor" autoplay muted></audio>
@@ -79,11 +79,11 @@
       shield's case), then read out a code and your PIN. The scam calls ask you to type a code, then to read one out loud ("read out your PIN", "read me the
       code"). That request arms the Secret Shield: read a fake number in the pause after it and the room hears a tone.</p>
     <div class="row"><span class="label">caller</span><div class="meter"><div id="m-agent"></div></div></div>
-    <div class="row"><span class="label">CallGuard (Hearsay) says</span><span class="stat" id="verdict">-</span></div>
+    <div class="row"><span class="label">Athena (Hearsay) says</span><span class="stat" id="verdict">-</span></div>
     <p class="stat">A clip's verdict is the mean over its scored 4 s windows (Hearsay scores the caller's audio every
       2 s). Judge my voice: talk for 10 s or more; the verdict is the mean of your last 3 windows.</p>
     <table id="results" hidden><thead><tr><th>clip</th><th>truth</th><th>windows</th><th>mean p(AI)</th>
-      <th>CallGuard</th><th></th></tr></thead><tbody></tbody></table>
+      <th>Athena</th><th></th></tr></thead><tbody></tbody></table>
     <audio id="agent" autoplay></audio>
   </section>
 
@@ -101,12 +101,12 @@
   </section>
 </main>
 
-<script>window.__callguardPort = Number(location.port) || 80;</script>
+<script>window.__athenaPort = Number(location.port) || 80;</script>
 <script src="/meet/static/bridge.js"></script>
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
-const B = window.__callguardBridge;
+const B = window.__athenaBridge;
 const params = new URLSearchParams(location.search);
 const room = window.__room = { you: null, caller: null, meters: [] };
 
@@ -144,7 +144,7 @@ async function loopback(PC, track) {
   return { a, b, stream: await got, close() { a.close(); b.close(); } };
 }
 
-// ---- you: mic -> (bridge: CallGuard) -> WebRTC -> "the room" ----
+// ---- you: mic -> (bridge: Athena) -> WebRTC -> "the room" ----
 async function join() {
   $('join').disabled = true;
   try {
@@ -237,7 +237,7 @@ function showVerdict() {
   ws.onclose = () => setTimeout(events, 1000);
 })();
 
-// A new clip or your mic = a new speaker: CallGuard forgets the previous voice (the dashboard's Flush).
+// A new clip or your mic = a new speaker: Athena forgets the previous voice (the dashboard's Flush).
 const flush = () => fetch('/api/control/voice/flush', { method: 'POST' }).catch(() => {});
 
 async function play(name) {
@@ -306,7 +306,7 @@ $('playall').onclick = async () => {
   $('playall').disabled = false;
 };
 
-// ---- be the caller: your mic, raw (no echo cancellation / noise suppression / AGC, not through the CallGuard
+// ---- be the caller: your mic, raw (no echo cancellation / noise suppression / AGC, not through the Athena
 // shield), as the far end. Use headphones.
 $('speak').onclick = async () => {
   if (room.caller && room.caller.mic) { stopClip(); session = null; showVerdict(); return; }
@@ -341,7 +341,7 @@ document.querySelectorAll('[data-secret]').forEach((b) => {
 
 // ---- bridge status ----
 setInterval(() => {
-  if (!B) { $('bridge').textContent = 'bridge not loaded (is CallGuard running on this port?)'; return; }
+  if (!B) { $('bridge').textContent = 'bridge not loaded (is Athena running on this port?)'; return; }
   const s = B.stats;
   $('bridge').innerHTML = `source <b>${B.source}</b> &middot; mic <b class="${s.mic}">${s.mic}</b> &middot; ` +
     `sent <b>${s.micSent}</b> / back <b>${s.micBack}</b> blocks &middot; round trip <b>` +

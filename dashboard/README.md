@@ -2,7 +2,7 @@
 
 FastAPI server (`server.py`) + a static UI (`static/`, no CDNs). `create_app(bus, state_provider, controls)` serves
 the page, pushes every bus event over `/ws`, and exposes the demo controls. The desktop app shows it in a native
-window; `callguard run` opens it in the browser at <http://127.0.0.1:8765/>.
+window; `athena run` opens it in the browser at <http://127.0.0.1:8765/>.
 
 | route | what |
 |---|---|

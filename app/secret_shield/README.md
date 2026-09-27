@@ -1,6 +1,6 @@
 # Secret Shield pillar: don't read the code to a fake caller
 
-While the caller is unverified (Hearsay p >= 0.5), after they ask for a code, or when armed by hand, CallGuard
+While the caller is unverified (Hearsay p >= 0.5), after they ask for a code, or when armed by hand, Athena
 delays your outgoing voice by 500 ms and cuts out digit runs, passwords and card numbers before the meeting hears
 them ([`docs/plans/06_spoken_secret_shield.md`](../../docs/plans/06_spoken_secret_shield.md)). Two parts: the
 **spotter** (a streaming recognizer that says *where* a secret is, never *what*) and the **redactor** (the delay line
@@ -28,7 +28,7 @@ that tones those samples out on the audio thread).
 
 Built here, no upstream repo. Get the model once: `python -m app.secret_shield.get_model` (downloads to
 `runs/models/`, checks its sha256, adds the low-latency decoder options). Config
-([`callguard.example.toml`](../../callguard.example.toml)): `[drivers] secret = "real"|"mock"`, and the `[secret]`
+([`athena.example.toml`](../../athena.example.toml)): `[drivers] secret = "real"|"mock"`, and the `[secret]`
 section (`delay_ms`, `style`, `arm_on_voice`, `arm_voice`, `arm_on_request`, `min_digits`, `gap_s`, ...).
 
 ## Plug in a new spotter

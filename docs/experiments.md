@@ -9,7 +9,7 @@ repos read-only (`KEYGUARD_ROOT`, `HEARSAY_ROOT`, defaulting to the sibling chec
 | `app/secret_shield/eval/secret_shield_eval.py` | Does the spoken-secret shield (Vosk spotter + 500 ms delay line) stop a code being read out, without muting normal speech or false-triggering on the caller? (plan 06 §5) | `docs/reports/secret_shield.{md,csv}` |
 
 ```
-cd CallGuard
+cd Athena
 uv run python app/keystroke_guard/eval/attack_under_speech.py   # ~12 min on 8 CPU threads: ~7.5 attack, ~4.5 Hearsay check
 uv run python -m app.secret_shield.get_model                    # once: Vosk model -> runs/models (sha256-pinned)
 uv run python app/secret_shield/eval/secret_shield_eval.py      # ~15 min; --tune = the tuning set only

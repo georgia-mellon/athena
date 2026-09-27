@@ -1,5 +1,5 @@
 [project]
-name = "callguard"
+name = "athena"
 version = "0.1.0"
 description = "Live call security: synthetic-voice detection (Hearsay) + keystroke-leak shield (Keyguard) with a threat dashboard"
 requires-python = ">=3.12,<3.13"
@@ -36,7 +36,7 @@ dependencies = [
 dev = ["pytest>=8"]
 
 [project.scripts]
-callguard = "app.source.cli:main"
+athena = "app.source.cli:main"
 
 [tool.uv]
 dev-dependencies = ["pytest>=8"]

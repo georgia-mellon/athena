@@ -1,7 +1,7 @@
-# 01: CallGuard product spec
+# 01: Athena product spec
 
 ## 1. One sentence
-CallGuard sits between you and your meeting app. It checks whether the voice you are hearing is a real person
+Athena sits between you and your meeting app. It checks whether the voice you are hearing is a real person
 (**Hearsay**), keeps the keys you type from leaking through your microphone (**Keyguard**), and turns both into
 one live **threat score** on a dashboard.
 
@@ -12,7 +12,7 @@ we're on the line"*. Two things go wrong at once:
 2. **Outbound:** the victim's keystrokes are audible in their mic stream. The agent (or anyone recording the call)
    runs a keystroke classifier and reads the code, with no malware needed.
 
-CallGuard's answer, live on the dashboard: the **voice-authenticity light goes red**, the **keystroke-exposure meter**
+Athena's answer, live on the dashboard: the **voice-authenticity light goes red**, the **keystroke-exposure meter**
 shows what an eavesdropper would read, the **shield** kicks in so the eavesdropper reads noise, and the **threat
 score** escalates to CRITICAL: *synthetic caller + sensitive typing = social-engineering attack in progress*.
 
@@ -20,9 +20,9 @@ score** escalates to CRITICAL: *synthetic caller + sensitive typing = social-eng
 | surface | who | what |
 |---|---|---|
 | Dashboard (browser, `localhost:8765`) | the person on the call; judges at the expo | live threat score, voice light, attacker readout (raw vs. shielded), timeline, event log |
-| Meeting app (Zoom primary; Meet/Teams work the same way) | everyone on the call | unchanged app; CallGuard is a virtual microphone + loopback listener (`docs/plans/03`) |
+| Meeting app (Zoom primary; Meet/Teams work the same way) | everyone on the call | unchanged app; Athena is a virtual microphone + loopback listener (`docs/plans/03`) |
 | Hooks | integrators | webhook / console / file sinks for threat events (`docs/plans/02` §5) |
-| CLI | us | `callguard run --mode live|replay`, `callguard devices`, `callguard bench` |
+| CLI | us | `athena run --mode live|replay`, `athena devices`, `athena bench` |
 
 ## 4. Functional requirements
 **F1 Inbound voice authenticity (Hearsay).** Capture the far-end audio (meeting output) and keep a rolling 4 s
@@ -70,9 +70,9 @@ mic before they reach the meeting. The redaction is threat-aware, logs only the 
 - **Reproducible:** `uv` env, pinned deps; tests run without models (mock drivers).
 
 ## 6. Acceptance (definition of done for the expo)
-1. `callguard run --mode replay --scenario ai_caller` plays the full story end to end: the dashboard goes
+1. `athena run --mode replay --scenario ai_caller` plays the full story end to end: the dashboard goes
    SAFE → WARN → CRITICAL and back; the attacker readout reads the typed fake code without the shield and noise with it.
-2. `callguard run --mode live` with Zoom: CallGuard's virtual mic is selectable in Zoom; far-end audio is scored;
+2. `athena run --mode live` with Zoom: Athena's virtual mic is selectable in Zoom; far-end audio is scored;
    a TTS "agent" joining from a second device triggers the red voice light.
 3. The attack proof (`docs/plans/04`): attacker accuracy with speech in the background, well above chance, and near
    chance with the shield on; speech quality numbers for the shielded audio.

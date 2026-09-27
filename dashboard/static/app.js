@@ -1,4 +1,4 @@
-// CallGuard dashboard: one WebSocket, every event is {topic, t, data}. No build step, no network beyond this server.
+// Athena dashboard: one WebSocket, every event is {topic, t, data}. No build step, no network beyond this server.
 "use strict";
 const $ = (id) => document.getElementById(id);
 const MAXC = 20;               // characters shown per keyboard row (the threat engine's 20-keystroke window)
@@ -90,6 +90,8 @@ function renderSpark() {
     st.voice.map(([t, p]) => `${(600 * (t - (now - SPARK_S)) / SPARK_S).toFixed(1)},${(120 * (1 - p)).toFixed(1)}`).join(" "));
 }
 setInterval(renderSpark, 1000);  // keep the window sliding while the far end is silent
+const MEET_EVENT = { joined: "joined the call (Meet)", left: "left the call (Meet)", meet_open: "Meet tab connected (not in a call)",
+                     meet_closed: "Meet tab closed or disconnected", test_room: "test room connected" };
 function renderFlush() {
   st.recent = []; st.voice = []; st.vclass = null;
   $("vlight").className = "vlight none"; $("vlabel").textContent = "listening…"; $("vp").textContent = "–";
@@ -123,6 +125,10 @@ $("gate").oninput = () => { st.gateDragging = true; renderGate(Number($("gate").
 $("gate").onchange = () => { st.gateDragging = false; post("/api/control/voice/threshold", { db: Number($("gate").value) }); };
 function renderSystem(d) {
   st.ready = !!d.ready;
+  if (d.voice_source) {
+    for (const b of document.querySelectorAll("[data-src]")) b.classList.toggle("on", b.dataset.src === d.voice_source);
+    $("voice-h").textContent = d.voice_source === "mic" ? "Your mic (test)" : "Caller voice";
+  }
   if (d.speech_db != null) renderGate(Number(d.speech_db));
   renderConn();
 }
@@ -302,7 +308,9 @@ function handle(m) {
     else if (m.topic === "shield.state") text = `shield → ${d.mode}`;
     else if (m.topic === "secret.blocked") text = `${d.category === "digits" ? d.length + "-digit code" : d.category} ${d.allowed ? "allowed" : "blocked"} from your voice`;
     else if (m.topic === "secret.request") text = "caller asked for a code";
-    else if (m.topic === "voice.flush") text = d.reason === "gap" ? "new speaker (long silence): voice history cleared" : "voice history flushed";
+    else if (m.topic === "meet.call") text = MEET_EVENT[d.event] || "meeting: " + d.event;
+    else if (m.topic === "voice.flush") text = d.reason === "gap" ? "new speaker (long silence): voice history cleared"
+      : d.reason === "source" ? "now judging " + ($("voice-h").textContent || "the voice") : "voice history flushed";
     else if (m.topic === "control.meet") text = `meeting → ${d.action}${d.url ? " " + d.url : ""}`;
     else if (m.topic === "keyguard.burst") text = `keyguard: ${txt(d.n_keys)} keys typed, Ares vs Athena match started`;
     else if (m.topic === "keyguard.arms_race") text = `keyguard: match done, ${d.protected == null ? "no verdict" : d.protected ? "secret protected" : "secret leaked"}`;
@@ -336,6 +344,7 @@ async function post(path, body) {
 }
 for (const b of document.querySelectorAll("[data-mode]")) b.onclick = () => post("/api/control/shield", { mode: b.dataset.mode });
 for (const b of document.querySelectorAll("[data-sec]")) b.onclick = () => post("/api/control/secret", { action: b.dataset.sec });
+for (const b of document.querySelectorAll("[data-src]")) b.onclick = () => post("/api/control/voice/source", { source: b.dataset.src });
 $("voice-flush").onclick = () => post("/api/control/voice/flush", {});
 $("meet-ext").onclick = () => post("/api/control/meet", { action: "extension" });
 

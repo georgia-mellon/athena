@@ -1,4 +1,4 @@
-"""Copy the vendored Keyguard's weights and data (never committed) from a Keyguard checkout into CallGuard.
+"""Copy the vendored Keyguard's weights and data (never committed) from a Keyguard checkout into Athena.
 
 The code lives in keyguard/ (vendored); its weights/data go to runs/keyguard/ and data/keyguard/ (gitignored), which
 is where keyguard.config.RUNS / DATA point. Source checkout: KEYGUARD_ROOT, else the first of upstream/keyguard,
@@ -27,7 +27,7 @@ ASSETS = [
     ("runs/demo_cache.json", RUNS, False),      # ... its demo-mode cache
     ("runs/pareto.json", RUNS, False),
     ("runs/arena", RUNS, False),                # Keyguard /api/arena: past co-training runs
-    ("runs/arena_memory.jsonl", RUNS, False),   # Ares/Athena local memory (appended to by CallGuard's matches)
+    ("runs/arena_memory.jsonl", RUNS, False),   # Ares/Athena local memory (appended to by Athena's matches)
 ]
 
 
@@ -45,7 +45,7 @@ def dest(rel: str, root: Path) -> Path:
 
 
 def missing() -> list[str]:
-    """Required assets not yet in CallGuard."""
+    """Required assets not yet in Athena."""
     return [rel for rel, root, req in ASSETS if req and not dest(rel, root).exists()]
 
 
@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         print("no Keyguard checkout found: pass --root or set KEYGUARD_ROOT", file=sys.stderr)
         return 1
     if src.resolve() == REPO.resolve():
-        print("--root must be the Keyguard checkout, not CallGuard", file=sys.stderr)
+        print("--root must be the Keyguard checkout, not Athena", file=sys.stderr)
         return 1
     failed = []
     for rel, root, required in ASSETS:

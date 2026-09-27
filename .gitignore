@@ -10,7 +10,7 @@ __pycache__/
 *.npz
 *.parquet
 .env
-callguard.toml
+athena.toml
 runs/
 logs/
 demo/audio/

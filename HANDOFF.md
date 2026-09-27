@@ -1,6 +1,6 @@
-# Handoff: CallGuard phase 1 (paused 2026-09-26 ~14:20 EDT)
+# Handoff: Athena phase 1 (paused 2026-09-26 ~14:20 EDT)
 
-Paused by the owner so that a dedicated Claude session can continue CallGuard here, while the original session works
+Paused by the owner so that a dedicated Claude session can continue Athena here, while the original session works
 only on Hearsay. **Start by reading `CLAUDE.md`, then `docs/plans/00_brief.md`** (owner intent), then plans 01-05.
 
 ## Where things stand
@@ -42,11 +42,11 @@ no devices), at the commit that added this file.
   `LordKarV/keyboard-acoustic-shield`; `git pull` it for the teammate's latest).
 - `runs/` (gitignored) holds the provisional attacker and the Hearsay calibration cache.
 
-## Hearsay status the CallGuard session should know
+## Hearsay status the Athena session should know
 - The organizers' scoring is now confirmed as **Pspoof = 0.3, Cfa = 4** (moderator message, 2026-09-26). Hearsay's
   numbers are being recomputed by the Hearsay session. If the Hearsay deployment threshold changes, re-run the
   calibration (delete `runs/hearsay_calibration.json`).
-- (Superseded 2026-09-26: the freeze is lifted; see the latest update below.) CallGuard only reads Hearsay.
+- (Superseded 2026-09-26: the freeze is lifted; see the latest update below.) Athena only reads Hearsay.
 
 ## Owner to-dos
 - Install VB-CABLE (vb-audio.com/Cable, admin, reboot) for live Zoom mode.
@@ -58,10 +58,10 @@ scope for this phase and not blocked on upstream**. Build it after WP8 lands (it
 chain after the Keyguard shield, with a constant delay line like the existing shield).
 
 ## Update 2026-09-26 evening: phase 1 complete up to the upstream blockers
-Built by the CallGuard session. PRs (open, for the owner to merge in order): **#1** WP3 Hearsay driver, **#2** WP7
+Built by the Athena session. PRs (open, for the owner to merge in order): **#1** WP3 Hearsay driver, **#2** WP7
 attack proof, **#3** WP8 integration, **#4** WP9 secret shield (stacked on #3). `uv run pytest -q`: 72 passed with
 the upstream repos + Vosk model present.
-- `callguard run --mode replay --scenario ai_caller --drivers real` plays the full story on the dashboard:
+- `athena run --mode replay --scenario ai_caller --drivers real` plays the full story on the dashboard:
   SAFE → WATCH → WARN → CRITICAL (~26-29 s) → WARN (shield on) → WATCH → SAFE; the secret shield arms on the
   synthetic voice and hears the agent's "read me the code".
 - The six contract mismatches above are reconciled (see PR #3). An independent review's findings are fixed
@@ -73,17 +73,17 @@ the upstream repos + Vosk model present.
   in Hearsay); record a consenting teammate reading the fake code to `demo/audio/recorded/victim_code.wav` (the
   secret-shield demo beat and a real eval set need it; never TTS); decide on the agent voice (currently a dataset
   ElevenLabs clone of a LibriSpeech speaker, brief constraint 4 wants a consenting teammate's clone); confirm
-  whether CallGuard should keep Hearsay's current 4:1 threshold or follow Pspoof=0.3/Cfa=4 once the Hearsay
+  whether Athena should keep Hearsay's current 4:1 threshold or follow Pspoof=0.3/Cfa=4 once the Hearsay
   session recomputes it (delete runs/hearsay_calibration.json after it changes).
 
 ## Update 2026-09-26 night: desktop app + Google Meet, repo restructured
 Branch `restructure-app-layout` (docs on `docs-desktop-meet`); not merged to `main` yet.
 - **Layout:** `app/source` (runtime), `app/hearsay` | `app/keystroke_guard` | `app/secret_shield` (driver around the
   real model, mock, harness, eval, README), `dashboard/`, `demo/`, `docs/` (plans, reports, experiments,
-  demo_runbook, meeting_setup), `tests/`. Console script: `callguard = app.source.cli:main`.
-- **Desktop app:** `uv run callguard app` (pywebview window; system browser fallback). **Google Meet connector**
-  (`app/source/connectors/meet`): CallGuard opens Meet in its own Chrome/Edge profile and injects an audio bridge
-  over DevTools, so Meet needs no VB-CABLE. `callguard run --mode meet` is the same engine with the dashboard in the
+  demo_runbook, meeting_setup), `tests/`. Console script: `athena = app.source.cli:main`.
+- **Desktop app:** `uv run athena app` (pywebview window; system browser fallback). **Google Meet connector**
+  (`app/source/connectors/meet`): Athena opens Meet in its own Chrome/Edge profile and injects an audio bridge
+  over DevTools, so Meet needs no VB-CABLE. `athena run --mode meet` is the same engine with the dashboard in the
   browser. Local test room at `/meet/testroom`. VB-CABLE (`--mode live`) is now only for Zoom/Teams: see the
   appendix of `docs/meeting_setup.md` (renamed from `docs/zoom_setup.md`).
 - **Pillar harnesses:** `python -m app.<pillar>.harness` checks any driver (mock, real, `module:Class`) against its
@@ -91,7 +91,7 @@ Branch `restructure-app-layout` (docs on `docs-desktop-meet`); not merged to `ma
 - **Measured:** full-stack meeting-room test (headless Chrome test room → bridge → meet mode, real drivers) blocked
   a spoken 6-digit code with ~1 s leaked at its start. `uv run pytest -q`: 90 passed (84 passed + 7 skipped in a
   checkout without the Vosk model).
-- **Hearsay for the main track:** the model repository is [danmano411/hearsay](https://github.com/danmano411/hearsay); CallGuard itself lives in [georgia-mellon/callguard](https://github.com/georgia-mellon/callguard), a fork of it, and
+- **Hearsay for the main track:** the model repository is [danmano411/hearsay](https://github.com/danmano411/hearsay); Athena itself lives in [georgia-mellon/athena](https://github.com/georgia-mellon/athena), a fork of it, and
   a dedicated README section, per the NSA organizers' guidance. The NSA challenge submission stays separate and frozen.
 - **Still blocked upstream:** Keyguard's final attacker weights, the adversarial shield stage, the CTC free-typing
   attacker (teammate); the owner's consenting victim recording of a fake code (Secret Shield eval + demo beat).
@@ -99,21 +99,21 @@ Branch `restructure-app-layout` (docs on `docs-desktop-meet`); not merged to `ma
   `docs/meeting_setup.md`.
 
 ## Update 2026-09-26 late: repository move
-CallGuard now lives at https://github.com/georgia-mellon/callguard, a fork of danmano411/hearsay whose main branch
-carries the CallGuard application (both histories kept). danmano411/callguard is no longer used. No attribution
+Athena now lives at https://github.com/georgia-mellon/athena, a fork of danmano411/hearsay whose main branch
+carries the Athena application (both histories kept). danmano411/callguard is no longer used. No attribution
 trailers in commits or PRs (owner rule, same as Hearsay). The root README and the Hearsay overview are templates to be
 written.
 
 ## Update 2026-09-26 night: Hearsay E5 is the default
 The Hearsay freeze is lifted: the NSA review confirmed the scorer (Pspoof 0.3, Cfa 4, higher score = real). Official
 HGT test score for R5: minDCF 0.0584, EER 2.5 % (organizers); E5 is Hearsay's final submission (score pending).
-CallGuard's default voice model is now **E5** (LR fusion of R4ft + R6 + R1, `data/models/e5/e5_fusion.json`), with r5 /
+Athena's default voice model is now **E5** (LR fusion of R4ft + R6 + R1, `data/models/e5/e5_fusion.json`), with r5 /
 r4ft selectable. E5 on CPU, 4 threads: ~1.4 s per 4 s window (keeps the 2 s hop, no skipped windows in the realtime
 replay), 20/20 on held-out clips, threshold 0.97 calibrated on E5's val_testlike cross-fitted scores (cache keyed on
 both checkpoint shas). The ai_caller demo was retimed (agent 12-44 s, typing at 24 s, shield at 31 s) so the voice
 risk has built up when the typing starts.
 
-## Update 2026-09-27 early: Keyguard's Ares-vs-Athena agents live in CallGuard (branch wp11)
+## Update 2026-09-27 early: Keyguard's Ares-vs-Athena agents live in Athena (branch wp11)
 - **Vendored Keyguard** (`keyguard/`, see `VENDORED.md`); console mounted at `/keyguard/`, its system/engine maps
   linked from the dashboard's new **Ares ⚔️ vs Athena 🦉** panel (live moves, rounds, per-agent before/after, verdict).
 - **Live match** (`app/keystroke_guard/agents.py`): each typing burst (raw mic, `[keyguard] burst_gap_s` of silence)

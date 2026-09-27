@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CallGuard for Google Meet",
+  "name": "Athena for Google Meet",
   "version": "1.0",
-  "description": "Connects Google Meet's audio to the CallGuard app running on this computer (127.0.0.1:8765).",
+  "description": "Connects Google Meet's audio to the Athena app running on this computer (127.0.0.1:8765).",
   "content_scripts": [{
     "matches": ["https://meet.google.com/*"],
     "js": ["bridge.js"],

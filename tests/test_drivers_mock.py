@@ -145,8 +145,8 @@ def test_hearsay_mode_defaults_to_e5_and_others_stay_selectable(monkeypatch, tmp
     monkeypatch.setattr(base, "_real", lambda mod, cls, **kw: seen.append(kw["mode"]))
     none = tmp_path / "none.toml"
     none.write_text("")
-    for env, mode in (({}, "e5"), ({"CALLGUARD_DRIVERS_HEARSAY_MODE": "r5"}, "r5"),
-                      ({"CALLGUARD_DRIVERS_HEARSAY_MODE": "r4ft"}, "r4ft")):
+    for env, mode in (({}, "e5"), ({"ATHENA_DRIVERS_HEARSAY_MODE": "r5"}, "r5"),
+                      ({"ATHENA_DRIVERS_HEARSAY_MODE": "r4ft"}, "r4ft")):
         cfg = config.load(none, env=env)
         assert cfg.drivers.hearsay_mode == mode
         cfg.drivers.voice = "real"
@@ -154,4 +154,4 @@ def test_hearsay_mode_defaults_to_e5_and_others_stay_selectable(monkeypatch, tmp
     base.make_voice({"voice": "real"})                  # a bare dict: same default
     assert seen == ["e5", "r5", "r4ft", "e5"]
     with pytest.raises(ValueError):
-        config.load(none, env={"CALLGUARD_DRIVERS_HEARSAY_MODE": "r3"})
+        config.load(none, env={"ATHENA_DRIVERS_HEARSAY_MODE": "r3"})

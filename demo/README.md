@@ -13,7 +13,7 @@ Build and check:
 
     .venv\Scripts\python demo\build_scenario_audio.py
     .venv\Scripts\python -c "from app.source.pipeline import load_scenario; print(load_scenario('ai_caller').seconds)"
-    uv run callguard run --mode replay --scenario ai_caller
+    uv run athena run --mode replay --scenario ai_caller
 
 Live Google Meet test: `python demo/render_agent.py`, then on the second device (in the same meeting)
 `python demo/agent_caller.py demo/audio/agent_lines --device "<its speaker>"`. The clips in `demo/audio/` also show up

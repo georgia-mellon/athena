@@ -359,7 +359,7 @@ def optimize(torch, U, nets, X, y, S, gain, radius, steps, lr, lam, kappa, bs=64
 
 
 def train_ctc(args) -> dict:
-    """Deltas vs Keyguard's CTC attacker (CallGuard's default attacker) on Keyguard's per-key bank (the teammate's
+    """Deltas vs Keyguard's CTC attacker (Athena's default attacker) on Keyguard's per-key bank (the teammate's
     MacBook: the demo keyboard), 10 presses per key held out. Same budget, EOT, speech and runtime format as `train`;
     no adaptive-retrain phase (that step is KeyNet-specific), so both phases run against the CTC attacker."""
     torch = _torch(args.threads)
@@ -571,7 +571,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=str(DELTAS))
     ap.add_argument("--attacker", default="keynet", choices=["keynet", "ctc"],
                     help="train: optimize vs the provisional KeyNets on harrison (default) or vs Keyguard's CTC attacker "
-                         "on Keyguard's bank (CallGuard's default attacker)")
+                         "on Keyguard's bank (Athena's default attacker)")
     ap.add_argument("--speech", default="hearsay", choices=["hearsay", "keyguard"],
                     help="--attacker ctc: speech for EOT, Hearsay's pools (HEARSAY_ROOT) or Keyguard's data/speech clips")
     a = ap.parse_args(argv)

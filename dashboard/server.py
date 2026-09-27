@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 STATIC = Path(__file__).parent / "static"
 ROOT = Path(__file__).resolve().parent.parent
-# arena.html's match data when no CallGuard match has run yet: a saved Keyguard match, else the vendored sample
+# arena.html's match data when no Athena match has run yet: a saved Keyguard match, else the vendored sample
 ARMS_RACE_FALLBACKS = (ROOT / "runs" / "keyguard" / "arms_race_data.js", ROOT / "keyguard" / "web" / "arms_race_data.js")
 log = logging.getLogger(__name__)
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -55,6 +55,10 @@ class SecretCmd(BaseModel):
 
 class ThresholdCmd(BaseModel):
     db: float
+
+
+class SourceCmd(BaseModel):
+    source: Literal["far", "mic"]
 
 
 class MeetCmd(BaseModel):
@@ -118,12 +122,12 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
             if callable(unsubscribe):
                 unsubscribe()
 
-    app = FastAPI(title="CallGuard", lifespan=lifespan)
+    app = FastAPI(title="Athena", lifespan=lifespan)
 
     @app.middleware("http")
     async def local_only(request, call_next):
         if not is_local(request.headers, allowed_hosts):
-            return PlainTextResponse("CallGuard only answers pages served from this machine", status_code=403)
+            return PlainTextResponse("Athena only answers pages served from this machine", status_code=403)
         return await call_next(request)
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -152,6 +156,10 @@ def create_app(bus: Any, state_provider: Callable[[], dict] | None = None, contr
     @app.post("/api/control/voice/threshold")
     def control_voice_threshold(cmd: ThresholdCmd):
         return _control("set_speech_db", cmd.db)
+
+    @app.post("/api/control/voice/source")
+    def control_voice_source(cmd: SourceCmd):
+        return _control("set_voice_source", cmd.source)
 
     @app.post("/api/control/voice/flush")
     def control_voice_flush():

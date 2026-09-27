@@ -21,7 +21,7 @@ import json
 import os
 import sys
 
-# CallGuard: no forced cuda; keyguard.ctc.model picks KEYGUARD_DEVICE, else cuda / mps / cpu
+# Athena: no forced cuda; keyguard.ctc.model picks KEYGUARD_DEVICE, else cuda / mps / cpu
 try:                                   # Windows consoles default to cp1252
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -49,8 +49,8 @@ def _num(x):
             return f"{x/u:.1f} {d}"
     return str(int(x))
 
-CKPT = os.environ.get("KEYGUARD_CKPT", str(RUNS / "ctc_rich_ft.pt"))              # CallGuard: under config.RUNS
-BANK = os.environ.get("KEYGUARD_BANK", str(config.DATA / "live_bank_rich.npz"))   # CallGuard: under config.DATA
+CKPT = os.environ.get("KEYGUARD_CKPT", str(RUNS / "ctc_rich_ft.pt"))              # Athena: under config.RUNS
+BANK = os.environ.get("KEYGUARD_BANK", str(config.DATA / "live_bank_rich.npz"))   # Athena: under config.DATA
 
 ATK_SYS = ("You are an acoustic-eavesdropping attacker. You get a NOISY character "
            "transcription of someone typing (recovered from keyboard sound; letters "
@@ -153,7 +153,7 @@ def _unfreeze(net, frozen, was_training):
 def adapt_attacker(net, y_def, key_ids, onsets, steps=120, lr=3e-4):
     """The attacker RETRAINS on the defended audio (true labels) to see through the
     current shield — the 'max_A' half of the min-max. Fast single-clip fine-tune."""
-    dev = next(net.parameters()).device    # CallGuard: the net's own device (was the module DEVICE)
+    dev = next(net.parameters()).device    # Athena: the net's own device (was the module DEVICE)
     m = logmel(y_def)
     fk = torch.from_numpy(frame_key_target(m.shape[0], onsets, key_ids)).to(dev)
     x = torch.from_numpy(m)[None].to(dev)
@@ -431,14 +431,14 @@ def write_replay(moves, log, final_read):
              "- **The LLM is the brain on both sides** — reconstructing text from weak "
              "acoustics (attack) and reasoning about *what* to protect and *what lie to "
              "plant* (defense). A fixed transform can do neither.")
-    RUNS.mkdir(parents=True, exist_ok=True)   # CallGuard: into runs/keyguard, not the repo root
+    RUNS.mkdir(parents=True, exist_ok=True)   # Athena: into runs/keyguard, not the repo root
     (RUNS / "ARMS_RACE_REPLAY.md").write_text("\n".join(L), encoding="utf-8")
 
 
 def write_web(log):
     """Emit keyguard/web/arms_race_data.js so arena.html visualizes THIS run."""
     from ..config import ROOT
-    RUNS.mkdir(parents=True, exist_ok=True)   # CallGuard: runs/keyguard (the dashboard serves it), not the package
+    RUNS.mkdir(parents=True, exist_ok=True)   # Athena: runs/keyguard (the dashboard serves it), not the package
     (RUNS / "arms_race_data.js").write_text(
         "window.ARMS_RACE = " + json.dumps(log, indent=2) + ";\n", encoding="utf-8")
 

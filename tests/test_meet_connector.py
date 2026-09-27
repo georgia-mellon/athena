@@ -117,7 +117,7 @@ def test_origin_checks():
                     ws.receive_bytes()
             assert e.value.code == 1008
     assert router.meet_stats["rejected"] == 4 and pipe.mic.position == 0
-    pipe.meet_port = 9000                                   # the port follows the server CallGuard runs on
+    pipe.meet_port = 9000                                   # the port follows the server Athena runs on
     with client.websocket_connect("/meet/far", headers={"origin": "http://localhost:9000"}) as ws:
         ws.send_bytes(_blocks(1).tobytes())
     app = FastAPI()
@@ -268,6 +268,8 @@ def test_status_channel_drives_the_meeting_state_and_leave():
     """/meet/status: the extension's page reports whether a call is live (the dashboard's pill), and the dashboard's
     Leave / Join reach that page as commands."""
     pipe, bus, states = _pipe()
+    calls = []
+    bus.subscribe("meet.call", lambda e: calls.append(e.data["event"]))
     client, _ = _client(pipe)
     with client.websocket_connect("/meet/status", headers=MEET) as ws:
         ws.send_text(json.dumps({"site": "meet", "in_call": False}))
@@ -285,6 +287,7 @@ def test_status_channel_drives_the_meeting_state_and_leave():
     time.sleep(0.2)
     bus.flush()
     assert states[-1]["page"] is None and states[-1]["in_call"] is False                # the tab closed
+    assert calls == ["meet_open", "joined", "left"]              # the event log: tab opened, joined, left (tab closed)
     with pytest.raises(WebSocketDisconnect):                                         # another site: rejected
         with client.websocket_connect("/meet/status", headers={"origin": "https://evil.example"}) as ws:
             ws.receive_text()
@@ -307,6 +310,19 @@ def test_speech_gate_and_levels():
     bus.flush()
     assert seen["system"][-1]["speech_db"] == -60.0 and seen["system"][-1]["ready"] is True
     assert any(x["far_db"] is not None and -20 < x["far_db"] < 0 for x in seen["level"])   # uniform +-0.5: ~-10 dBFS
+
+    # judge your own mic instead of the caller (solo tests): mic audio now reaches the voice model
+    windows = []
+    bus.subscribe("voice.window", lambda e: windows.append(e.data))
+    with pytest.raises(ValueError):
+        pipe.set_voice_source("speaker")
+    assert pipe.set_voice_source("mic") == "mic"
+    for b in _blocks(400, seed=3):                               # 8 s of loud audio from the page's mic
+        pipe.meet_mic(b)
+    time.sleep(1.0)
+    bus.flush()
+    assert windows and seen["system"][-1]["voice_source"] == "mic"
+    pipe.set_voice_source("far")
     pipe.stop()
     bus.close()
 
@@ -350,9 +366,9 @@ def test_meet_controls_and_pass_through_outside_meet_mode():
 def test_testroom_and_static_served():
     pipe, bus, _ = _pipe()
     client, _ = _client(pipe)
-    assert "CallGuard test room" in client.get("/meet/testroom").text
+    assert "Athena test room" in client.get("/meet/testroom").text
     js = client.get("/meet/static/bridge.js")
-    assert js.status_code == 200 and "__callguardBridge" in js.text
+    assert js.status_code == 200 and "__athenaBridge" in js.text
     assert client.get("/meet/static/launcher.py").status_code == 404
     assert client.get("/meet/audio/../../../pyproject.toml").status_code == 404
     assert isinstance(client.get("/meet/audio").json(), list)
@@ -402,8 +418,8 @@ def served():
 
 HEADLESS = ["--headless=new", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
             "--disable-features=WebRtcHideLocalIpsWithMdns", "--mute-audio"]
-needs_browser = pytest.mark.skipif(launcher.find_browser() is None or os.environ.get("CALLGUARD_SKIP_BROWSER") == "1",
-                                   reason="no Chrome/Edge (or CALLGUARD_SKIP_BROWSER=1)")
+needs_browser = pytest.mark.skipif(launcher.find_browser() is None or os.environ.get("ATHENA_SKIP_BROWSER") == "1",
+                                   reason="no Chrome/Edge (or ATHENA_SKIP_BROWSER=1)")
 
 
 def _wait(cond, timeout=20.0):
@@ -425,11 +441,11 @@ def test_browser_end_to_end_testroom(served, tmp_path):
     try:
         st = router.meet_stats
         assert _wait(lambda: st["mic_out"] > 100 and st["far_in"] > 50), f"no audio through the bridge: {st}"
-        assert _wait(lambda: (s.evaluate("__callguardBridge.stats") or {}).get("mic") == "processed")
+        assert _wait(lambda: (s.evaluate("__athenaBridge.stats") or {}).get("mic") == "processed")
         a, t0 = dict(st), time.monotonic()
         time.sleep(3.0)
         b, dt = dict(st), time.monotonic() - t0
-        bridge = s.evaluate("__callguardBridge")
+        bridge = s.evaluate("__athenaBridge")
         stats = bridge["stats"]
         mic_fps, far_fps = (b["mic_in"] - a["mic_in"]) / dt, (b["far_in"] - a["far_in"]) / dt
         print(f"\n[e2e] source={bridge['source']} mic {mic_fps:.1f} blocks/s in, "
@@ -448,12 +464,12 @@ def test_browser_end_to_end_testroom(served, tmp_path):
         level = s.evaluate("__room.meters.map((m) => m.rms)")
         assert level and all(v > 0.01 for v in level), level
         assert any(x["mic"] and x["far"] and x["connected"] for x in states)
-        # FAIL OPEN: CallGuard goes away mid-call -> the bridge switches to the raw mic; the room still hears you
+        # FAIL OPEN: Athena goes away mid-call -> the bridge switches to the raw mic; the room still hears you
         server.should_exit = True
-        assert _wait(lambda: s.evaluate("__callguardBridge.stats.mic") == "raw", 10)
+        assert _wait(lambda: s.evaluate("__athenaBridge.stats.mic") == "raw", 10)
         time.sleep(0.5)
         level = s.evaluate("__room.meters.map((m) => m.rms)")
-        print(f"[e2e] server stopped: bridge mic={s.evaluate('__callguardBridge.stats.mic')}, room levels {level}")
+        print(f"[e2e] server stopped: bridge mic={s.evaluate('__athenaBridge.stats.mic')}, room levels {level}")
         assert all(v > 0.01 for v in level), level
     finally:
         s.close()
@@ -461,7 +477,7 @@ def test_browser_end_to_end_testroom(served, tmp_path):
 
 
 @needs_browser
-@pytest.mark.skipif(os.environ.get("CALLGUARD_MEET_ONLINE") != "1", reason="needs network: CALLGUARD_MEET_ONLINE=1")
+@pytest.mark.skipif(os.environ.get("ATHENA_MEET_ONLINE") != "1", reason="needs network: ATHENA_MEET_ONLINE=1")
 def test_browser_bridge_on_real_meet_page(served, tmp_path):
     """Real meet.google.com: the bridge is installed before Meet's scripts and its mic path reaches us from Meet's
     origin (CSP bypass, mixed content, Local Network Access). Meet's home redirects signed-out users to a marketing
@@ -475,10 +491,10 @@ def test_browser_bridge_on_real_meet_page(served, tmp_path):
     try:
         assert _wait(lambda: s.evaluate("location.hostname + ':' + document.readyState") == "meet.google.com:complete",
                      30), s.evaluate("location.href")
-        assert s.evaluate("!!window.__callguardBridge && __callguardBridge.source") == "cdp"
+        assert s.evaluate("!!window.__athenaBridge && __athenaBridge.source") == "cdp"
         s.evaluate("navigator.mediaDevices.getUserMedia({audio: true}).then((m) => { window.__m = m; return 1; })")
         assert _wait(lambda: router.meet_stats["mic_out"] > 50), router.meet_stats
         print(f"\n[meet] {s.evaluate('location.href')} (local network access: {s.lna}): "
-              f"{s.evaluate('__callguardBridge.stats')}")
+              f"{s.evaluate('__athenaBridge.stats')}")
     finally:
         s.close()

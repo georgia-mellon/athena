@@ -1,8 +1,8 @@
-# CallGuard
+# Athena
 
-<!-- TEMPLATE: one-line pitch. Working line: "CallGuard protects what you hear, what you type, and what you say." -->
+<!-- TEMPLATE: one-line pitch. Working line: "Athena protects what you hear, what you type, and what you say." -->
 
-<!-- TEMPLATE: 2-3 sentences: what CallGuard is (a desktop app that guards a Google Meet call), who it's for, HackGT 13 / team GeorgiaMellon. -->
+<!-- TEMPLATE: 2-3 sentences: what Athena is (a desktop app that guards a Google Meet call), who it's for, HackGT 13 / team GeorgiaMellon. -->
 
 ## The threat
 <!-- TEMPLATE: the story in a few lines: an AI voice agent joins a Meet, asks you to type a reset code, then to read it out. What goes wrong on each channel (hear / type / say). -->
@@ -13,7 +13,7 @@
 ## The three pillars
 
 ### Hearsay: what you hear
-<!-- TEMPLATE: SHORT overview only (Hearsay is a subpart of CallGuard): what it detects, the one headline number, and a link to the Hearsay model repository for the full model documentation. -->
+<!-- TEMPLATE: SHORT overview only (Hearsay is a subpart of Athena): what it detects, the one headline number, and a link to the Hearsay model repository for the full model documentation. -->
 
 ### Keystroke Guard: what you type
 <!-- TEMPLATE: the keystroke-leak attack, the shield (DSP + adversarial), the headline numbers, credit to the Keystroke Guard author. -->

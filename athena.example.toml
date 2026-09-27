@@ -1,6 +1,6 @@
-# Copy to callguard.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT,
-# CALLGUARD_ATTACKER_WEIGHTS, CALLGUARD_<SECTION>_<FIELD> (e.g. CALLGUARD_DRIVERS_VOICE=mock),
-# CALLGUARD_WEBHOOK_URL (adds a webhook for threat.level_change; keeps the URL out of files).
+# Copy to athena.toml (gitignored) and edit. Env overrides: HEARSAY_ROOT,
+# ATHENA_ATTACKER_WEIGHTS, ATHENA_<SECTION>_<FIELD> (e.g. ATHENA_DRIVERS_VOICE=mock),
+# ATHENA_WEBHOOK_URL (adds a webhook for threat.level_change; keeps the URL out of files).
 
 # hearsay_root = "../Hearsay"                    # default: sibling of this repo
 # attacker_weights = ""                          # empty = Keyguard's CTC attacker (runs/keyguard/ctc_rich_ft.pt)
@@ -76,7 +76,7 @@ topics = ["threat.*", "voice.verdict", "shield.state", "secret.*", "driver.error
 path = "logs/events.jsonl"
 
 # [[hooks]]
-# kind = "webhook"        # e.g. a Slack incoming webhook; prefer CALLGUARD_WEBHOOK_URL
+# kind = "webhook"        # e.g. a Slack incoming webhook; prefer ATHENA_WEBHOOK_URL
 # url = "https://hooks.slack.com/services/..."
 # topics = ["threat.level_change"]
 # timeout_s = 3.0

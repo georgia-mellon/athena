@@ -1,5 +1,5 @@
 """The vendored Keyguard console mounted at /keyguard, the live arms-race data it replays, and the Ares vs Athena
-panel on the CallGuard dashboard. Offline: no LLM keys, no models needed."""
+panel on the Athena dashboard. Offline: no LLM keys, no models needed."""
 import json
 import sys
 
@@ -11,7 +11,7 @@ from dashboard.server import create_app
 from tests.test_server import LOCAL, FakeBus
 
 MATCH = {"line": "my password is hunter2", "secret": "HUNTER2", "decoy": "DRAGON7", "kind": "password",
-         "backend": "gemini", "route": "backboard:google/gemini-2.5-flash", "source": "callguard",
+         "backend": "gemini", "route": "backboard:google/gemini-2.5-flash", "source": "athena",
          "rounds": [{"round": 0, "mode": "deceive", "span_read": "DRAGON7", "reads_true_secret": False, "stoi": 0.99}],
          "moves": [], "agents": {"ctc": {"before": "HUNTER2", "after": "DRAGON7"}}, "protected": True}
 

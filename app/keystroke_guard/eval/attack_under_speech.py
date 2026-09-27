@@ -11,10 +11,10 @@ Protocol (fixed seeds, CPU, 8 threads, ~12 min):
   attacker's training noise and the evaluation mixtures.
 - Each test press sits at a random spot in a 1.5 s speech excerpt at a speech-to-key power ratio (speech excerpt
   power over key-window power). Attack with the oracle onset and with Keyguard's onset detector on the mixture.
-- Shield: Keyguard DSP Shield with ShieldConfig(key_frames=26) (as CallGuard ships it; Keyguard's default 14 as a
+- Shield: Keyguard DSP Shield with ShieldConfig(key_frames=26) (as Athena ships it; Keyguard's default 14 as a
   secondary row at keys only / +10 dB) given the true onset (the victim has OS key events).
 - Hearsay check (pass criterion 3): full real clips (>= 3 s) from the test speakers, with test presses at +10 dB
-  speech-to-key, scored clean / keys unshielded / keys shielded by CallGuard's Hearsay driver (r4ft, CPU).
+  speech-to-key, scored clean / keys unshielded / keys shielded by Athena's Hearsay driver (r4ft, CPU).
 
 Run: .venv/Scripts/python app/keystroke_guard/eval/attack_under_speech.py   (reads the vendored keyguard + data/keyguard, HEARSAY_ROOT; writes docs/reports/)
 """
@@ -77,7 +77,7 @@ def power(x: np.ndarray) -> float:
 
 
 def load_keys(rng):
-    """driver.harrison_split: the ONE key split CallGuard uses everywhere (this used to re-split in another per-key
+    """driver.harrison_split: the ONE key split Athena uses everywhere (this used to re-split in another per-key
     order, so the speech-aug attacker saw 206 harrison_split test presses; fixed 2026-09-26). `rng` is still advanced
     by one permutation per key, as the old loop did (every key has 25 presses), so the speaker split drawn next from
     the same rng, and every speech pool derived from it, is unchanged."""

@@ -31,7 +31,7 @@ def offline(monkeypatch, tmp_path):
     # a match an earlier test's pipeline started can't be interrupted: let it finish before redirecting the memory
     # file, or it lands in this test's arena_memory.jsonl
     for t in threading.enumerate():
-        if t.name == "callguard-keyguard-agents":
+        if t.name == "athena-keyguard-agents":
             t.join(timeout=300)
     from keyguard import memory                     # keyguard.config load_dotenv()s on import: do it BEFORE delenv
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -145,7 +145,7 @@ def test_pipeline_cuts_two_bursts():
 
 
 def test_agents_off_in_config():
-    cfg = config.load(env={"CALLGUARD_KEYGUARD_AGENTS": "0"})
+    cfg = config.load(env={"ATHENA_KEYGUARD_AGENTS": "0"})
     cfg.drivers.secret = "mock"
 
     class CTC(MockAttacker):

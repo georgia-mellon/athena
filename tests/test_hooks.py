@@ -44,8 +44,8 @@ def test_webhook_retries_then_succeeds():
 def test_config_toml_and_env(tmp_path):
     p = tmp_path / "c.toml"
     p.write_text('[drivers]\nvoice = "mock"\n[server]\nport = 9000\n[[hooks]]\nkind = "jsonl"\ntopics = ["*"]\n')
-    cfg = config.load(p, env={"CALLGUARD_SERVER_PORT": "9100", "HEARSAY_ROOT": "C:/h",
-                              "CALLGUARD_WEBHOOK_URL": "http://hook"})
+    cfg = config.load(p, env={"ATHENA_SERVER_PORT": "9100", "HEARSAY_ROOT": "C:/h",
+                              "ATHENA_WEBHOOK_URL": "http://hook"})
     assert cfg.drivers.voice == "mock" and cfg.server.port == 9100
     assert str(cfg.hearsay_root).replace("\\", "/") == "C:/h"
     assert [h.kind for h in cfg.hooks] == ["jsonl", "webhook"]
@@ -63,6 +63,6 @@ def test_config_rejects_bad_driver(tmp_path):
 
 
 def test_example_toml_loads():
-    cfg = config.load(config.REPO / "callguard.example.toml", env={})
+    cfg = config.load(config.REPO / "athena.example.toml", env={})
     assert cfg.server.port == 8765 and cfg.threat.tick_hz >= 2
     assert cfg.hearsay_root.name == "Hearsay"

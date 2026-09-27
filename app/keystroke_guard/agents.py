@@ -1,6 +1,6 @@
 """Keyguard's Ares-vs-Athena arms race, run live on the user's own typing bursts.
 
-The pipeline cuts each typing burst (raw mic, before any CallGuard shield) and hands it to an AgentWorker; the worker
+The pipeline cuts each typing burst (raw mic, before any Athena shield) and hands it to an AgentWorker; the worker
 runs one ArmsRace match per burst off the audio thread and streams the moves on the bus:
 
   keyguard.burst      {t_audio, n_keys, shield}                        a burst was queued
@@ -38,11 +38,11 @@ CTX_S = 0.5            # audio kept before the first / after the last key of a b
 
 @dataclass
 class Burst:
-    audio: np.ndarray      # raw mic clip, float32 16 kHz, before any CallGuard shield
+    audio: np.ndarray      # raw mic clip, float32 16 kHz, before any Athena shield
     onsets: np.ndarray     # sample index into `audio` of each char of `keys` (spaces included)
     keys: str              # what was typed (victim-side truth; never leaves this process except in the match log)
     t_audio: float         # stream time of the first key (s)
-    shield: str            # CallGuard shield mode while it was typed
+    shield: str            # Athena shield mode while it was typed
 
 
 def _device(device: str) -> str:
@@ -135,7 +135,7 @@ class ArmsRace:
             self.emit("keyguard.move", t_audio=burst.t_audio, **m)
 
         base = {"line": text, "attacker": "Ares", "defender": "Athena", "backend": llm.backend(),
-                "source": "callguard", "t_audio": burst.t_audio, "shield": burst.shield,
+                "source": "athena", "t_audio": burst.t_audio, "shield": burst.shield,
                 "moves": moves}
 
         def finish(log_: dict) -> dict:
@@ -267,12 +267,12 @@ class ArmsRace:
 
         rs = rounds
         memory.remember(
-            f"Arms race ({plan['kind']}, {len(rs)} rounds, live CallGuard burst): Athena planted decoy {decoy!r}; "
+            f"Arms race ({plan['kind']}, {len(rs)} rounds, live Athena burst): Athena planted decoy {decoy!r}; "
             f"Ares broke through {sum(bool(r.get('after_retrain_reads_true')) for r in rs)} time(s); final read "
             f"{A._clean(final_span)!r}, secret {'protected' if protected else 'LEAKED'} at STOI "
             f"{rs[-1]['stoi']:.3f}, budget {rs[-1]['snr_db']:.1f} dB; team {', '.join(agents)}.",
             metadata={"leaked": not protected, "rounds": len(rs), "decoy": decoy, "stoi": float(rs[-1]["stoi"]),
-                      "source": "callguard", "agents": list(agents)}, kind="arms_race")
+                      "source": "athena", "agents": list(agents)}, kind="arms_race")
         return finish({"secret": secret, "decoy": decoy, "kind": plan["kind"], "clean_span_read": clean_span,
                        "smart_dict_clean": sd0, "smart_dict_defended": sdD, "rounds": rounds,
                        "final_read": final_read, "agents": agents, "protected": protected})
@@ -299,7 +299,7 @@ class AgentWorker:
             self._q.put_nowait(burst)
             if self._thread is None or not self._thread.is_alive():   # (re)started lazily after stop()
                 self._stop.clear()
-                self._thread = threading.Thread(target=self._loop, name="callguard-keyguard-agents", daemon=True)
+                self._thread = threading.Thread(target=self._loop, name="athena-keyguard-agents", daemon=True)
                 self._thread.start()
 
     def _loop(self) -> None:

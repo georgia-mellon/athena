@@ -1,7 +1,7 @@
 # 02: Architecture, driver contracts, threat score, hooks
 
 ## 1. Process layout
-One Python process (`callguard`), several threads, one asyncio server:
+One Python process (`athena`), several threads, one asyncio server:
 
 ```
  physical mic ─► [mic stream 16k, 20 ms blocks] ─► shield driver ─► [virtual mic out: VB-CABLE Input] ─► Zoom mic
@@ -23,7 +23,7 @@ downstream is identical.
 ```
 app/source/
   types.py          shared dataclasses + driver Protocols   (contracts; written first, changed only by review)
-  config.py         dataclass config, TOML load, env (HEARSAY_ROOT, KEYGUARD_ROOT, CALLGUARD_*)
+  config.py         dataclass config, TOML load, env (HEARSAY_ROOT, KEYGUARD_ROOT, ATHENA_*)
   bus.py            EventBus (thread-safe pub/sub; asyncio bridge)
   threat.py         ThreatEngine
   hooks.py          sinks: console, jsonl, webhook
@@ -31,7 +31,7 @@ app/source/
   drivers/          base.py (registry), hearsay_real.py, keyguard_real.py, mock.py
   pipeline.py       wires streams → drivers → bus (live + replay)
   server/           app.py (FastAPI + WebSocket), static/ (dashboard)
-  cli.py            callguard run|devices|bench|scenario
+  cli.py            athena run|devices|bench|scenario
 experiments/        attack_under_speech.py (+ results in docs/reports/)
 demo/               scenarios/*.toml, render_agent.py (TTS lines), agent_caller.py (plays into a meeting)
 tests/
@@ -63,9 +63,9 @@ class ShieldDriver(Protocol):
   through `hearsay.preprocess.prep()`, as in Hearsay. `p_synthetic` = logistic of the fused margin, centred on the
   deployment threshold fixed on Hearsay's `val_testlike` (brief reading), so p = 0.5 is the decision boundary. Mode
   `r5` (default: the submitted fusion; adds classic features, ≈ +0.1 s) or `r4ft` (XLS-R alone, faster). See
-  `docs/reports/hearsay_r5_in_callguard.md`.
-- `keyguard_real`: `sys.path` += `KEYGUARD_ROOT`. Attacker = `KeyNet` weights from `CALLGUARD_ATTACKER_WEIGHTS`, or a
-  provisional CallGuard-trained KeyNet (plan 04) until the teammate ships theirs. Shield `dsp` =
+  `docs/reports/hearsay_r5_in_athena.md`.
+- `keyguard_real`: `sys.path` += `KEYGUARD_ROOT`. Attacker = `KeyNet` weights from `ATHENA_ATTACKER_WEIGHTS`, or a
+  provisional Athena-trained KeyNet (plan 04) until the teammate ships theirs. Shield `dsp` =
   `keyguard.shield.shield.Shield` fed with OS key timestamps; `adversarial` = the teammate's D when available.
 - `mock`: deterministic stand-ins with the same timing profile, used by tests, the UI and CI.
 

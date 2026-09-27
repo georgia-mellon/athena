@@ -26,7 +26,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import librosa
 
-from ..config import SR, KEY_WIN, N_MELS, N_FFT, HOP, CLASSES, CLS_IDX, RUNS, DATA  # CallGuard: + DATA
+from ..config import SR, KEY_WIN, N_MELS, N_FFT, HOP, CLASSES, CLS_IDX, RUNS, DATA  # Athena: + DATA
 from ..attackers.supervised import KeyNet, DEVICE
 from .. import audio, segment
 from .. import memory
@@ -57,7 +57,7 @@ def torch_logmel(x: torch.Tensor) -> torch.Tensor:
     return ((logmel - m) / s).unsqueeze(1)                    # (B,1,mel,frames)
 
 
-def harrison_windows(root=str(DATA / "harrison" / "MBPWavs"), n_test=5):  # CallGuard: under config.DATA, not cwd
+def harrison_windows(root=str(DATA / "harrison" / "MBPWavs"), n_test=5):  # Athena: under config.DATA, not cwd
     """Audio windows per key -> (Xtr, ytr, Xte, yte) float32 (n, KEY_WIN)."""
     Xtr, ytr, Xte, yte = [], [], [], []
     for k in CLASSES:
